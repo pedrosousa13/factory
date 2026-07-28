@@ -33,7 +33,7 @@ Run `/factory-new <name>`. It will:
 Run `/factory-adopt` inside the repo. It will:
 
 1. **Stamp** the repo with the same conventions as above — creating the Linear project, remote, and labels only where missing, and merging into an existing `AGENTS.md`/`CLAUDE.md` rather than overwriting
-2. **Re-triage sweep**: every open issue gets a category label (`bug`/`enhancement`) + a state label (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), and issues destined for agents get durable agent briefs written into them — you approve in batches
+2. **Re-triage sweep**: every open issue gets a category label (`Feature`/`Improvement`/`Bug`) + a state label (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), and issues destined for agents get durable agent briefs written into them — you approve in batches
 3. Leave the project loop-ready: `/factory` works from that point on
 
 ## Conventions all projects share
