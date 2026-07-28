@@ -24,6 +24,10 @@ _Avoid_: intake, brainstorm session
 A Project's set of ready-for-agent issues that are not blocked. The only thing a Loop Session consumes; when empty, the loop stops.
 _Avoid_: backlog, todo list
 
+**Queue scope**:
+The narrowing a Loop Session chooses at Session start — one milestone, everything, or the unassigned issues — that decides which of a Project's ready-for-agent issues enter its Queue. Draining a scoped Queue means the session's agent-ready work is exhausted, never that the milestone is complete.
+_Avoid_: filter, sprint, batch
+
 **Handoff**:
 The compacted document a Loop Session writes when its context budget is spent, so a fresh Loop Session can continue without the old context.
 _Avoid_: summary, compaction
