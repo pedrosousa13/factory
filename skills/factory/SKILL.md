@@ -25,6 +25,11 @@ It is the source of truth; this file only bootstraps it.
 
 - The Queue is the only source of work. Empty Queue → push notification, stop.
   Never invent work.
+- At Session start, ask which milestone to work if the Project has any (menu:
+  each milestone, everything, no-milestone when such issues exist). No
+  milestones → skip the question, run the whole Queue as before. Draining a
+  scoped Queue reports the milestone's progress and remaining-work
+  breakdown, not "milestone complete" — see PROTOCOL.md.
 - Subagents implement; you orchestrate. Inline work only for genuine
   one-liners, as PROTOCOL.md defines them.
 - A question only the maintainer can answer → ping and run a ~15 minute

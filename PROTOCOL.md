@@ -36,7 +36,23 @@ maintainer to run `/factory-adopt` and stop.
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
    Handoffs is specified in the Handoff section below.
-3. Enter the loop below.
+3. **Ask which milestone to work.** Call `list_milestones` for the Project.
+   - **No milestones** → skip the question entirely; run the whole Queue
+     unscoped, exactly as before this rule existed. Required: the Factory's
+     own Project has none, and `/factory` must keep working here.
+   - **Any milestones** → ask the maintainer, before touching the Queue.
+     Never default to a scope. Menu, in order:
+     1. Every milestone in the Project, by ascending `sortOrder`.
+     2. **Everything** — no scope, run the whole Queue.
+     3. **(No milestone)** — offered only if the Project has at least one
+        issue with no `projectMilestone`.
+     List every milestone regardless of whether it currently has
+     agent-ready work — a menu whose shape is stable beats one that shifts
+     between runs, even though it means a milestone with nothing ready can
+     be picked and the loop stops immediately.
+   - Record the answer as this session's **Queue scope** (used by Queue
+     selection below).
+4. Enter the loop below.
 
 ## The loop
 
@@ -49,16 +65,56 @@ The Queue is the set of issues in this Project's Linear project that are:
 
 - labeled `ready-for-agent`, and
 - in an unstarted state (Todo/Backlog), and
+- in scope (see "Queue scope" below), and
 - **unblocked**: no `blockedBy` relation to an issue that is not Done/Canceled.
+
+**Queue scope**, chosen once at Session start, narrows which issues count:
+
+- **Everything**, or a Project with no milestones → no filter; every
+  candidate is in scope.
+- **A specific milestone** → in scope if the issue's `projectMilestone` is
+  that milestone, or the issue carries no `projectMilestone` at all —
+  fail-open, so unassigned work is never stranded by a scoped run.
+- **(No milestone)** → in scope only if the issue carries no
+  `projectMilestone`.
+
+`list_issues` has no milestone filter; apply scope by filtering candidates
+client-side on `projectMilestone`, a field `list_issues` already returns.
 
 Selection order: highest Linear priority first (Urgent > High > Medium > Low >
 No priority), ties broken by oldest `createdAt`. Concretely: `list_issues`
-filtered by project + label, then walk candidates in that order and confirm
-each with `get_issue` (`includeRelations: true`), skipping any with an
-unfinished blocker. First unblocked candidate wins.
+filtered by project + label, narrowed to scope, then walk candidates in that
+order and confirm each with `get_issue` (`includeRelations: true`), skipping
+any with an unfinished blocker. First unblocked candidate wins.
 
-**Empty Queue** → notify the maintainer (push notification with a one-line
-status) and stop cleanly. The loop never invents work.
+**Empty Queue** → stop cleanly. What to report depends on scope:
+
+- **Unscoped** (Everything, or no milestones in the Project) → notify the
+  maintainer with a push notification (one-line status), as before.
+- **Scoped to a milestone** → an empty scoped Queue means agent-ready work is
+  exhausted, not that the milestone is complete — those are different
+  claims, and conflating them is exactly the failure scoping guards against.
+  Re-fetch the milestone (don't reuse the Session-start snapshot — landed
+  issues may have moved its `progress` since) and report its real `progress`
+  plus a breakdown of its still-open issues: how many carry
+  `ready-for-human`, how many carry `needs-info`, and how many
+  `ready-for-agent` issues remain blocked by unfinished work.
+  The breakdown covers **every still-open issue in the milestone**, not just
+  the ones that reached the Queue — so it needs its own query, not a re-count
+  of the `ready-for-agent` candidates already fetched. Counting within the
+  Queue is the mistake to avoid: it can only ever find `ready-for-agent`
+  issues, and would report zero for the two labels that matter most here.
+  The blocked count is a fresh count at report time, not a tally accumulated
+  as the loop skipped issues — a session-long tally counts the same issue
+  once per iteration, so two runs over identical state would disagree.
+  Deliver this the same way as the unscoped case: a push notification with a
+  one-line status, the detail in the session.
+- **Scoped to (No milestone)** → the same breakdown (`ready-for-human`,
+  `needs-info`, blocked counts) among no-milestone issues, delivered the same
+  way, with no progress figure — there is no milestone entity to report it
+  against.
+
+The loop never invents work, scoped or not.
 
 ### 2. State mirroring (pickup)
 
