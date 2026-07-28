@@ -482,7 +482,7 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | --- | --- |
 | Repo | `~/apps/<name>`, private GitHub remote over SSH |
 | Issue tracker | One tracker per repo, satisfying the tracker contract above, documented in `docs/agents/issue-tracker.md` |
-| Labels | A tracker-dependent set: five canonical triage states + `Feature`/`Improvement`/`Bug` categories always, in whatever scope the tracker gives labels; plus a started-state label and a priority label vocabulary only where the tracker has no native field for either — see `docs/agents/triage-labels.md` |
+| Labels | Tracker-dependent: 5 triage states + 3 categories, plus started-state and priority where fields are missing |
 | Milestones | Every open issue carries exactly one, a third axis alongside category and state — see "## Milestones" |
 | Agent docs | `AGENTS.md` + `docs/agents/` (issue-tracker, triage-labels, domain) |
 | Domain docs | `CONTEXT.md` + `docs/adr/`, created lazily |

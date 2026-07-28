@@ -38,25 +38,25 @@ GitHub are the adapters today.
 
 ## Placeholders
 
-| Placeholder             | Meaning                          | Example              |
-| ------------------------ | --------------------------------- | --------------------- |
-| `{{PROJECT_NAME}}`       | The Linear project name          | `Factory`             |
-| `{{LINEAR_PROJECT_URL}}` | The Linear project URL           | (a linear.app link)   |
-| `{{TEAM_NAME}}`          | The Linear team name             | `Side projects`       |
-| `{{TEAM_KEY}}`           | The Linear team key              | `SIDEPRO`             |
-| `{{REPO}}`               | The GitHub repo slug             | `pedrosousa13/factory`|
+| Placeholder              | Meaning                 | Example                |
+| ------------------------ | ----------------------- | ---------------------- |
+| `{{PROJECT_NAME}}`       | The Linear project name | `Factory`              |
+| `{{LINEAR_PROJECT_URL}}` | The Linear project URL  | (a linear.app link)    |
+| `{{TEAM_NAME}}`          | The tracker's team name | `Side projects`        |
+| `{{TEAM_KEY}}`           | The Linear team key     | `SIDEPRO`              |
+| `{{REPO}}`               | The GitHub repo slug    | `pedrosousa13/factory` |
 
 Placeholders differ per template — a template uses only what its own tracker
 needs, and a skill fills only those:
 
-| Template                                              | Placeholders it uses |
-| ----------------------------------------------------- | --------------------- |
+| Template                                              | Placeholders it uses                                                          |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `templates/stamp/docs/agents/issue-tracker-linear.md` | `{{PROJECT_NAME}}`, `{{LINEAR_PROJECT_URL}}`, `{{TEAM_NAME}}`, `{{TEAM_KEY}}` |
-| `templates/stamp/docs/agents/issue-tracker-github.md` | `{{REPO}}`            |
-| `templates/stamp/AGENTS.md`                           | `{{PROJECT_NAME}}`, `{{TEAM_NAME}}` |
-| `templates/stamp/docs/agents/triage-labels.md`        | `{{TEAM_NAME}}`       |
-| `templates/stamp/docs/agents/domain.md`               | none — fully generic  |
-| `templates/stamp/gitignore`                           | none — fully generic  |
+| `templates/stamp/docs/agents/issue-tracker-github.md` | `{{REPO}}`                                                                    |
+| `templates/stamp/AGENTS.md`                           | `{{PROJECT_NAME}}`, `{{TEAM_NAME}}`                                           |
+| `templates/stamp/docs/agents/triage-labels.md`        | none — fully generic                                                          |
+| `templates/stamp/docs/agents/domain.md`               | none — fully generic                                                          |
+| `templates/stamp/gitignore`                           | none — fully generic                                                          |
 
 ## What the stamp is not, in this directory
 

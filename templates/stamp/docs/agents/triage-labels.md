@@ -7,9 +7,9 @@ two tables — five triage states plus three categories — are universal: every
 Project carries them whatever its tracker. Anything below them exists only on
 trackers that need it, and is spelled out as such.
 
-These labels live wherever this repo's tracker scopes labels: team labels on
-the **{{TEAM_NAME}}** team where the tracker has teams, repository labels on
-the repo itself where it doesn't. `docs/agents/issue-tracker.md` names which.
+These labels live wherever this repo's tracker scopes labels — a team, an
+organization, the repo itself. `docs/agents/issue-tracker.md` names the
+tracker, and so the scope.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |
 | -------------------------- | -------------------- | ---------------------------------------- |
@@ -62,14 +62,18 @@ deterministic. Highest first; an issue with none sorts last:
 | `P2`  | Medium   |
 | `P3`  | Low      |
 
+"Exactly one" is the invariant, not a guarantee — nothing enforces it when
+priority is a label. `docs/agents/issue-tracker.md` carries the resolution
+rule for an issue that ends up carrying two.
+
 ## Milestones
 
 Alongside its category and state labels, every open issue also carries
-exactly one milestone — a third axis, not a label: a Linear field
-(`projectMilestone`), set via `list_milestones` / `save_issue`'s `milestone`
-parameter. Per-axis, exactly like the two above: assigning a milestone must
-not disturb the category label, the state label, or this Project's own
-domain labels.
+exactly one milestone — a third axis, and never a triage label: a tracker
+field, or whatever that tracker offers in its place.
+`docs/agents/issue-tracker.md` names the mechanism. Per-axis, exactly like
+the two above: assigning a milestone must not disturb the category label,
+the state label, or this Project's own domain labels.
 
 If this Project has no milestones defined yet, the invariant doesn't apply
 until they exist — milestone names are a maintainer decision, made once, not
