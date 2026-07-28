@@ -186,8 +186,8 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
 
 ## The stamp
 
-What `/factory-new` installs and `/factory-adopt` (SIDEPRO-110) retrofits — the
-conventions the loop relies on. The file half of the stamp lives in
+What `/factory-new` installs and `/factory-adopt` retrofits — the conventions
+the loop relies on. The file half of the stamp lives in
 `templates/stamp/`, parameterised; those templates are its only source, and a
 stamping skill fills their placeholders rather than hand-writing conventions.
 

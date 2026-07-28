@@ -83,6 +83,13 @@ Confirm with the maintainer that the matched project is indeed the right one
 before reusing it. Only create a new project (`save_project`, same call as
 `/factory-new`) if no match exists.
 
+If the maintainer says the matched project is *not* this repo's, don't reuse
+it and don't create a new project under the same name — ask them whether to
+use a different existing project instead (and which one) or create a new one
+under a different name, then follow their answer. This is a name collision
+between two unrelated projects; silently reusing the matched project or
+silently creating a confusing duplicate are both wrong.
+
 ## Phase 1 — stamp, idempotently
 
 For every piece below: create only if missing, merge only if present, never
@@ -110,12 +117,20 @@ labels, Domain docs), placeholders filled. Merging means:
   untouched.
 - If it already has an `## Agent skills` heading, add only the subsections
   that are missing under it (`### Issue tracker`, `### Triage labels`,
-  `### Domain docs`). Leave subsections that are already present as they are
-  — don't rewrite them, even if their wording differs from the template.
-- If existing content conflicts with what the template would say (for
-  example, an `### Issue tracker` subsection pointing at a different
-  tracker), surface the conflict to the maintainer and let them decide.
-  Don't clobber it.
+  `### Domain docs`). For a subsection that's already present, decide which
+  of these two cases it is before touching anything:
+  - **Same thing, different words** — it describes the same tracker,
+    project, and label vocabulary as the template, just phrased
+    differently (for example, an `### Issue tracker` subsection that names
+    the same Linear project but says "Track work in Linear" instead of the
+    template's exact phrasing). Leave it exactly as it is — don't rewrite
+    it, even to match the template's wording.
+  - **Conflict** — it asserts something different: a different tracker, a
+    different project, a different label vocabulary, or a pointer to
+    different files (for example, an `### Issue tracker` subsection
+    pointing at a different tracker entirely). Surface the conflict to the
+    maintainer and let them decide. Never clobber it, and never leave it in
+    place without flagging it.
 
 ### docs/agents/*
 
@@ -169,6 +184,15 @@ actively check it at the end of Phase 1 and report to the maintainer either
 "stamp already complete, nothing changed" or a list of what was created or
 merged this run. That report is how the maintainer sees acceptance criterion
 1 hold.
+
+Before that report, also run `/factory-new`'s build step 7 check: from the
+repo root, `grep -rn '{{' . --exclude-dir=.git`, scanning the whole tree. It
+must return nothing. This matters more here than in `/factory-new`, because
+it covers the merged block in `AGENTS.md`/`CLAUDE.md` — not just the
+`docs/agents/` files — and the merge path hand-assembles subsections into an
+existing file rather than copying a rendered template whole, so it's the
+likeliest place for a placeholder to survive. If the grep finds anything,
+stop and fix it before reporting Phase 1 complete.
 
 ## Phase 2 — re-triage sweep
 
