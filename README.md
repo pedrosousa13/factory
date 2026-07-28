@@ -45,3 +45,26 @@ Run `/factory-adopt` inside the repo. It will:
 - **Domain docs**: single-context `CONTEXT.md` + `docs/adr/` per repo, created lazily. See `docs/agents/domain.md`.
 - **Git**: branch per issue, PR, auto-merge on green. No half-done work on main — parked issues live on their branch.
 - **Context discipline**: Loop Sessions stay under ~40% context; superpowers subagents do the implementation; `/handoff` bridges sessions.
+
+## Install
+
+What the Factory assumes on the machine:
+
+1. **Claude Code** with the **Linear MCP server** connected to the Side projects workspace.
+2. **`gh`** authenticated, git over SSH.
+3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills` — or, once they ship, `/factory-new` and `/factory-adopt`.
+4. **This repo** at `~/apps/factory`, with the Factory skills symlinked in:
+
+   ```sh
+   ln -s ~/apps/factory/skills/factory ~/.claude/skills/factory
+   ```
+
+   `/factory` should then show up in any Claude Code session's skill list.
+
+## Use
+
+1. **Plan** in the project repo: `/grilling` an idea into shape, slice it into `ready-for-agent` Linear issues (see "The loop at a glance").
+2. **Run** `/factory` in the project repo and walk away. The Loop Session works the Queue and pings only when it has a question.
+3. **Steer** from Linear: reorder priorities, answer `needs-info` questions. Re-running `/factory` is always the right way to resume.
+
+`PROTOCOL.md` is the contract for what the Loop Session does at every step.

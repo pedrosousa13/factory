@@ -14,4 +14,14 @@ These exist as team labels on the **Side projects** team in Linear.
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+## Category labels
+
+Alongside its state label, every issue gets exactly one category label. These also exist as team labels on **Side projects**:
+
+| Label         | Meaning                              |
+| ------------- | ------------------------------------ |
+| `Feature`     | New capability                       |
+| `Improvement` | Enhancement to existing behavior     |
+| `Bug`         | Something is wrong                   |
+
+Use these exact names — not `enhancement`, not lowercase `bug`.
