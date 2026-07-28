@@ -13,8 +13,15 @@ It is the source of truth; this file only bootstraps it.
 ## Bootstrap
 
 1. Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`.
-2. Verify this repo is stamped: `docs/agents/issue-tracker.md` exists at the
-   repo root. If not, tell the maintainer to run `/factory-adopt` and stop.
+2. Run its "## Preflight" section in full, plus the stamp check below, before
+   doing anything else — accumulate failures from both rather than stopping
+   at the first:
+   - Every Preflight check in `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`.
+   - **Stamped**: `docs/agents/issue-tracker.md` exists at the repo root. If
+     not, that's a failure too: the Queue has no tracker to read, so no
+     Loop Session is possible here. Fix by running `/factory-adopt`.
+   If either produced a failure, report every one collected, with its fix,
+   and stop — do not begin Session start.
 3. Read `docs/agents/issue-tracker.md` — it names this Project's Linear
    project and the MCP tool conventions. Load the Linear MCP tool schemas via
    ToolSearch if they are deferred.

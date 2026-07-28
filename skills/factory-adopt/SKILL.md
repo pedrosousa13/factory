@@ -37,6 +37,17 @@ the real label names are `Feature`/`Improvement`/`Bug`. Never emit `bug` or
 
 ## Preflight — establish what exists, change nothing
 
+Run `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "## Preflight" section first, in
+full — accumulate every failure there rather than stopping at the first, per
+its own instruction, and stop before doing anything else if it finds one.
+Its tracker-reachable check applies only if `docs/agents/issue-tracker.md`
+already exists in this repo: if it doesn't, that's not a failure — this
+skill is what derives and writes that file (see "Derive the Linear project
+name" below), so its absence going in is expected. If the file already
+exists (a second `/factory-adopt` run, or a repo adopted before), the check
+does apply, and catches a tracker that's since gone stale (renamed project,
+revoked access) before the sweep below relies on it.
+
 Must run inside an existing git repo (`git rev-parse --is-inside-work-tree`).
 Stop if not.
 
