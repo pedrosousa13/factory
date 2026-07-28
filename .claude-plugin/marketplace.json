@@ -1,0 +1,13 @@
+{
+  "name": "factory",
+  "owner": {
+    "name": "Pedro Sousa",
+    "url": "https://github.com/pedrosousa13"
+  },
+  "plugins": [
+    {
+      "name": "factory",
+      "source": "./"
+    }
+  ]
+}
