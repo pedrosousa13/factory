@@ -31,10 +31,14 @@ Call `get_issue` with the issue identifier, then `list_comments`.
 
 ## Factory loop operations
 
-Linear's answer to each row of the tracker contract in the Factory's
-`PROTOCOL.md` ("The tracker contract"), one bullet per
-row. A `/factory` Loop Session needs every one of them.
+Linear's answer to each row of the tracker contract in `PROTOCOL.md`, the
+Factory plugin's own protocol document — a session with the Factory
+installed can find it, and one without it has no use for this section — one
+bullet per row. A `/factory` Loop Session needs every one of them.
 
+- **Reachability**: `list_teams` both resolves the Linear MCP tools and
+  confirms the **Side projects** team exists; `list_projects` filtered to
+  that team confirms the **Factory** project does.
 - **Queue listing**: `list_issues` filtered by
   `project: "Factory"` and `label: "ready-for-agent"`, keeping only
   issues in an unstarted state (**Todo** or **Backlog**). `list_issues` has
@@ -45,11 +49,10 @@ row. A `/factory` Loop Session needs every one of them.
   **Urgent > High > Medium > Low > No priority** — ties broken by the
   oldest `createdAt`. Both fields come back on `list_issues`, so ordering
   costs no extra call.
-- **State: started**: `save_issue` setting `state` to **In Progress**,
-  in the same call that sets `assignee` — one call is what makes pickup
-  atomic.
-- **State: completed / canceled**: `save_issue` setting `state` to **Done** for
-  landed work, **Canceled** for wontfix.
+- **State: started**: `save_issue` setting `state` to **In Progress**, in
+  the same call that sets `assignee` — one call is what makes pickup atomic.
+- **State: completed / canceled**: `save_issue` setting `state` to **Done**
+  for landed work, **Canceled** for wontfix.
 - **Park**: `save_issue` setting `state` back to **Todo**, with
   `removeLabels: ["ready-for-agent"]` and `addLabels: ["needs-info"]`.
 - **Blocking**: `get_issue` with `includeRelations: true`; the issue is
@@ -63,6 +66,14 @@ row. A `/factory` Loop Session needs every one of them.
   runs); set with `save_issue`'s `milestone` parameter, against a milestone
   `list_milestones` returned. Read a milestone's completion with
   `get_milestone`'s `progress`.
+- **Milestone issue counts**: a second `list_issues` filtered by
+  `project: "Factory"` with no `ready-for-agent` filter, scoped to
+  the milestone client-side on `projectMilestone` and to Linear's open
+  states (everything but **Done** and **Canceled**), then bucketed by the
+  triage label each issue carries.
+- **Read an issue**: `get_issue` (accepts `SIDEPRO-123` identifiers)
+  for the body, then `list_comments` for the discussion — `get_issue` does
+  not return comments, so reading an issue in full is always both calls.
 - **Comment**: `save_comment` on the issue. Body as Markdown with literal
   newlines.
 - **Branch name**: `gitBranchName` on the issue — the branch name Linear

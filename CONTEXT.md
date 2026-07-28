@@ -9,7 +9,7 @@ The control plane defined by this repo: the preferences, loop protocol, and conv
 _Avoid_: workspace, monorepo
 
 **Project**:
-A piece of software the Factory builds. Lives in its own repo under `~/apps/` with its own Linear project, stamped with the Factory's conventions.
+A piece of software the Factory builds. Lives in its own repo under `~/apps/` with its own issue tracker project, stamped with the Factory's conventions.
 _Avoid_: app, product, workspace
 
 **Tracker adapter**:

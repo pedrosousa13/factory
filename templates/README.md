@@ -14,13 +14,13 @@ inline copy of it.
 
 ## File mapping
 
-| Template                                    | Destination in the Project repo    |
-| -------------------------------------------- | ----------------------------------- |
-| `templates/stamp/AGENTS.md`                  | `AGENTS.md`                         |
+| Template                                              | Destination in the Project repo    |
+| ----------------------------------------------------- | ----------------------------------- |
+| `templates/stamp/AGENTS.md`                           | `AGENTS.md`                         |
 | `templates/stamp/docs/agents/issue-tracker-linear.md` | `docs/agents/issue-tracker.md`      |
-| `templates/stamp/docs/agents/triage-labels.md` | `docs/agents/triage-labels.md`    |
-| `templates/stamp/docs/agents/domain.md`      | `docs/agents/domain.md`             |
-| `templates/stamp/gitignore`                  | `.gitignore`                        |
+| `templates/stamp/docs/agents/triage-labels.md`        | `docs/agents/triage-labels.md`    |
+| `templates/stamp/docs/agents/domain.md`               | `docs/agents/domain.md`             |
+| `templates/stamp/gitignore`                           | `.gitignore`                        |
 
 `templates/stamp/gitignore` has no leading dot on purpose — a dotfile inside
 the templates tree is easy to miss, and some copy operations skip hidden

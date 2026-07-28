@@ -93,6 +93,7 @@ rewrite of that one file and of nothing else.
 
 | Operation | What the loop requires |
 | --- | --- |
+| Reachability | A check that the tracker is usable from here: its tooling resolves, and the place this Project's issues live actually exists |
 | Queue listing | The issues that carry `ready-for-agent` and are in an unstarted state, each with its milestone, so Queue scope can be applied to the result |
 | Queue order | A deterministic order over those issues: priority high→low, ties broken oldest-first |
 | State: started | Move an issue into a started state and assign it, as one act |
@@ -100,6 +101,8 @@ rewrite of that one file and of nothing else.
 | Park | Return an issue to an unstarted state, and swap its `ready-for-agent` label for `needs-info` |
 | Blocking | Answer, for one issue, whether anything still unfinished blocks it |
 | Milestone | Carry exactly one milestone per open issue, as a field or equivalent and never a triage label; list a Project's milestones in a stable order; report a milestone's completion |
+| Milestone issue counts | Count every still-open issue in one milestone, broken down by state label — its own query, not a re-count of the Queue, which sees only `ready-for-agent` |
+| Read an issue | Retrieve one issue's body and every comment on it — the brief Implementation works from, and where a declined milestone is recorded |
 | Comment | Append a comment to an issue — pickup, completion, a Parked question, a declined milestone; the last two open with the AI disclaimer (see Ping and Park) |
 | Branch name | A per-issue branch name, the same one for every session that touches that issue |
 | State verification | Report an issue's current state on demand, so a claim about it can be checked |
