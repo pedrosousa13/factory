@@ -325,6 +325,63 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
   `/factory` in a fresh session — its Session start consumes the Handoff and
   archives it to `.scratch/handoffs/archive/` (consume-once).
 
+## Milestones
+
+Every open issue carries exactly one milestone — a third invariant axis
+alongside the category label and the state label (see "The stamp" table).
+Per-axis, exactly as the other two: assigning a milestone must not disturb
+either label, and a Project's own domain labels stay untouched. A milestone
+is a Linear field (`projectMilestone`), not a label — set it with
+`save_issue`'s `milestone` parameter, against a milestone from
+`list_milestones`.
+
+Three places enforce it:
+
+- **Issue creation, in a Planning Session.** A new issue is filed with a
+  milestone already set, the same as it is filed with a category label.
+- **`/factory-adopt`'s re-triage sweep.** Proposes a milestone for every
+  open issue alongside its category and state, in the same
+  maintainer-approved batches (`skills/factory-adopt/SKILL.md`, "Phase 2"),
+  and backfills issues a prior sweep left unassigned.
+- **The stamp docs.** The convention is written in
+  `docs/agents/triage-labels.md` for every stamped Project — the same file
+  that carries the category and state conventions.
+
+**No milestones defined.** The invariant cannot hold until the Project has
+milestones to assign. Finding none (`list_milestones` returns empty) —
+surface that to the maintainer and stop there for this axis, rather than
+skipping it silently or inventing milestone names: naming milestones is a
+maintainer decision, made once, outside any sweep or issue-creation step.
+Category and state labeling proceeds regardless. This mirrors Queue scope's
+own "no milestones" case above, and doesn't contradict it: the invariant is
+the goal state a Project grows into, not a precondition Queue scoping
+already requires — Queue scoping already works with milestones only
+partially applied.
+
+**Declining a milestone.** The maintainer may decline one for a specific
+issue — an explicit decision, not an oversight, and it must read as one.
+Record it as a Linear comment on the issue, opening with the AI disclaimer
+used elsewhere for agent-written tracker comments (see Ping and Park), then
+this exact marker line beneath it:
+
+**Milestone: declined by the maintainer.**
+
+Human-readable context belongs beneath the marker — which milestone was
+proposed, and why it was declined if the maintainer said — but detection
+depends only on the marker, not on that prose.
+
+A decline is recognised **only** by a comment containing that exact line.
+Nothing else counts: not a comment that merely discusses milestones, not a
+maintainer remark in passing. Before proposing a milestone to an
+unassigned issue, check its comments for the marker: an issue that already
+carries one is left alone, not re-proposed every sweep.
+
+**Ambiguous or absent record** — no comment contains the marker, or
+whether one does is unclear — the issue is treated as *not declined*, and
+the sweep proposes a milestone again. Re-asking costs the maintainer one
+approval; wrongly inferring a decline from vague prose silently strips an
+issue out of the invariant forever. Fail toward asking.
+
 ## The stamp
 
 What `/factory-new` installs and `/factory-adopt` retrofits — the conventions
@@ -337,6 +394,7 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Repo | `~/apps/<name>`, private GitHub remote over SSH |
 | Issue tracker | One Linear project per repo, Side projects team, documented in `docs/agents/issue-tracker.md` |
 | Labels | Five canonical triage states + `Feature`/`Improvement`/`Bug` categories, as team labels |
+| Milestones | Every open issue carries exactly one, a third axis alongside category and state — see "## Milestones" |
 | Agent docs | `AGENTS.md` + `docs/agents/` (issue-tracker, triage-labels, domain) |
 | Domain docs | `CONTEXT.md` + `docs/adr/`, created lazily |
 | Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/`, Pause note at `.scratch/pause-note.md` |
