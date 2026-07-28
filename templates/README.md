@@ -52,8 +52,10 @@ Two pieces of the stamp aren't files a template can produce:
 See `PROTOCOL.md`'s "The stamp" table for the complete list and how each
 piece fits into the loop.
 
-## Not part of the stamp
+## Created lazily, not templated
 
-Domain docs (`CONTEXT.md`, `docs/adr/`) are deliberately absent from this
-directory — `docs/agents/domain.md` explains that they're created lazily,
-by `/domain-modeling`, not installed upfront.
+Domain docs (`CONTEXT.md`, `docs/adr/`) are part of the Factory stamp — see
+`PROTOCOL.md`'s "The stamp" table — but have no template in this directory.
+They're created lazily, by `/domain-modeling`, once terms and decisions
+actually need resolving, not installed upfront. See
+`docs/agents/domain.md`.
