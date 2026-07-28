@@ -31,6 +31,5 @@ It is the source of truth; this file only bootstraps it.
   plus `/review`).
 - Mirror every transition in Linear: pickup comment with branch name,
   completion comment with PR link, states In Progress → Done.
-- At every issue boundary, check the Context Budget (~40% of the context
-  window). Above it, write a Handoff to `.scratch/handoffs/` and stop — never
-  start a new issue over budget.
+- At every issue boundary, check the Context Budget; over budget → write a
+  Handoff and stop. Never start a new issue over budget.

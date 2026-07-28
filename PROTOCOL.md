@@ -33,7 +33,7 @@ maintainer to run `/factory-adopt` (forthcoming, SIDEPRO-110) and stop.
    previous Loop Session (an in-flight issue, decisions, facts not in the
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
-   Handoffs is specified under "Handoff" below.
+   Handoffs is specified in the Handoff section below.
 2. **Check the working tree.** Must be clean. A dirty tree means the previous
    session died mid-issue: stop and ask the maintainer rather than guessing.
 3. Enter the loop below.
@@ -119,23 +119,25 @@ fix isn't forthcoming, the work stays on its branch and the issue is Parked.
 After each issue lands or is Parked:
 
 1. **Context Budget check**: above ~40% of the context window → write a
-   Handoff and stop (mechanics under "Handoff" below).
+   Handoff and stop (mechanics in the Handoff section below).
 2. Otherwise return to Queue selection.
 
 ## Handoff
 
-The compacted document a Loop Session writes when its Context Budget is spent,
-so a fresh Loop Session can continue without the old context.
+How a Loop Session bridges to the next one when its Context Budget is spent:
 
 - **Issue boundaries only.** A Handoff is written after an issue lands or is
   Parked, never mid-issue. The boundary guarantees the previous issue landed
   or was Parked cleanly, so a Handoff never carries half-done work.
-- **Written via the `/handoff` skill**, with two Factory overrides: the
-  document goes to `.scratch/handoffs/<timestamp>.md` in the Project repo,
-  not the OS temp dir the skill defaults to, where `<timestamp>` is a
-  sortable date-time prefix, optionally followed by a short slug — e.g.
-  `2026-07-28-0912-resume-queue.md`. "Newest" in Session start means last in
-  lexicographic order, which the sortable prefix guarantees.
+- **Follow the `/handoff` skill** (machine-level, at
+  `~/.claude/skills/handoff` — it is human-invoke-only, so the session
+  reads its SKILL.md and applies the instructions directly), with two
+  Factory overrides:
+  - **Destination**: `.scratch/handoffs/` in the Project repo, not the OS
+    temp dir the skill defaults to.
+  - **Name**: `<timestamp>.md` — a sortable date-time prefix, optionally a
+    short slug after it, e.g. `2026-07-28-0912-resume-queue.md`. "Newest"
+    in Session start means last in lexicographic order.
 - **Contents**: where the Queue stood, decisions made, and facts not
   recoverable from the artifacts (issues, commits, PRs, docs). Reference,
   don't duplicate, what the artifacts already hold — the skill's own rule.
