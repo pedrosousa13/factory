@@ -24,7 +24,7 @@ is an interactive session, not a daemon.
 - **Git**: a GitHub remote (SSH), `gh` authenticated, `.scratch/` gitignored.
 
 If `docs/agents/issue-tracker.md` is missing, the repo is not stamped: tell the
-maintainer to run `/factory-adopt` (forthcoming, SIDEPRO-110) and stop.
+maintainer to run `/factory-adopt` and stop.
 
 ## Session start
 
