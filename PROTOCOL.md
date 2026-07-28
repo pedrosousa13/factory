@@ -53,10 +53,13 @@ fix — never a bare "preflight failed." Shape:
   with `/setup-matt-pocock-skills`.
 - **superpowers available**: `superpowers:subagent-driven-development` and
   `superpowers:test-driven-development`, both required by Implementation
-  (below). The plugin manifest declares `superpowers@superpowers-marketplace`
-  as a dependency, so an installation via the marketplace should already
-  have it — check anyway, as a cheap assertion rather than trusting the
-  manifest silently held. Failure: install the `superpowers` plugin.
+  (below). This Preflight check is the *only* thing that guarantees them —
+  the plugin manifest deliberately declares no dependency on superpowers.
+  A manifest dependency has to name a marketplace as well as a plugin, so
+  it fails on a machine that installed superpowers from a different one
+  even though the skills are right there; checking for the skills
+  themselves is what actually matters, and it doesn't care where they came
+  from. Failure: install the `superpowers` plugin, from any marketplace.
 - **No stale `factory*` symlinks**: `~/.claude/skills/factory`,
   `factory-new`, `factory-adopt` must not exist. The Factory ships as a
   plugin now; a leftover symlink from before that change means two things

@@ -1,5 +1,4 @@
 {
   "name": "factory",
-  "description": "The control plane for running AI-driven software development in a loop.",
-  "dependencies": ["superpowers@superpowers-marketplace"]
+  "description": "The control plane for running AI-driven software development in a loop."
 }

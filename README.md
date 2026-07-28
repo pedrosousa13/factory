@@ -53,6 +53,12 @@ What the Factory assumes on the machine:
 1. **Claude Code** with the **Linear MCP server** connected to the Side projects workspace.
 2. **`gh`** authenticated, git over SSH.
 3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
+
+   Install superpowers yourself — the Factory's manifest declares no
+   dependency on it, on purpose. A manifest dependency names a marketplace
+   as well as a plugin, so it breaks on a machine that installed
+   superpowers from a different one. Any marketplace will do; Preflight
+   checks for the skills, not their provenance.
 4. **The Factory plugin**, installed from its marketplace:
 
    ```sh
