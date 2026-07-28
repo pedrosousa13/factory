@@ -17,7 +17,7 @@ inline copy of it.
 | Template                                    | Destination in the Project repo    |
 | -------------------------------------------- | ----------------------------------- |
 | `templates/stamp/AGENTS.md`                  | `AGENTS.md`                         |
-| `templates/stamp/docs/agents/issue-tracker-linear.md` | `docs/agents/issue-tracker.md` |
+| `templates/stamp/docs/agents/issue-tracker-linear.md` | `docs/agents/issue-tracker.md`      |
 | `templates/stamp/docs/agents/triage-labels.md` | `docs/agents/triage-labels.md`    |
 | `templates/stamp/docs/agents/domain.md`      | `docs/agents/domain.md`             |
 | `templates/stamp/gitignore`                  | `.gitignore`                        |
@@ -27,7 +27,7 @@ the templates tree is easy to miss, and some copy operations skip hidden
 files. The skill writes its contents to `.gitignore` in the target repo.
 
 `issue-tracker-<tracker>.md` is one template per tracker — the Project's
-**tracker adapter**, answering every row of
+**Tracker adapter**, answering every row of
 `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The tracker contract" for that one
 tracker. Only the template's name carries the tracker; the destination is
 always `docs/agents/issue-tracker.md`, because a Project has exactly one
@@ -43,7 +43,7 @@ is the only adapter today.
 | `{{TEAM_NAME}}`          | The Linear team name             | `Side projects`       |
 | `{{TEAM_KEY}}`           | The Linear team key              | `SIDEPRO`             |
 
-`docs/agents/issue-tracker-linear.md` uses all four. `AGENTS.md` uses
+The `issue-tracker-linear.md` template uses all four. `AGENTS.md` uses
 `{{PROJECT_NAME}}` and `{{TEAM_NAME}}`. `docs/agents/triage-labels.md` uses
 only `{{TEAM_NAME}}`. `docs/agents/domain.md` is fully generic and has no
 placeholders.

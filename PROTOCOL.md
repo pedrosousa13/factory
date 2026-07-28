@@ -85,7 +85,7 @@ maintainer to run `/factory-adopt` and stop.
 ## The tracker contract
 
 Every Project has exactly one issue tracker, named and documented in
-`docs/agents/issue-tracker.md` — that file is the Project's **tracker
+`docs/agents/issue-tracker.md` — that file is the Project's **Tracker
 adapter**. This document states *what* a tracker must provide; the adapter
 states *how* this Project's tracker provides it. Nothing in this document
 names a tracker product, so moving a Project to a different tracker is a
@@ -93,13 +93,13 @@ rewrite of that one file and of nothing else.
 
 | Operation | What the loop requires |
 | --- | --- |
-| Queue listing | The issues that carry `ready-for-agent`, are unstarted, are unblocked, and fall in a chosen milestone |
+| Queue listing | The issues that carry `ready-for-agent` and are in an unstarted state, each with its milestone, so Queue scope can be applied to the result |
 | Queue order | A deterministic order over those issues: priority high→low, ties broken oldest-first |
-| State: In Progress | Move an issue into a started state and assign it, as one act |
-| State: Done / Canceled | Move an issue into a completed state (landed) or a canceled one (wontfix) |
+| State: started | Move an issue into a started state and assign it, as one act |
+| State: completed / canceled | Move an issue into a completed state (landed) or a canceled one (wontfix) |
 | Park | Return an issue to an unstarted state, and swap its `ready-for-agent` label for `needs-info` |
 | Blocking | Answer, for one issue, whether anything still unfinished blocks it |
-| Milestone | Carry exactly one milestone per open issue, as a field or equivalent and never a triage label; list a Project's milestones in a stable order |
+| Milestone | Carry exactly one milestone per open issue, as a field or equivalent and never a triage label; list a Project's milestones in a stable order; report a milestone's completion |
 | Comment | Append a comment to an issue — pickup, completion, a Parked question, a declined milestone; the last two open with the AI disclaimer (see Ping and Park) |
 | Branch name | A per-issue branch name, the same one for every session that touches that issue |
 | State verification | Report an issue's current state on demand, so a claim about it can be checked |
@@ -188,7 +188,7 @@ check, are in `docs/agents/issue-tracker.md`.
   exhausted, not that the milestone is complete — those are different
   claims, and conflating them is exactly the failure scoping guards against.
   Re-fetch the milestone (don't reuse the Session-start snapshot — landed
-  issues may have moved its `progress` since) and report its real `progress`
+  issues may have moved its progress since) and report its real progress
   plus a breakdown of its still-open issues: how many carry
   `ready-for-human`, how many carry `needs-info`, and how many
   `ready-for-agent` issues remain blocked by unfinished work.

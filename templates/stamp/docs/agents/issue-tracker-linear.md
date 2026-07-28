@@ -32,7 +32,7 @@ Call `get_issue` with the issue identifier, then `list_comments`.
 ## Factory loop operations
 
 Linear's answer to each row of the tracker contract in the Factory's
-`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md` ("The tracker contract"), one bullet per
+`PROTOCOL.md` ("The tracker contract"), one bullet per
 row. A `/factory` Loop Session needs every one of them.
 
 - **Queue listing**: `list_issues` filtered by
@@ -45,10 +45,10 @@ row. A `/factory` Loop Session needs every one of them.
   **Urgent > High > Medium > Low > No priority** — ties broken by the
   oldest `createdAt`. Both fields come back on `list_issues`, so ordering
   costs no extra call.
-- **State: In Progress**: `save_issue` setting `state` to **In Progress**,
+- **State: started**: `save_issue` setting `state` to **In Progress**,
   in the same call that sets `assignee` — one call is what makes pickup
   atomic.
-- **State: Done / Canceled**: `save_issue` setting `state` to **Done** for
+- **State: completed / canceled**: `save_issue` setting `state` to **Done** for
   landed work, **Canceled** for wontfix.
 - **Park**: `save_issue` setting `state` back to **Todo**, with
   `removeLabels: ["ready-for-agent"]` and `addLabels: ["needs-info"]`.
