@@ -41,3 +41,8 @@ It is the source of truth; this file only bootstraps it.
   completion comment with PR link, states In Progress → Done.
 - At every issue boundary, check the Context Budget; over budget → write a
   Handoff and stop. Never start a new issue over budget.
+- A Pause note (`.scratch/pause-note.md`) is written on pickup, refreshed
+  only on a maintainer decision or an irreversible external action, and
+  deleted when the issue lands or is Parked. A dirty tree at Session start
+  with a Pause note present is not a block — read, verify, and resume the
+  named issue; see PROTOCOL.md.

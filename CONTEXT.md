@@ -26,11 +26,15 @@ _Avoid_: backlog, todo list
 
 **Queue scope**:
 The narrowing a Loop Session chooses at Session start — one milestone, everything, or the unassigned issues — that decides which of a Project's ready-for-agent issues enter its Queue. Draining a scoped Queue means the session's agent-ready work is exhausted, never that the milestone is complete.
-_Avoid_: filter, sprint, batch
+_Avoid_: filter, sprint
 
 **Handoff**:
 The compacted document a Loop Session writes when its context budget is spent, so a fresh Loop Session can continue without the old context.
 _Avoid_: summary, compaction
+
+**Pause note**:
+The single file (`.scratch/pause-note.md`) a Loop Session writes on picking up an issue and deletes when that issue lands or is Parked. The opposite of a Handoff: written mid-issue rather than at a boundary, refreshed only on a maintainer decision or an irreversible external action, and read at Session start as an interrupted state to verify, never as trusted fact.
+_Avoid_: handoff, pause file, checkpoint
 
 **Context Budget**:
 The ceiling (~40% of the context window) a Loop Session may consume before it must hand off. Checked at issue boundaries.
