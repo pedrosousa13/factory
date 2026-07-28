@@ -33,7 +33,7 @@ maintainer to run `/factory-adopt` (forthcoming, SIDEPRO-110) and stop.
    previous Loop Session (an in-flight issue, decisions, facts not in the
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
-   Handoffs is specified in SIDEPRO-107.
+   Handoffs is specified under "Handoff" below.
 2. **Check the working tree.** Must be clean. A dirty tree means the previous
    session died mid-issue: stop and ask the maintainer rather than guessing.
 3. Enter the loop below.
@@ -119,9 +119,30 @@ fix isn't forthcoming, the work stays on its branch and the issue is Parked.
 After each issue lands or is Parked:
 
 1. **Context Budget check**: above ~40% of the context window → write a
-   Handoff to `.scratch/handoffs/` and stop (mechanics in SIDEPRO-107; until
-   that ships, stop and tell the maintainer a fresh session is needed).
+   Handoff and stop (mechanics under "Handoff" below).
 2. Otherwise return to Queue selection.
+
+## Handoff
+
+The compacted document a Loop Session writes when its Context Budget is spent,
+so a fresh Loop Session can continue without the old context.
+
+- **Issue boundaries only.** A Handoff is written after an issue lands or is
+  Parked, never mid-issue. The boundary guarantees the previous issue landed
+  or was Parked cleanly, so a Handoff never carries half-done work.
+- **Written via the `/handoff` skill**, with two Factory overrides: the
+  document goes to `.scratch/handoffs/<timestamp>.md` in the Project repo,
+  not the OS temp dir the skill defaults to, where `<timestamp>` is a
+  sortable date-time prefix, optionally followed by a short slug — e.g.
+  `2026-07-28-0912-resume-queue.md`. "Newest" in Session start means last in
+  lexicographic order, which the sortable prefix guarantees.
+- **Contents**: where the Queue stood, decisions made, and facts not
+  recoverable from the artifacts (issues, commits, PRs, docs). Reference,
+  don't duplicate, what the artifacts already hold — the skill's own rule.
+- **Then stop.** Send the maintainer a push notification (one line: Handoff
+  written, fresh session needed) and stop cleanly. Resuming is just running
+  `/factory` in a fresh session — its Session start consumes the Handoff and
+  archives it to `.scratch/handoffs/archive/` (consume-once).
 
 ## The stamp
 
