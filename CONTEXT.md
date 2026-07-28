@@ -9,8 +9,12 @@ The control plane defined by this repo: the preferences, loop protocol, and conv
 _Avoid_: workspace, monorepo
 
 **Project**:
-A piece of software the Factory builds. Lives in its own repo under `~/apps/` with its own Linear project, stamped with the Factory's conventions.
+A piece of software the Factory builds. Lives in its own repo under `~/apps/` with its own issue tracker project, stamped with the Factory's conventions.
 _Avoid_: app, product, workspace
+
+**Tracker adapter**:
+A Project's `docs/agents/issue-tracker.md` — the one file that says how its issue tracker satisfies the tracker contract in `PROTOCOL.md`. The protocol names no tracker product, so moving a Project to a different tracker rewrites this file and nothing else. The Factory's own adapter is Linear.
+_Avoid_: tracker config, issue-tracker doc, integration
 
 **Loop Session**:
 A long-lived interactive Claude Code session that works through a Project's ready-for-agent issues one at a time, pinging the maintainer only when a question arises.

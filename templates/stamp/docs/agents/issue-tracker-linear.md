@@ -1,20 +1,20 @@
 # Issue tracker: Linear
 
-Issues and PRDs for this repo live in Linear: project **Factory** on
-the **Side projects** team (key `SIDEPRO`).
-https://linear.app/side-projects-p/project/factory-99c50a0b88d2
+Issues and PRDs for this repo live in Linear: project **{{PROJECT_NAME}}** on
+the **{{TEAM_NAME}}** team (key `{{TEAM_KEY}}`).
+{{LINEAR_PROJECT_URL}}
 
 Use the Linear MCP tools (`mcp__linear-server__*`). If their schemas are
 deferred, load them with ToolSearch first.
 
 ## Conventions
 
-- **Create an issue**: `save_issue` with `team: "Side projects"` and
-  `project: "Factory"`. Title in imperative mood; body as Markdown
+- **Create an issue**: `save_issue` with `team: "{{TEAM_NAME}}"` and
+  `project: "{{PROJECT_NAME}}"`. Title in imperative mood; body as Markdown
   with literal newlines (no escape sequences).
-- **Read an issue**: `get_issue` (accepts `SIDEPRO-123` identifiers);
+- **Read an issue**: `get_issue` (accepts `{{TEAM_KEY}}-123` identifiers);
   `list_comments` for the discussion.
-- **List issues**: `list_issues` filtered by `project: "Factory"`,
+- **List issues**: `list_issues` filtered by `project: "{{PROJECT_NAME}}"`,
   plus `state` / `label` filters as needed.
 - **Comment**: `save_comment` on the issue.
 - **Apply / remove labels**: `save_issue` with `addLabels` / `removeLabels`.
@@ -23,7 +23,7 @@ deferred, load them with ToolSearch first.
 
 ## When a skill says "publish to the issue tracker"
 
-Create a Linear issue in the Factory project.
+Create a Linear issue in the {{PROJECT_NAME}} project.
 
 ## When a skill says "fetch the relevant ticket"
 
@@ -37,10 +37,10 @@ installed can find it, and one without it has no use for this section — one
 bullet per row. A `/factory` Loop Session needs every one of them.
 
 - **Reachability**: `list_teams` both resolves the Linear MCP tools and
-  confirms the **Side projects** team exists; `list_projects` filtered to
-  that team confirms the **Factory** project does.
+  confirms the **{{TEAM_NAME}}** team exists; `list_projects` filtered to
+  that team confirms the **{{PROJECT_NAME}}** project does.
 - **Queue listing**: `list_issues` filtered by
-  `project: "Factory"` and `label: "ready-for-agent"`, keeping only
+  `project: "{{PROJECT_NAME}}"` and `label: "ready-for-agent"`, keeping only
   issues in an unstarted state (**Todo** or **Backlog**). `list_issues` has
   **no milestone filter** — apply the milestone scope client-side on
   `projectMilestone`, a field `list_issues` already returns, rather than
@@ -67,11 +67,11 @@ bullet per row. A `/factory` Loop Session needs every one of them.
   `list_milestones` returned. Read a milestone's completion with
   `get_milestone`'s `progress`.
 - **Milestone issue counts**: a second `list_issues` filtered by
-  `project: "Factory"` with no `ready-for-agent` filter, scoped to
+  `project: "{{PROJECT_NAME}}"` with no `ready-for-agent` filter, scoped to
   the milestone client-side on `projectMilestone` and to Linear's open
   states (everything but **Done** and **Canceled**), then bucketed by the
   triage label each issue carries.
-- **Read an issue**: `get_issue` (accepts `SIDEPRO-123` identifiers)
+- **Read an issue**: `get_issue` (accepts `{{TEAM_KEY}}-123` identifiers)
   for the body, then `list_comments` for the discussion — `get_issue` does
   not return comments, so reading an issue in full is always both calls.
 - **Comment**: `save_comment` on the issue. Body as Markdown with literal
@@ -86,7 +86,7 @@ bullet per row. A `/factory` Loop Session needs every one of them.
 ## Reachability
 
 What the Factory's Preflight checks: the Linear MCP tools resolve, and both
-the **Side projects** team and the **Factory** project exist —
+the **{{TEAM_NAME}}** team and the **{{PROJECT_NAME}}** project exist —
 `list_teams`, then `list_projects` filtered to that team.
 
 ## If Linear is unreachable

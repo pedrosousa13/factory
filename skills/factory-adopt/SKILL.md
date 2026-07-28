@@ -145,8 +145,10 @@ labels, Domain docs), placeholders filled. Merging means:
 
 ### docs/agents/*
 
-Write, from `${CLAUDE_PLUGIN_ROOT}/templates/stamp/docs/agents/`, only the files that don't already
-exist (placeholders filled). If a file already exists:
+For each `docs/agents/` row in `${CLAUDE_PLUGIN_ROOT}/templates/README.md`'s
+file mapping, write the template to its mapped destination — not to its own
+basename — only where that destination doesn't already exist (placeholders
+filled). If a file already exists:
 
 - and its content matches what the template would produce — nothing to do,
   this is what makes the second run idempotent. "Matches" means byte-identical

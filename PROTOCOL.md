@@ -29,16 +29,16 @@ fix — never a bare "preflight failed." Shape:
 > `/review` not found. The Landing gate cannot run without it. Install with
 > `/setup-matt-pocock-skills`.
 
-- **Issue tracker reachable.** Read `docs/agents/issue-tracker.md` and check
-  whatever tracker *that file names* — never hardcode Linear here, so this
-  check keeps working if the Factory later supports a tracker other than
-  Linear. For a Linear-backed repo: the Linear MCP tools resolve, and the
-  team and project the file names both exist (`list_teams`, `list_projects`
-  filtered to that team). If the file doesn't exist, this check does not
-  apply — an unstamped repo has no declared tracker yet, and its absence is
-  the calling skill's problem, not Preflight's: the stamp check below
-  catches it for `/factory`; `/factory-new` and `/factory-adopt` are what
-  create the file in the first place, so its absence going in is expected.
+- **Issue tracker reachable.** Read `docs/agents/issue-tracker.md` and run
+  the reachability check *that file documents* — never hardcode a tracker
+  here, so this check keeps working for whichever tracker a repo declares.
+  Reachable means the tracker's tooling resolves and the place that file
+  says issues live in actually exists; the file names the calls that
+  confirm both. If the file doesn't exist, this check does not apply — an
+  unstamped repo has no declared tracker yet, and its absence is the
+  calling skill's problem, not Preflight's: the stamp check below catches
+  it for `/factory`; `/factory-new` and `/factory-adopt` are what create
+  the file in the first place, so its absence going in is expected.
 - **`gh` authenticated.** Run `gh auth status`. Failure: `gh auth login`.
 - **Dependent skills present**: `/review`, `/handoff`, `/triage`,
   `/domain-modeling`, each of which must exist at `~/.claude/skills/<name>/`
@@ -67,9 +67,10 @@ fix — never a bare "preflight failed." Shape:
 
 `/factory` runs from the root of a Project repo that carries the Factory stamp:
 
-- **Issue tracker**: a Linear project on the **Side projects** team, documented
-  in `docs/agents/issue-tracker.md`. That file names the exact Linear project —
-  never guess it.
+- **Issue tracker**: one that satisfies the tracker contract below,
+  documented in `docs/agents/issue-tracker.md`. That file names the exact
+  tracker and the exact place this Project's issues live — never guess
+  either.
 - **Triage labels**: the five canonical state labels (`needs-triage`,
   `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), mapped in
   `docs/agents/triage-labels.md`, plus the category labels
@@ -80,6 +81,37 @@ fix — never a bare "preflight failed." Shape:
 
 If `docs/agents/issue-tracker.md` is missing, the repo is not stamped: tell the
 maintainer to run `/factory-adopt` and stop.
+
+## The tracker contract
+
+Every Project has exactly one issue tracker, named and documented in
+`docs/agents/issue-tracker.md` — that file is the Project's **Tracker
+adapter**. This document states *what* a tracker must provide; the adapter
+states *how* this Project's tracker provides it. Nothing in this document
+names a tracker product, so moving a Project to a different tracker is a
+rewrite of that one file and of nothing else.
+
+| Operation | What the loop requires |
+| --- | --- |
+| Reachability | A check that the tracker is usable from here: its tooling resolves, and the place this Project's issues live actually exists |
+| Queue listing | The issues that carry `ready-for-agent` and are in an unstarted state, each with its milestone, so Queue scope can be applied to the result |
+| Queue order | A deterministic order over those issues: priority high→low, ties broken oldest-first |
+| State: started | Move an issue into a started state and assign it, as one act |
+| State: completed / canceled | Move an issue into a completed state (landed) or a canceled one (wontfix) |
+| Park | Return an issue to an unstarted state, and swap its `ready-for-agent` label for `needs-info` |
+| Blocking | Answer, for one issue, whether anything still unfinished blocks it |
+| Milestone | Carry exactly one milestone per open issue, as a field or equivalent and never a triage label; list a Project's milestones in a stable order; report a milestone's completion |
+| Milestone issue counts | Count every still-open issue in one milestone, broken down by state label — its own query, not a re-count of the Queue, which sees only `ready-for-agent` |
+| Read an issue | Retrieve one issue's body and every comment on it — the brief Implementation works from, and where a declined milestone is recorded |
+| Comment | Append a comment to an issue — pickup, completion, a Parked question, a declined milestone; the last two open with the AI disclaimer (see Ping and Park) |
+| Branch name | A per-issue branch name, the same one for every session that touches that issue |
+| State verification | Report an issue's current state on demand, so a claim about it can be checked |
+
+**Priority is required.** Queue order is what makes two sessions over
+identical state pick the same issue, so a tracker with no native priority
+field must supply the ordering some other way — a label vocabulary, a rank
+field — and its adapter must say which. A tracker whose Queue cannot be
+ordered cannot run the loop.
 
 ## Session start
 
@@ -102,16 +134,17 @@ maintainer to run `/factory-adopt` and stop.
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
    Handoffs is specified in the Handoff section below.
-3. **Ask which milestone to work.** Call `list_milestones` for the Project.
+3. **Ask which milestone to work.** List the Project's milestones.
    - **No milestones** → skip the question entirely; run the whole Queue
      unscoped, exactly as before this rule existed. Required: the Factory's
      own Project has none, and `/factory` must keep working here.
    - **Any milestones** → ask the maintainer, before touching the Queue.
      Never default to a scope. Menu, in order:
-     1. Every milestone in the Project, by ascending `sortOrder`.
+     1. Every milestone in the Project, in the tracker's own milestone
+        order.
      2. **Everything** — no scope, run the whole Queue.
      3. **(No milestone)** — offered only if the Project has at least one
-        issue with no `projectMilestone`.
+        issue with no milestone.
      List every milestone regardless of whether it currently has
      agent-ready work — a menu whose shape is stable beats one that shifts
      between runs, even though it means a milestone with nothing ready can
@@ -127,31 +160,28 @@ maintainer interrupts):
 
 ### 1. Queue selection
 
-The Queue is the set of issues in this Project's Linear project that are:
+The Queue is the set of this Project's issues that are:
 
 - labeled `ready-for-agent`, and
-- in an unstarted state (Todo/Backlog), and
+- in an unstarted state, and
 - in scope (see "Queue scope" below), and
-- **unblocked**: no `blockedBy` relation to an issue that is not Done/Canceled.
+- **unblocked**: nothing that blocks them is still unfinished.
 
 **Queue scope**, chosen once at Session start, narrows which issues count:
 
 - **Everything**, or a Project with no milestones → no filter; every
   candidate is in scope.
-- **A specific milestone** → in scope if the issue's `projectMilestone` is
-  that milestone, or the issue carries no `projectMilestone` at all —
-  fail-open, so unassigned work is never stranded by a scoped run.
-- **(No milestone)** → in scope only if the issue carries no
-  `projectMilestone`.
+- **A specific milestone** → in scope if the issue's milestone is that
+  milestone, or the issue carries no milestone at all — fail-open, so
+  unassigned work is never stranded by a scoped run.
+- **(No milestone)** → in scope only if the issue carries no milestone.
 
-`list_issues` has no milestone filter; apply scope by filtering candidates
-client-side on `projectMilestone`, a field `list_issues` already returns.
-
-Selection order: highest Linear priority first (Urgent > High > Medium > Low >
-No priority), ties broken by oldest `createdAt`. Concretely: `list_issues`
-filtered by project + label, narrowed to scope, then walk candidates in that
-order and confirm each with `get_issue` (`includeRelations: true`), skipping
-any with an unfinished blocker. First unblocked candidate wins.
+Selection order: highest priority first, ties broken by the oldest issue.
+Concretely: list the `ready-for-agent` candidates, narrow them to scope,
+then walk them in that order, checking each for an unfinished blocker and
+skipping any that has one. First unblocked candidate wins. The tracker's
+priority vocabulary, and the calls behind the listing and the blocker
+check, are in `docs/agents/issue-tracker.md`.
 
 **Empty Queue** → stop cleanly. What to report depends on scope:
 
@@ -161,7 +191,7 @@ any with an unfinished blocker. First unblocked candidate wins.
   exhausted, not that the milestone is complete — those are different
   claims, and conflating them is exactly the failure scoping guards against.
   Re-fetch the milestone (don't reuse the Session-start snapshot — landed
-  issues may have moved its `progress` since) and report its real `progress`
+  issues may have moved its progress since) and report its real progress
   plus a breakdown of its still-open issues: how many carry
   `ready-for-human`, how many carry `needs-info`, and how many
   `ready-for-agent` issues remain blocked by unfinished work.
@@ -184,14 +214,14 @@ The loop never invents work, scoped or not.
 
 ### 2. State mirroring (pickup)
 
-Atomically with pickup, in Linear:
+Atomically with pickup, in the tracker:
 
 - assign the issue to the maintainer,
-- move it to **In Progress**,
+- move it to a **started** state,
 - comment the branch name being used.
 
-Labels stay as they are — the Linear state, not the label, tracks progress. The
-one exception is Park, which swaps the state label.
+Labels stay as they are — the tracker's state, not the label, tracks progress.
+The one exception is Park, which swaps the state label.
 
 Also write the Pause note (mechanics below): which issue, which branch, and
 nothing decided yet.
@@ -199,7 +229,7 @@ nothing decided yet.
 ### 3. Implementation
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
-  Linear's suggested branch name (`gitBranchName` on the issue).
+  the tracker's per-issue branch name (`docs/agents/issue-tracker.md`).
 - The issue brief is the spec. Read the issue and its comments in full before
   writing anything.
 - **The Loop Session orchestrates; subagents implement.** Dispatch code work to
@@ -230,8 +260,8 @@ Then land it:
 - If the repo has required checks, enable auto-merge and wait for green. If it
   has none, the Landing gate above *is* the green signal — merge immediately
   (squash), delete the branch.
-- Mirror completion in Linear: comment with the PR link, move the issue to
-  **Done**.
+- Mirror completion in the tracker: comment with the PR link, move the issue
+  to a **completed** state.
 - Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
   boundary that closes it.
 
@@ -272,24 +302,25 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   1. **Store the work**: commit what exists on the issue branch and push it.
      The working tree must be clean and the default branch untouched — Parked
      work lives only on its branch.
-  2. **Post the question** as a Linear comment on the issue, opening with the
+  2. **Post the question** as a tracker comment on the issue, opening with the
      AI disclaimer the `/triage` skill (`~/.claude/skills/triage`) requires on
      agent-written tracker comments:
      `> *This was generated by AI during triage.*` — followed by the question,
      and a note of the branch name and what state the shelved work is in.
   3. **Re-label**: swap `ready-for-agent` for `needs-info` (an issue carries
-     exactly one state label), and move the Linear state back to **Todo**. Both
-     matter: Queue selection requires `ready-for-agent` *and* an unstarted
-     state, so an issue left In Progress would never re-enter the Queue even
-     after it is re-labeled. Only now delete the Pause note
-     (`.scratch/pause-note.md`) — this is the issue boundary that closes it.
-     Deleting any earlier would be a mistake: until the re-label lands, the
-     Pause note is the only record that a Park is half-finished, and an
-     issue that is In Progress with `ready-for-agent` still on it cannot
-     re-enter the Queue on its own.
+     exactly one state label), and move the tracker state back to an
+     **unstarted** state. Both matter: Queue selection requires
+     `ready-for-agent` *and* an unstarted state, so an issue left in a
+     started state would never re-enter the Queue even after it is
+     re-labeled. Only now delete the Pause note (`.scratch/pause-note.md`)
+     — this is the issue boundary that closes it. Deleting any earlier
+     would be a mistake: until the re-label lands, the Pause note is the
+     only record that a Park is half-finished, and an issue left started
+     with `ready-for-agent` still on it cannot re-enter the Queue on its
+     own.
   4. **Continue**: a Park is an issue boundary like a landing, so return to it
      — Context Budget check first, then the next Queue issue.
-- **Re-entry**: the maintainer answers the Linear comment; normal triage moves
+- **Re-entry**: the maintainer answers the tracker comment; normal triage moves
   the issue `needs-info` → `needs-triage` → `ready-for-agent`, and it re-enters
   the Queue like any other issue. A later Loop Session picks it up and finds
   its work waiting on the branch.
@@ -342,11 +373,11 @@ whenever it likes, not when the session chooses to check.
 - **Consumed at Session start** (step 1), where it turns a dirty tree from
   an unconditional block into an informative one: if present, the session
   reads it and verifies its claims against `git status`/`git log` on the
-  named branch and the issue's actual state in Linear.
+  named branch and the issue's actual state in the tracker.
   - **Verified** → check out that branch and resume Implementation for it
     directly — skipping Queue selection and State mirroring, both already
     done.
-  - **Not verified** (the branch is missing, Linear's state doesn't match,
+  - **Not verified** (the branch is missing, the tracker's state doesn't match,
     or a claimed decision can't be confirmed) → the note is not trustworthy
     and must not be acted on. Do not guess or partially resume: fall back
     to the same stop-and-ask path a dirty tree with no Pause note takes,
@@ -386,9 +417,9 @@ Every open issue carries exactly one milestone — a third invariant axis
 alongside the category label and the state label (see "The stamp" table).
 Per-axis, exactly as the other two: assigning a milestone must not disturb
 either label, and a Project's own domain labels stay untouched. A milestone
-is a Linear field (`projectMilestone`), not a label — set it with
-`save_issue`'s `milestone` parameter, against a milestone from
-`list_milestones`.
+is a tracker field or its equivalent, never a triage label; how to list a
+Project's milestones and set one on an issue is the tracker's business
+(`docs/agents/issue-tracker.md`).
 
 Three places enforce it:
 
@@ -403,7 +434,7 @@ Three places enforce it:
   that carries the category and state conventions.
 
 **No milestones defined.** The invariant cannot hold until the Project has
-milestones to assign. Finding none (`list_milestones` returns empty) —
+milestones to assign. Finding none (the Project's milestone list is empty) —
 surface that to the maintainer and stop there for this axis, rather than
 skipping it silently or inventing milestone names: naming milestones is a
 maintainer decision, made once, outside any sweep or issue-creation step.
@@ -415,7 +446,7 @@ partially applied.
 
 **Declining a milestone.** The maintainer may decline one for a specific
 issue — an explicit decision, not an oversight, and it must read as one.
-Record it as a Linear comment on the issue, opening with the AI disclaimer
+Record it as a tracker comment on the issue, opening with the AI disclaimer
 used elsewhere for agent-written tracker comments (see Ping and Park), then
 this exact marker line beneath it:
 
@@ -447,7 +478,7 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Piece | Convention |
 | --- | --- |
 | Repo | `~/apps/<name>`, private GitHub remote over SSH |
-| Issue tracker | One Linear project per repo, Side projects team, documented in `docs/agents/issue-tracker.md` |
+| Issue tracker | One tracker per repo, satisfying the tracker contract above, documented in `docs/agents/issue-tracker.md` |
 | Labels | Five canonical triage states + `Feature`/`Improvement`/`Bug` categories, as team labels |
 | Milestones | Every open issue carries exactly one, a third axis alongside category and state — see "## Milestones" |
 | Agent docs | `AGENTS.md` + `docs/agents/` (issue-tracker, triage-labels, domain) |
