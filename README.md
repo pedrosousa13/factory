@@ -19,7 +19,7 @@ The maintainer plans interactively; an AI Loop Session consumes the queue and on
 
 Resuming after a handoff, a reboot, or a week away is always the same command: `/factory`.
 
-`PROTOCOL.md` is the full Loop Session spec; the `/factory` skill executes it (source in `skills/factory/`, installed by symlinking into `~/.claude/skills/factory`).
+`PROTOCOL.md` is the full Loop Session spec; the `/factory` skill executes it (source in `skills/factory/`, shipped as part of the Factory plugin).
 
 ## New project
 
@@ -53,13 +53,17 @@ What the Factory assumes on the machine:
 1. **Claude Code** with the **Linear MCP server** connected to the Side projects workspace.
 2. **`gh`** authenticated, git over SSH.
 3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
-4. **This repo** at `~/apps/factory`, with the Factory skills symlinked in:
+4. **The Factory plugin**, installed from its marketplace:
 
    ```sh
-   ln -s ~/apps/factory/skills/factory ~/.claude/skills/factory
-   ln -s ~/apps/factory/skills/factory-new ~/.claude/skills/factory-new
-   ln -s ~/apps/factory/skills/factory-adopt ~/.claude/skills/factory-adopt
+   /plugin marketplace add pedrosousa13/factory
+   /plugin install factory
    ```
+
+   Since this is a private repo, set
+   `CLAUDE_CODE_PLUGIN_KEEP_MARKETPLACE_ON_FAILURE=1` — background pulls
+   disable git credential helpers, so a failed pull would otherwise trigger a
+   full re-clone.
 
    `/factory` should then show up in any Claude Code session's skill list.
 
