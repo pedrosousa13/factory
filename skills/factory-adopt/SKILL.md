@@ -1,25 +1,25 @@
 ---
 name: factory-adopt
-description: Bring an already-existing project under Factory conventions — Adoption, per CONTEXT.md's glossary. Stamps the repo idempotently (Linear project, GitHub remote, triage labels, agent docs, .scratch/ gitignore, all created only where missing and never overwritten), then sweeps every open issue through the triage state machine so it carries exactly one category + one state label + one milestone, with agent briefs written for anything ready-for-agent. Use when the user runs /factory-adopt inside an existing repo.
+description: Bring an already-existing project under Factory conventions — Adoption, per ${CLAUDE_PLUGIN_ROOT}/CONTEXT.md's glossary. Stamps the repo idempotently (Linear project, GitHub remote, triage labels, agent docs, .scratch/ gitignore, all created only where missing and never overwritten), then sweeps every open issue through the triage state machine so it carries exactly one category + one state label + one milestone, with agent briefs written for anything ready-for-agent. Use when the user runs /factory-adopt inside an existing repo.
 ---
 
 # /factory-adopt — bring an existing repo under Factory conventions
 
-This skill performs **Adoption** (see `CONTEXT.md`'s glossary): bringing an
+This skill performs **Adoption** (see `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`'s glossary): bringing an
 already-existing repo under Factory conventions so `/factory` can run there.
 It is the idempotent counterpart to `/factory-new` — same stamp, same
 placeholders, same voice — but every step is "create if missing, merge if
 present, never clobber," because this repo may already have history,
 opinions, and issues of its own.
 
-**Read `~/apps/factory/PROTOCOL.md`'s "The stamp" table and
-`~/apps/factory/templates/README.md` in full before doing anything else**,
-same as `/factory-new`. `templates/stamp/` is the single source of stamp
+**Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The stamp" table and
+`${CLAUDE_PLUGIN_ROOT}/templates/README.md` in full before doing anything else**,
+same as `/factory-new`. `${CLAUDE_PLUGIN_ROOT}/templates/stamp/` is the single source of stamp
 content here too — you fill in its placeholders and write the result, you
 never hand-write `AGENTS.md`, `docs/agents/`, or `.gitignore` content
 yourself.
 
-**Read `~/apps/factory/skills/factory-new/SKILL.md`** for the parts that are
+**Read `${CLAUDE_PLUGIN_ROOT}/skills/factory-new/SKILL.md`** for the parts that are
 genuinely identical: how to derive and confirm the Linear project name, the
 label set, the file mapping, the placeholder values, the SSH-remote check.
 This file does not repeat that mechanics — it only calls out where Adoption
@@ -94,7 +94,7 @@ silently creating a confusing duplicate are both wrong.
 
 For every piece below: create only if missing, merge only if present, never
 overwrite. `{{TEAM_NAME}}` is `Side projects`, `{{TEAM_KEY}}` is `SIDEPRO` —
-both fixed, per `PROTOCOL.md`.
+both fixed, per `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`.
 
 ### AGENTS.md vs CLAUDE.md — the merge rule
 
@@ -109,7 +109,7 @@ it:
 > written alongside it.
 
 The "Agent skills block" is the `## Agent skills` section of
-`templates/stamp/AGENTS.md` (its three subsections: Issue tracker, Triage
+`${CLAUDE_PLUGIN_ROOT}/templates/stamp/AGENTS.md` (its three subsections: Issue tracker, Triage
 labels, Domain docs), placeholders filled. Merging means:
 
 - If the target file has no `## Agent skills` heading, append the whole
@@ -134,7 +134,7 @@ labels, Domain docs), placeholders filled. Merging means:
 
 ### docs/agents/*
 
-Write, from `templates/stamp/docs/agents/`, only the files that don't already
+Write, from `${CLAUDE_PLUGIN_ROOT}/templates/stamp/docs/agents/`, only the files that don't already
 exist (placeholders filled). If a file already exists:
 
 - and its content matches what the template would produce — nothing to do,
@@ -149,7 +149,7 @@ exist (placeholders filled). If a file already exists:
 
 ### .gitignore
 
-If `.gitignore` doesn't exist, create it from `templates/stamp/gitignore`
+If `.gitignore` doesn't exist, create it from `${CLAUDE_PLUGIN_ROOT}/templates/stamp/gitignore`
 (remember: no leading dot in the templates tree, write it to `.gitignore`).
 If it exists and doesn't already ignore `.scratch/`, append a `.scratch/`
 line — don't rewrite or reorder the rest of the file. If it already ignores
@@ -218,7 +218,7 @@ unchanged; this section only adds the sweep-specific rules.
   those three does not "clean up" anything, it destroys information the
   maintainer curated.
 - **One milestone, a third axis.** Alongside the two label axes, every open
-  issue also gets exactly one milestone (`PROTOCOL.md`, "## Milestones") — a
+  issue also gets exactly one milestone (`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`, "## Milestones") — a
   Linear field, not a label, set via `save_issue`'s `milestone` parameter
   against a milestone from `list_milestones`. Per-axis like the two above:
   assigning it must not touch the category label, the state label, or the
@@ -233,7 +233,7 @@ unchanged; this section only adds the sweep-specific rules.
 
   **Declining a milestone.** The maintainer may decline one for a specific
   issue, the same way they can adjust any other proposal in its batch.
-  Record the decline exactly as `PROTOCOL.md`'s "## Milestones" section
+  Record the decline exactly as `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "## Milestones" section
   specifies: a Linear comment opening with the AI disclaimer below, then
   the canonical marker line, `**Milestone: declined by the maintainer.**`,
   with human-readable context beneath it. Detection is the marker line
@@ -297,7 +297,7 @@ them; starting the Loop Session is a separate, maintainer-initiated step.
 - Create only where missing — Linear project, GitHub remote, labels,
   `docs/agents/*` files, the `.scratch/` gitignore line. Check first, every
   time, even on a repo you believe you've already adopted.
-- `templates/stamp/` is the only source of stamp content. Never hand-write
+- `${CLAUDE_PLUGIN_ROOT}/templates/stamp/` is the only source of stamp content. Never hand-write
   `AGENTS.md`, `docs/agents/` files, or `.gitignore` content inline.
 - Every open issue carries exactly one category label and exactly one state
   label when the sweep ends — not zero, not two.

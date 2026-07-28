@@ -5,7 +5,7 @@ protocol and must not duplicate it; when the skill and this document disagree,
 this document wins.
 
 Vocabulary (Loop Session, Queue, Handoff, Context Budget, Park…) is defined in
-`CONTEXT.md`. `docs/adr/0001-interactive-loop-session.md` explains why the loop
+`${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`. `${CLAUDE_PLUGIN_ROOT}/docs/adr/0001-interactive-loop-session.md` explains why the loop
 is an interactive session, not a daemon.
 
 ## Prerequisites: a stamped Project repo
@@ -386,7 +386,7 @@ issue out of the invariant forever. Fail toward asking.
 
 What `/factory-new` installs and `/factory-adopt` retrofits — the conventions
 the loop relies on. The file half of the stamp lives in
-`templates/stamp/`, parameterised; those templates are its only source, and a
+`${CLAUDE_PLUGIN_ROOT}/templates/stamp/`, parameterised; those templates are its only source, and a
 stamping skill fills their placeholders rather than hand-writing conventions.
 
 | Piece | Convention |

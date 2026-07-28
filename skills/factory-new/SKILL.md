@@ -8,9 +8,9 @@ description: Bootstrap a brand-new Factory Project end-to-end — repo under ~/a
 You are bootstrapping a new Factory Project. The conventions you are stamping
 are specified elsewhere, not here:
 
-**Read `~/apps/factory/PROTOCOL.md`'s "The stamp" table and
-`~/apps/factory/templates/README.md` in full before doing anything else.**
-`templates/stamp/` is the single source of stamp content. You fill in its
+**Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The stamp" table and
+`${CLAUDE_PLUGIN_ROOT}/templates/README.md` in full before doing anything else.**
+`${CLAUDE_PLUGIN_ROOT}/templates/stamp/` is the single source of stamp content. You fill in its
 placeholders and write the result — you never hand-write AGENTS.md,
 docs/agents/, or .gitignore content yourself. If a placeholder value isn't
 known at the point you need it, stop rather than improvise one.
@@ -18,7 +18,7 @@ known at the point you need it, stop rather than improvise one.
 This skill creates exactly one repo, one Linear project, and (where missing)
 team labels. It creates zero Linear issues. It ends by moving the maintainer
 into a Planning Session — grilling → PRD → issue slices — because that is the
-only place new work gets created (see `CONTEXT.md`).
+only place new work gets created (see `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`).
 
 ## Preflight — fail loudly, change nothing
 
@@ -66,7 +66,7 @@ its URL, and the stamp must exist before the initial commit.
 2. **Linear project**: `save_project` with `name: {{PROJECT_NAME}}`,
    `addTeams: ["Side projects"]`. Capture the returned project URL as
    `{{LINEAR_PROJECT_URL}}`. `{{TEAM_NAME}}` is `Side projects`, `{{TEAM_KEY}}`
-   is `SIDEPRO` — both fixed, per PROTOCOL.md.
+   is `SIDEPRO` — both fixed, per ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md.
 
 3. **Labels**: call `list_issue_labels` for the Side projects team first.
    Compare against the eight required team labels — the five triage states
@@ -75,10 +75,10 @@ its URL, and the stamp must exist before the initial commit.
    and call `create_issue_label` only for names not already present. Never
    create a label you haven't first confirmed is missing.
 
-4. **Apply the stamp**: for each row in `templates/README.md`'s file mapping,
+4. **Apply the stamp**: for each row in `${CLAUDE_PLUGIN_ROOT}/templates/README.md`'s file mapping,
    copy the template into the new repo at its mapped destination, substituting
    `{{PROJECT_NAME}}`, `{{LINEAR_PROJECT_URL}}`, `{{TEAM_NAME}}`, `{{TEAM_KEY}}`
-   wherever they appear. Note: `templates/stamp/gitignore` has no leading dot
+   wherever they appear. Note: `${CLAUDE_PLUGIN_ROOT}/templates/stamp/gitignore` has no leading dot
    in the templates tree on purpose — write its contents to `.gitignore` in
    the new repo, not `gitignore`. Domain docs (`CONTEXT.md`, `docs/adr/`) are
    created lazily by later work, not by this skill — do not create them here.
@@ -117,7 +117,7 @@ maintainer that once the Queue has issues, their next command is `/factory`.
 - Fail loudly and stop rather than half-create anything. A failed preflight
   check means no repo, no project, no labels, no commit — nothing.
 - Never create a second Linear project for a name that already has one.
-- Templates under `templates/stamp/` are the only source of stamp content.
+- Templates under `${CLAUDE_PLUGIN_ROOT}/templates/stamp/` are the only source of stamp content.
   Never hand-write AGENTS.md, docs/agents/ files, or .gitignore inline.
 - No AI attribution anywhere — not in commits, not in the PR (there is no PR
   here, but the rule still applies to the initial commit), not in the repo.

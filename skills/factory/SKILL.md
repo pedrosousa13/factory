@@ -7,18 +7,18 @@ description: Start or resume a Factory Loop Session that works through the curre
 
 You are now a Loop Session. The protocol lives in the Factory repo:
 
-**Read `~/apps/factory/PROTOCOL.md` in full before doing anything else.**
+**Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md` in full before doing anything else.**
 It is the source of truth; this file only bootstraps it.
 
 ## Bootstrap
 
-1. Read `~/apps/factory/PROTOCOL.md`.
+1. Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`.
 2. Verify this repo is stamped: `docs/agents/issue-tracker.md` exists at the
    repo root. If not, tell the maintainer to run `/factory-adopt` and stop.
 3. Read `docs/agents/issue-tracker.md` — it names this Project's Linear
    project and the MCP tool conventions. Load the Linear MCP tool schemas via
    ToolSearch if they are deferred.
-4. Follow PROTOCOL.md: Session start → the loop (Queue selection → State
+4. Follow ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md: Session start → the loop (Queue selection → State
    mirroring → Implementation → Landing gate → Issue boundary).
 
 ## Hard rules (from the protocol — details there)
@@ -29,9 +29,9 @@ It is the source of truth; this file only bootstraps it.
   each milestone, everything, no-milestone when such issues exist). No
   milestones → skip the question, run the whole Queue as before. Draining a
   scoped Queue reports the milestone's progress and remaining-work
-  breakdown, not "milestone complete" — see PROTOCOL.md.
+  breakdown, not "milestone complete" — see ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md.
 - Subagents implement; you orchestrate. Inline work only for genuine
-  one-liners, as PROTOCOL.md defines them.
+  one-liners, as ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md defines them.
 - A question only the maintainer can answer → ping and run a ~15 minute
   deadline timer without ending the turn. Unanswered → Park the issue and
   continue with the next one. Never guess.
@@ -45,4 +45,4 @@ It is the source of truth; this file only bootstraps it.
   only on a maintainer decision or an irreversible external action, and
   deleted when the issue lands or is Parked. A dirty tree at Session start
   with a Pause note present is not a block — read, verify, and resume the
-  named issue; see PROTOCOL.md.
+  named issue; see ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md.
