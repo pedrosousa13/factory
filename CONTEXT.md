@@ -1,0 +1,41 @@
+# Factory
+
+The control plane for running AI-driven software development in a loop. This repo defines the workflow — preferences, loop protocol, conventions — while software gets built in separate project repos.
+
+## Language
+
+**Factory**:
+The control plane defined by this repo: the preferences, loop protocol, and conventions that govern how AI builds software across projects.
+_Avoid_: workspace, monorepo
+
+**Project**:
+A piece of software the Factory builds. Lives in its own repo under `~/apps/` with its own Linear project, stamped with the Factory's conventions.
+_Avoid_: app, product, workspace
+
+**Loop Session**:
+A long-lived interactive Claude Code session that works through a Project's ready-for-agent issues one at a time, pinging the maintainer only when a question arises.
+_Avoid_: run, agent loop, daemon
+
+**Planning Session**:
+An interactive session where the maintainer turns an idea into ready-for-agent issues (grilling → PRD → issue slices). The only place new work is created.
+_Avoid_: intake, brainstorm session
+
+**Queue**:
+A Project's set of ready-for-agent issues that are not blocked. The only thing a Loop Session consumes; when empty, the loop stops.
+_Avoid_: backlog, todo list
+
+**Handoff**:
+The compacted document a Loop Session writes when its context budget is spent, so a fresh Loop Session can continue without the old context.
+_Avoid_: summary, compaction
+
+**Context Budget**:
+The ceiling (~40% of the context window) a Loop Session may consume before it must hand off. Checked at issue boundaries.
+_Avoid_: token limit
+
+**Park**:
+Shelving an in-progress issue because a question went unanswered: the question is posted to the issue, the issue moves to needs-info, work is stored cleanly, and the Loop Session continues with the next issue.
+_Avoid_: pause, defer, skip
+
+**Adoption**:
+Bringing an already-existing Project under Factory conventions: stamping the repo, and fixing its existing issues to meet Factory standards.
+_Avoid_: onboarding, migration, import
