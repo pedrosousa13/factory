@@ -8,6 +8,61 @@ Vocabulary (Loop Session, Queue, Handoff, Context Budget, Park…) is defined in
 `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`. `${CLAUDE_PLUGIN_ROOT}/docs/adr/0001-interactive-loop-session.md` explains why the loop
 is an interactive session, not a daemon.
 
+## Preflight: prerequisites, not the stamp
+
+Before `/factory`, `/factory-new`, or `/factory-adopt` do anything else, they
+run this Preflight. It checks the Factory installation and the maintainer's
+environment — not a specific repo's stamp. A repo's stamp (whether
+`docs/agents/issue-tracker.md` exists, below) is a separate, later check;
+Preflight is what has to be true before that check is even meaningful.
+
+**Run every check below regardless of whether an earlier one already
+failed.** Collect every failure, then report all of them together and stop —
+never stop at the first. A maintainer who fixes one prerequisite only to
+discover the next one on the following run is the exact failure this exists
+to prevent. When every check passes, say nothing: Preflight adds no visible
+ceremony to a fully-provisioned repo.
+
+Each failure names what's missing, why the Factory needs it, and the exact
+fix — never a bare "preflight failed." Shape:
+
+> `/review` not found. The Landing gate cannot run without it. Install with
+> `/setup-matt-pocock-skills`.
+
+- **Issue tracker reachable.** Read `docs/agents/issue-tracker.md` and check
+  whatever tracker *that file names* — never hardcode Linear here, so this
+  check keeps working if the Factory later supports a tracker other than
+  Linear. For a Linear-backed repo: the Linear MCP tools resolve, and the
+  team and project the file names both exist (`list_teams`, `list_projects`
+  filtered to that team). If the file doesn't exist, this check does not
+  apply — an unstamped repo has no declared tracker yet, and its absence is
+  the calling skill's problem, not Preflight's: the stamp check below
+  catches it for `/factory`; `/factory-new` and `/factory-adopt` are what
+  create the file in the first place, so its absence going in is expected.
+- **`gh` authenticated.** Run `gh auth status`. Failure: `gh auth login`.
+- **Dependent skills present**: `/review`, `/handoff`, `/triage`,
+  `/domain-modeling`, each of which must exist at `~/.claude/skills/<name>/`
+  — that path, not the skill's source location, is what makes a skill
+  invocable in a session. `/setup-matt-pocock-skills` installs the four as
+  symlinks there, pointing at `~/.agents/skills/<name>/`; check the
+  `~/.claude/skills/` path itself; a missing or broken symlink there leaves
+  the skill unavailable even if the `~/.agents/skills/` source exists.
+  Failure, per missing skill: name it, name what it's for (`/review` gates
+  Landing, `/handoff` bridges a Context Budget stop, `/triage` runs
+  Adoption's re-triage sweep, `/domain-modeling` maintains `CONTEXT.md`), fix
+  with `/setup-matt-pocock-skills`.
+- **superpowers available**: `superpowers:subagent-driven-development` and
+  `superpowers:test-driven-development`, both required by Implementation
+  (below). The plugin manifest declares `superpowers@superpowers-marketplace`
+  as a dependency, so an installation via the marketplace should already
+  have it — check anyway, as a cheap assertion rather than trusting the
+  manifest silently held. Failure: install the `superpowers` plugin.
+- **No stale `factory*` symlinks**: `~/.claude/skills/factory`,
+  `factory-new`, `factory-adopt` must not exist. The Factory ships as a
+  plugin now; a leftover symlink from before that change means two things
+  claim the name `factory`, and the wrong one can win. Failure: name which
+  symlink(s) were found, fix by deleting them.
+
 ## Prerequisites: a stamped Project repo
 
 `/factory` runs from the root of a Project repo that carries the Factory stamp:

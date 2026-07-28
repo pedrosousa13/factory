@@ -22,9 +22,18 @@ only place new work gets created (see `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`).
 
 ## Preflight — fail loudly, change nothing
 
-Run every check below before touching the filesystem, git, GitHub, or Linear.
-The skill makes no changes until every check in this section and the next
-one ("Derive the Linear project name") has passed. These are the checks
+Run `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "## Preflight" section first, in
+full — accumulate every failure there rather than stopping at the first, per
+its own instruction. It supersedes check 4 below: `gh` authentication is
+defined once, there. Its tracker-reachable check does not apply here — this
+skill runs before `~/apps/<name>` exists, so there is no
+`docs/agents/issue-tracker.md` to read yet; the file this skill writes in
+"Apply the stamp" below *is* what that check will read on every later run of
+`/factory` or `/factory-adopt` in this repo.
+
+Then run every check below before touching the filesystem, git, GitHub, or
+Linear. The skill makes no changes until every check in this section and the
+next one ("Derive the Linear project name") has passed. These are the checks
 that don't depend on the confirmed project name; the duplicate-Linear-
 project check runs later, once the name is confirmed, so an override can't
 slip past it.
@@ -34,9 +43,9 @@ slip past it.
    between words (`^[a-z0-9]+(-[a-z0-9]+)*$`). Reject anything else — no
    spaces, no underscores, no leading/trailing hyphen, no uppercase.
 3. `~/apps/<name>` must not already exist. Stop if it does.
-4. `gh auth status` must report a clean, authenticated state. Stop otherwise.
 
-If any check fails, report exactly which one and stop. Do not partially
+If any check — from the shared Preflight or the list above — fails, report
+every failure found, across both, together, and stop. Do not partially
 proceed.
 
 ## Derive the Linear project name
