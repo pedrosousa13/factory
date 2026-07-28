@@ -28,14 +28,14 @@ maintainer to run `/factory-adopt` (forthcoming, SIDEPRO-110) and stop.
 
 ## Session start
 
-1. **Consume the newest Handoff, if any.** If `.scratch/handoffs/` contains
+1. **Check the working tree.** Must be clean. A dirty tree means the previous
+   session died mid-issue: stop and ask the maintainer rather than guessing.
+2. **Consume the newest Handoff, if any.** If `.scratch/handoffs/` contains
    files, read the newest one and follow it — it carries state from the
    previous Loop Session (an in-flight issue, decisions, facts not in the
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
    Handoffs is specified in the Handoff section below.
-2. **Check the working tree.** Must be clean. A dirty tree means the previous
-   session died mid-issue: stop and ask the maintainer rather than guessing.
 3. Enter the loop below.
 
 ## The loop
@@ -135,9 +135,10 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
   Factory overrides:
   - **Destination**: `.scratch/handoffs/` in the Project repo, not the OS
     temp dir the skill defaults to.
-  - **Name**: `<timestamp>.md` — a sortable date-time prefix, optionally a
-    short slug after it, e.g. `2026-07-28-0912-resume-queue.md`. "Newest"
-    in Session start means last in lexicographic order.
+  - **Name**: `<timestamp>.md` — a full date-time prefix, `YYYY-MM-DD-HHMM`,
+    optionally a short slug after it, e.g. `2026-07-28-0912-resume-queue.md`.
+    The fixed-width prefix is what makes "newest" — last in lexicographic
+    order, as Session start reads it — correct.
 - **Contents**: where the Queue stood, decisions made, and facts not
   recoverable from the artifacts (issues, commits, PRs, docs). Reference,
   don't duplicate, what the artifacts already hold — the skill's own rule.
