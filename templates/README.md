@@ -1,8 +1,9 @@
 # Stamp templates
 
 The Factory stamp is the set of conventions a Project repo must carry for
-`/factory` to run against it — see `PROTOCOL.md`'s "The stamp" table for the
-full list. `templates/stamp/` holds the file-shaped part of that stamp as
+`/factory` to run against it — see `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The
+stamp" table for the full list. `${CLAUDE_PLUGIN_ROOT}/templates/stamp/` holds
+the file-shaped part of that stamp as
 parameterised templates: `/factory-new` and `/factory-adopt` copy each one
 into the Project repo, filling in the project-specific placeholders below.
 
@@ -49,13 +50,14 @@ Two pieces of the stamp aren't files a template can produce:
 - **Git remote**: the Project repo's GitHub remote is created and wired up
   directly, not templated.
 
-See `PROTOCOL.md`'s "The stamp" table for the complete list and how each
-piece fits into the loop.
+See `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The stamp" table for the complete
+list and how each piece fits into the loop.
 
 ## Created lazily, not templated
 
 Domain docs (`CONTEXT.md`, `docs/adr/`) are part of the Factory stamp — see
-`PROTOCOL.md`'s "The stamp" table — but have no template in this directory.
+`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The stamp" table — but have no template
+in this directory.
 They're created lazily, by `/domain-modeling`, once terms and decisions
 actually need resolving, not installed upfront. See
 `docs/agents/domain.md`.
