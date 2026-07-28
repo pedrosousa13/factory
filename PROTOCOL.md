@@ -28,14 +28,14 @@ maintainer to run `/factory-adopt` (forthcoming, SIDEPRO-110) and stop.
 
 ## Session start
 
-1. **Consume the newest Handoff, if any.** If `.scratch/handoffs/` contains
+1. **Check the working tree.** Must be clean. A dirty tree means the previous
+   session died mid-issue: stop and ask the maintainer rather than guessing.
+2. **Consume the newest Handoff, if any.** If `.scratch/handoffs/` contains
    files, read the newest one and follow it — it carries state from the
    previous Loop Session (an in-flight issue, decisions, facts not in the
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
-   Handoffs is specified in SIDEPRO-107.
-2. **Check the working tree.** Must be clean. A dirty tree means the previous
-   session died mid-issue: stop and ask the maintainer rather than guessing.
+   Handoffs is specified in the Handoff section below.
 3. Enter the loop below.
 
 ## The loop
@@ -119,9 +119,33 @@ fix isn't forthcoming, the work stays on its branch and the issue is Parked.
 After each issue lands or is Parked:
 
 1. **Context Budget check**: above ~40% of the context window → write a
-   Handoff to `.scratch/handoffs/` and stop (mechanics in SIDEPRO-107; until
-   that ships, stop and tell the maintainer a fresh session is needed).
+   Handoff and stop (mechanics in the Handoff section below).
 2. Otherwise return to Queue selection.
+
+## Handoff
+
+How a Loop Session bridges to the next one when its Context Budget is spent:
+
+- **Issue boundaries only.** A Handoff is written after an issue lands or is
+  Parked, never mid-issue. The boundary guarantees the previous issue landed
+  or was Parked cleanly, so a Handoff never carries half-done work.
+- **Follow the `/handoff` skill** (machine-level, at
+  `~/.claude/skills/handoff` — it is human-invoke-only, so the session
+  reads its SKILL.md and applies the instructions directly), with two
+  Factory overrides:
+  - **Destination**: `.scratch/handoffs/` in the Project repo, not the OS
+    temp dir the skill defaults to.
+  - **Name**: `<timestamp>.md` — a full date-time prefix, `YYYY-MM-DD-HHMM`,
+    optionally a short slug after it, e.g. `2026-07-28-0912-resume-queue.md`.
+    The fixed-width prefix is what makes "newest" — last in lexicographic
+    order, as Session start reads it — correct.
+- **Contents**: where the Queue stood, decisions made, and facts not
+  recoverable from the artifacts (issues, commits, PRs, docs). Reference,
+  don't duplicate, what the artifacts already hold — the skill's own rule.
+- **Then stop.** Send the maintainer a push notification (one line: Handoff
+  written, fresh session needed) and stop cleanly. Resuming is just running
+  `/factory` in a fresh session — its Session start consumes the Handoff and
+  archives it to `.scratch/handoffs/archive/` (consume-once).
 
 ## The stamp
 
