@@ -123,7 +123,11 @@ Write, from `templates/stamp/docs/agents/`, only the files that don't already
 exist (placeholders filled). If a file already exists:
 
 - and its content matches what the template would produce — nothing to do,
-  this is what makes the second run idempotent.
+  this is what makes the second run idempotent. "Matches" means byte-identical
+  to the template with its placeholders filled; compare the rendered template
+  against the file rather than eyeballing them. A file that is merely similar
+  does not match, and treating it as a match would silently leave a repo
+  half-stamped.
 - and its content differs — do not overwrite it. Surface the diff to the
   maintainer and let them decide whether to adopt the template version, keep
   theirs, or merge by hand.
@@ -179,8 +183,16 @@ unchanged; this section only adds the sweep-specific rules.
   `docs/agents/triage-labels.md`) and exactly one state label
   (`needs-triage`/`needs-info`/`ready-for-agent`/`ready-for-human`/
   `wontfix`). "Exactly one" is the invariant, not "at least one" — if an
-  issue already carries a duplicate, stale, or wrong label, removing it is
-  part of the job, not an optional cleanup.
+  issue carries two state labels or two category labels, removing the wrong
+  one is part of the job, not an optional cleanup.
+
+  The invariant is **per axis, and only over these two axes**. A project's
+  own labels — area, component, milestone, anything outside the eight
+  canonical names — are a separate axis this sweep does not touch. Leave
+  them exactly as they are. An issue ending up with one category, one state,
+  and three of the project's own labels satisfies the invariant; stripping
+  those three does not "clean up" anything, it destroys information the
+  maintainer curated.
 - **Agent briefs for `ready-for-agent`.** An issue moving to `ready-for-agent`
   gets a durable agent brief written into its body (not just a comment),
   structured per `~/.claude/skills/triage/AGENT-BRIEF.md`: category, one-line
@@ -200,6 +212,16 @@ unchanged; this section only adds the sweep-specific rules.
   "approve everything" that skips showing the batch content; the checkpoint
   is what makes acceptance criterion 3 true, not a formality to route
   around. Move to the next batch only once the current one is applied.
+
+  **Approval does not travel to a subagent.** If you dispatch a subagent to
+  analyse issues, it cannot apply a batch on the strength of you telling it
+  the maintainer approved — from inside that subagent, a relayed approval is
+  indistinguishable from an agent inventing one, and a correctly-built
+  subagent will refuse. Only the session that received the maintainer's
+  answer can act on it. So either apply the batch from that session, or
+  dispatch a fresh subagent whose task is applying already-approved content,
+  passing the approved text verbatim so nothing drifts between what was shown
+  and what is written.
 - **The AI disclaimer.** Every AI-written issue body or comment — agent
   briefs, needs-info triage notes, wontfix closing comments, anything this
   sweep writes into the tracker — opens with the line the `/triage` skill
