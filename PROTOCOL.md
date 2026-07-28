@@ -28,8 +28,19 @@ maintainer to run `/factory-adopt` and stop.
 
 ## Session start
 
-1. **Check the working tree.** Must be clean. A dirty tree means the previous
-   session died mid-issue: stop and ask the maintainer rather than guessing.
+1. **Check the working tree, and for a Pause note.** Clean tree, no Pause
+   note (`.scratch/pause-note.md`) → proceed to step 2 normally. Otherwise
+   the previous session was interrupted mid-issue:
+   - **Pause note present** → read it, verify it, and resume the issue it
+     names directly — mechanics in the Pause note section below. Do this
+     before step 2: the Pause note decides what to resume right now; the
+     Handoff (if also present) decides what follows once that issue reaches
+     its own boundary. Step 2 is deferred, not skipped — it runs when the
+     resumed issue reaches its own boundary (Issue boundary below), before
+     Queue selection picks anything new.
+   - **Dirty tree, no Pause note** → the interruption predates this
+     mechanism or the note was lost: stop and ask the maintainer rather
+     than guessing.
 2. **Consume the newest Handoff, if any.** If `.scratch/handoffs/` contains
    files, read the newest one and follow it — it carries state from the
    previous Loop Session (an in-flight issue, decisions, facts not in the
@@ -127,6 +138,9 @@ Atomically with pickup, in Linear:
 Labels stay as they are — the Linear state, not the label, tracks progress. The
 one exception is Park, which swaps the state label.
 
+Also write the Pause note (mechanics below): which issue, which branch, and
+nothing decided yet.
+
 ### 3. Implementation
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
@@ -163,6 +177,8 @@ Then land it:
   (squash), delete the branch.
 - Mirror completion in Linear: comment with the PR link, move the issue to
   **Done**.
+- Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
+  boundary that closes it.
 
 No half-done work ever reaches the default branch. If the gate fails and the
 fix isn't forthcoming, the work stays on its branch and the issue is Parked.
@@ -173,7 +189,12 @@ After each issue lands or is Parked:
 
 1. **Context Budget check**: above ~40% of the context window → write a
    Handoff and stop (mechanics in the Handoff section below).
-2. Otherwise return to Queue selection.
+2. **If this issue was resumed from a Pause note at Session start**, and
+   Session start step 2 has not run yet this session, run it now: consume
+   the newest Handoff, if any (mechanics in the Handoff section below).
+   This is the one place that deferred step is picked back up — skipping it
+   here would strand a Handoff unread for the rest of the session.
+3. Return to Queue selection.
 
 ## Ping and Park
 
@@ -190,7 +211,8 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   Do not end the turn to ask: that stalls the loop indefinitely, the exact cost
   Park exists to remove (ADR-0001).
 - **Answered before the timer** → stop the timer, continue the issue with
-  context intact. No Park, no state change.
+  context intact. No Park, no state change. The answer is a maintainer
+  decision: refresh the Pause note with it (mechanics below).
 - **Unanswered** → Park, which is these four steps in order:
   1. **Store the work**: commit what exists on the issue branch and push it.
      The working tree must be clean and the default branch untouched — Parked
@@ -204,7 +226,12 @@ How a Loop Session handles a mid-issue question it must not answer itself:
      exactly one state label), and move the Linear state back to **Todo**. Both
      matter: Queue selection requires `ready-for-agent` *and* an unstarted
      state, so an issue left In Progress would never re-enter the Queue even
-     after it is re-labeled.
+     after it is re-labeled. Only now delete the Pause note
+     (`.scratch/pause-note.md`) — this is the issue boundary that closes it.
+     Deleting any earlier would be a mistake: until the re-label lands, the
+     Pause note is the only record that a Park is half-finished, and an
+     issue that is In Progress with `ready-for-agent` still on it cannot
+     re-enter the Queue on its own.
   4. **Continue**: a Park is an issue boundary like a landing, so return to it
      — Context Budget check first, then the next Queue issue.
 - **Re-entry**: the maintainer answers the Linear comment; normal triage moves
@@ -214,6 +241,64 @@ How a Loop Session handles a mid-issue question it must not answer itself:
 - **The other trigger**: a Landing gate that fails with no fix forthcoming
   Parks the issue too, by the same four steps — with the gate failure and what
   it would take to clear it posted in place of the question.
+
+## Pause note
+
+How a Loop Session survives an interruption that lands mid-issue — a usage
+cutoff, a killed session — where the Context Budget's own issue-boundary
+discipline does not apply, because the interruption is external and arrives
+whenever it likes, not when the session chooses to check.
+
+- **Distinct from a Handoff, deliberately weaker.** A Handoff is trustworthy
+  by construction: written only at issue boundaries, so it never carries
+  half-done work. A Pause note is the opposite on purpose — written
+  mid-issue, and never trusted without verification. Keeping the two
+  separate is what protects the Handoff guarantee; folding a "maybe
+  mid-issue" flag into one shared artifact would force every reader to check
+  it, and the guarantee decays. The "Handoffs at issue boundaries only" rule
+  is not relaxed by this section.
+- **Location**: `.scratch/pause-note.md` — a single file, not a directory
+  with an archive like `.scratch/handoffs/`. At most one issue is ever in
+  flight, and a Pause note is never a history: it is overwritten in place on
+  refresh and removed entirely once the issue it describes reaches a
+  boundary. Nothing about it is ever read twice, so nothing about it needs
+  archiving.
+- **Written on pickup** — as part of, or immediately after, State mirroring
+  (loop step 2): which issue, which branch, and what has been decided so far
+  (nothing, at first pickup).
+- **Refreshed** only on:
+  - a maintainer decision (e.g., a Ping answered, an approval batch or a
+    scope approved), or
+  - an irreversible external action (e.g., a PR merged, a branch pushed, a
+    remote or repo created, an approval batch actually applied).
+  An approval batch is the maintainer-approved set of changes from a
+  `/factory-adopt` re-triage sweep — not a Queue scope; the two are unrelated
+  and must not be conflated.
+  Nothing else triggers a rewrite — not an intermediate code state, which
+  `git log`/`git diff` on the branch already shows. The bar stays this
+  narrow so two agents working the same interruption refresh at the same
+  moments; a vaguer trigger becomes either constant rewriting or a judgment
+  call agents get wrong.
+- **Deleted** when the issue lands (Landing gate) or is Parked (Ping and
+  Park, step 3, after the re-label). Its existence must mean exactly one
+  thing — there is half-done work in progress — and nothing else may cause a
+  write outside pickup and the two refresh triggers above, or a delete
+  outside landing and Park.
+- **Consumed at Session start** (step 1), where it turns a dirty tree from
+  an unconditional block into an informative one: if present, the session
+  reads it and verifies its claims against `git status`/`git log` on the
+  named branch and the issue's actual state in Linear.
+  - **Verified** → check out that branch and resume Implementation for it
+    directly — skipping Queue selection and State mirroring, both already
+    done.
+  - **Not verified** (the branch is missing, Linear's state doesn't match,
+    or a claimed decision can't be confirmed) → the note is not trustworthy
+    and must not be acted on. Do not guess or partially resume: fall back
+    to the same stop-and-ask path a dirty tree with no Pause note takes,
+    reporting which specific claim failed, and let the maintainer decide.
+  It is read before the Handoff and answers a different question: the
+  Pause note says what to resume right now, if anything; the Handoff says
+  what to do once that issue reaches its own boundary.
 
 ## Handoff
 
@@ -254,5 +339,5 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Labels | Five canonical triage states + `Feature`/`Improvement`/`Bug` categories, as team labels |
 | Agent docs | `AGENTS.md` + `docs/agents/` (issue-tracker, triage-labels, domain) |
 | Domain docs | `CONTEXT.md` + `docs/adr/`, created lazily |
-| Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/` |
+| Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/`, Pause note at `.scratch/pause-note.md` |
 | Git | Branch per issue → PR → merge on green; no direct commits to the default branch |
