@@ -52,12 +52,13 @@ What the Factory assumes on the machine:
 
 1. **Claude Code** with the **Linear MCP server** connected to the Side projects workspace.
 2. **`gh`** authenticated, git over SSH.
-3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` — `/factory-adopt` is still forthcoming.
+3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
 4. **This repo** at `~/apps/factory`, with the Factory skills symlinked in:
 
    ```sh
    ln -s ~/apps/factory/skills/factory ~/.claude/skills/factory
    ln -s ~/apps/factory/skills/factory-new ~/.claude/skills/factory-new
+   ln -s ~/apps/factory/skills/factory-adopt ~/.claude/skills/factory-adopt
    ```
 
    `/factory` should then show up in any Claude Code session's skill list.
