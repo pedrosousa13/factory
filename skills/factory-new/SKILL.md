@@ -95,8 +95,11 @@ its URL, and the stamp must exist before the initial commit.
    continuing the build.
 
 7. **Verify the stamp**: confirm `docs/agents/issue-tracker.md` exists at the
-   repo root and `grep -n '{{' ` over the stamped files returns nothing — no
-   leftover placeholders. `docs/agents/issue-tracker.md`'s existence is
+   repo root, then run `grep -rn '{{' . --exclude-dir=.git` from the repo
+   root. It must return nothing — any hit is a placeholder the stamp failed
+   to substitute, which means stopping and fixing it, not continuing. Scan
+   the whole tree rather than a file list, so a template added later can't
+   slip through unchecked. `docs/agents/issue-tracker.md`'s existence is
    exactly what `/factory` and `/factory-adopt` check to decide a repo is
    stamped, so this file matters more than the others.
 
