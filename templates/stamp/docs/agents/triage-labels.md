@@ -25,3 +25,28 @@ Alongside its state label, every issue gets exactly one category label. These al
 | `Bug`         | Something is wrong                   |
 
 Use these exact names — not `enhancement`, not lowercase `bug`.
+
+## Milestones
+
+Alongside its category and state labels, every open issue also carries
+exactly one milestone — a third axis, not a label: a Linear field
+(`projectMilestone`), set via `list_milestones` / `save_issue`'s `milestone`
+parameter. Per-axis, exactly like the two above: assigning a milestone must
+not disturb the category label, the state label, or this Project's own
+domain labels.
+
+If this Project has no milestones defined yet, the invariant doesn't apply
+until they exist — milestone names are a maintainer decision, made once, not
+invented by an agent sweep.
+
+The maintainer may decline a milestone for a specific issue. That decision is
+recorded as a comment on the issue carrying this exact line:
+
+**Milestone: declined by the maintainer.**
+
+An issue carrying that line is left alone rather than re-proposed. Detection
+is that line and nothing else — a comment merely discussing milestones is not
+a decline. If the record is ambiguous or absent, treat the issue as **not**
+declined and propose a milestone again: re-asking costs one approval, while
+wrongly inferring a decline drops an issue out of the invariant silently and
+permanently.
