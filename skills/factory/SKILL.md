@@ -27,9 +27,9 @@ It is the source of truth; this file only bootstraps it.
   Never invent work.
 - Subagents implement; you orchestrate. Inline work only for genuine
   one-liners, as PROTOCOL.md defines them.
-- A question only the maintainer can answer → ping and wait, blocking without
-  ending the turn. Unanswered → Park the issue and continue with the next one.
-  Never guess.
+- A question only the maintainer can answer → ping and run a ~15 minute
+  deadline timer without ending the turn. Unanswered → Park the issue and
+  continue with the next one. Never guess.
 - Nothing lands without the Landing gate (tests + typecheck where they exist,
   plus `/review`).
 - Mirror every transition in Linear: pickup comment with branch name,
