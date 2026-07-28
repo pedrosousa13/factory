@@ -18,6 +18,7 @@ inline copy of it.
 | ----------------------------------------------------- | ----------------------------------- |
 | `templates/stamp/AGENTS.md`                           | `AGENTS.md`                         |
 | `templates/stamp/docs/agents/issue-tracker-linear.md` | `docs/agents/issue-tracker.md`      |
+| `templates/stamp/docs/agents/issue-tracker-github.md` | `docs/agents/issue-tracker.md`      |
 | `templates/stamp/docs/agents/triage-labels.md`        | `docs/agents/triage-labels.md`    |
 | `templates/stamp/docs/agents/domain.md`               | `docs/agents/domain.md`             |
 | `templates/stamp/gitignore`                           | `.gitignore`                        |
@@ -31,8 +32,9 @@ files. The skill writes its contents to `.gitignore` in the target repo.
 `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The tracker contract" for that one
 tracker. Only the template's name carries the tracker; the destination is
 always `docs/agents/issue-tracker.md`, because a Project has exactly one
-tracker and nothing that reads that file should have to know which. Linear
-is the only adapter today.
+tracker and nothing that reads that file should have to know which — so
+exactly one of these templates is ever copied into a given repo. Linear and
+GitHub are the adapters today.
 
 ## Placeholders
 
@@ -42,11 +44,19 @@ is the only adapter today.
 | `{{LINEAR_PROJECT_URL}}` | The Linear project URL           | (a linear.app link)   |
 | `{{TEAM_NAME}}`          | The Linear team name             | `Side projects`       |
 | `{{TEAM_KEY}}`           | The Linear team key              | `SIDEPRO`             |
+| `{{REPO}}`               | The GitHub repo slug             | `pedrosousa13/factory`|
 
-The `issue-tracker-linear.md` template uses all four. `AGENTS.md` uses
-`{{PROJECT_NAME}}` and `{{TEAM_NAME}}`. `docs/agents/triage-labels.md` uses
-only `{{TEAM_NAME}}`. `docs/agents/domain.md` is fully generic and has no
-placeholders.
+Placeholders differ per template — a template uses only what its own tracker
+needs, and a skill fills only those:
+
+| Template                                              | Placeholders it uses |
+| ----------------------------------------------------- | --------------------- |
+| `templates/stamp/docs/agents/issue-tracker-linear.md` | `{{PROJECT_NAME}}`, `{{LINEAR_PROJECT_URL}}`, `{{TEAM_NAME}}`, `{{TEAM_KEY}}` |
+| `templates/stamp/docs/agents/issue-tracker-github.md` | `{{REPO}}`            |
+| `templates/stamp/AGENTS.md`                           | `{{PROJECT_NAME}}`, `{{TEAM_NAME}}` |
+| `templates/stamp/docs/agents/triage-labels.md`        | `{{TEAM_NAME}}`       |
+| `templates/stamp/docs/agents/domain.md`               | none — fully generic  |
+| `templates/stamp/gitignore`                           | none — fully generic  |
 
 ## What the stamp is not, in this directory
 
