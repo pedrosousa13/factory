@@ -19,6 +19,8 @@ The maintainer plans interactively; an AI Loop Session consumes the queue and on
 
 Resuming after a handoff, a reboot, or a week away is always the same command: `/factory`.
 
+`PROTOCOL.md` is the full Loop Session spec; the `/factory` skill executes it (source in `skills/factory/`, installed by symlinking into `~/.claude/skills/factory`).
+
 ## New project
 
 Run `/factory-new <name>`. It will:
