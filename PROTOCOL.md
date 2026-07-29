@@ -82,8 +82,10 @@ fix — never a bare "preflight failed." Shape:
   (`CONTEXT.md`, `docs/adr/`) created lazily per `docs/agents/domain.md`.
 - **Git**: a GitHub remote (SSH), `gh` authenticated, `.scratch/` gitignored.
 
-If `docs/agents/issue-tracker.md` is missing, the repo is not stamped: tell the
-maintainer to run `/factory-adopt` and stop.
+If `docs/agents/issue-tracker.md` is missing, or exists but carries no
+`Factory loop operations` section, the repo is not stamped for the loop: tell
+the maintainer to run `/factory-adopt` (safe to re-run — it diffs the
+existing adapter against the template rather than overwriting) and stop.
 
 ## The tracker contract
 

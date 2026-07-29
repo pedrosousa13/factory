@@ -17,9 +17,11 @@ It is the source of truth; this file only bootstraps it.
    doing anything else — accumulate failures from both rather than stopping
    at the first:
    - Every Preflight check in `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`.
-   - **Stamped**: `docs/agents/issue-tracker.md` exists at the repo root. If
-     not, that's a failure too: the Queue has no tracker to read, so no
-     Loop Session is possible here. Fix by running `/factory-adopt`.
+   - **Stamped**: `docs/agents/issue-tracker.md` exists *and* carries a
+     `Factory loop operations` section — one grep, cheap enough to pay
+     before every Loop Session. Two distinct failures possible;
+     `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s Prerequisites gives the cause
+     and fix for each.
    If either produced a failure, report every one collected, with its fix,
    and stop — do not begin Session start.
 3. Read `docs/agents/issue-tracker.md` — the Project's Tracker adapter. It
