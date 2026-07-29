@@ -254,7 +254,8 @@ line — don't rewrite or reorder the rest of the file. If it already ignores
   uses — this is the git remote, not the tracker choice. If `origin` is
   already set, leave it — Adoption's job is filling gaps, not rewriting a
   maintainer's existing remote configuration. If it's missing, create one
-  the same way `/factory-new` does: `gh repo create <name> --private
+  the same way `/factory-new` does, with `<name>` the repo directory's
+  basename: `gh repo create <name> --private
   --source=. --remote=origin --push`, then confirm the resulting remote is
   SSH and correct it if not (same check `/factory-new` runs). If `origin`
   already exists but isn't SSH, that's a finding to report during Preflight,
@@ -268,7 +269,7 @@ line — don't rewrite or reorder the rest of the file. If it already ignores
     done in Preflight) and call `create_issue_label` only for the canonical
     names that are missing, scoped as team labels on Side projects.
   - **GitHub**: call `gh label list -R {{REPO}}` (already done in Preflight)
-    and call `gh label create <name> -R {{REPO}}` only for the canonical
+    and call `gh label create <label> -R {{REPO}}` only for the canonical
     names — including `in-progress` and `P0`–`P3` — that are missing, scoped
     as repo labels on `{{REPO}}`.
   Never create a label you haven't first confirmed is missing.

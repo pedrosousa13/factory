@@ -26,8 +26,8 @@ slices — because that is the only place new work gets created (see
 
 Run `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "## Preflight" section first, in
 full — accumulate every failure there rather than stopping at the first, per
-its own instruction. It supersedes check 4 below: `gh` authentication is
-defined once, there. Its tracker-reachable check does not apply here — this
+its own instruction. `gh` authentication is defined once, there, and is not
+repeated below. Its tracker-reachable check does not apply here — this
 skill runs before `~/apps/<name>` exists, so there is no
 `docs/agents/issue-tracker.md` to read yet; the file this skill writes in
 "Apply the stamp" below *is* what that check will read on every later run of
