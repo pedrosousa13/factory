@@ -71,7 +71,9 @@ Before touching anything, detect and record the current state:
 - **Labels**: once the tracker is known (from the check above), call its own
   listing — `list_issue_labels` for the Side projects team on Linear,
   `gh label list -R {{REPO}}` on GitHub — and note which of the canonical
-  names already exist.
+  names already exist. On GitHub with no `origin` yet there is no `{{REPO}}`
+  to list against, and this check defers to Phase 1 — see "Choose the
+  tracker" below.
 
 **Report this detected state to the maintainer before proceeding.** Adoption
 touches a repo that already has content and conventions of its own — the
@@ -144,9 +146,19 @@ silently creating a confusing duplicate are both wrong.
 
 **If GitHub:**
 
-No project entity — the repo is the tracker. Derive `{{REPO}}` from `origin`
-(the `owner/repo` slug of the GitHub remote checked above); there is nothing
-else to derive or confirm.
+No project entity — the repo is the tracker. `{{REPO}}` is the `owner/repo`
+slug of `origin`, so derive it from the remote detected above; there is
+nothing else to derive or confirm.
+
+If `origin` is absent — the "nothing conclusive" fallback reaches this on a
+repo with no remote — there is no slug to derive yet, and inventing one is
+not an option. Phase 1's **GitHub remote** step is what creates the remote;
+derive `{{REPO}}` immediately after it, and defer every earlier use of it
+(Preflight's label listing) until then. Deferred, not skipped: a new GitHub
+repo ships with default labels of its own, one of which is `wontfix`, so the
+listing still has to run before anything is created — "never create a label
+you haven't first confirmed is missing" is not relaxed by the remote
+arriving late.
 
 ## Phase 1 — stamp, idempotently
 
