@@ -77,7 +77,8 @@ fix — never a bare "preflight failed." Shape:
 - **Triage labels**: the five canonical state labels (`needs-triage`,
   `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), mapped in
   `docs/agents/triage-labels.md`, plus the category labels
-  (`Feature`/`Improvement`/`Bug`) as team labels.
+  (`Feature`/`Improvement`/`Bug`), at whatever label scope the tracker
+  adapter names.
 - **Agent docs**: `AGENTS.md` pointing at `docs/agents/`; domain docs
   (`CONTEXT.md`, `docs/adr/`) created lazily per `docs/agents/domain.md`.
 - **Git**: a GitHub remote (SSH), `gh` authenticated, `.scratch/` gitignored.
@@ -482,7 +483,7 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | --- | --- |
 | Repo | `~/apps/<name>`, private GitHub remote over SSH |
 | Issue tracker | One tracker per repo, satisfying the tracker contract above, documented in `docs/agents/issue-tracker.md` |
-| Labels | Five canonical triage states + `Feature`/`Improvement`/`Bug` categories, as team labels |
+| Labels | Five canonical triage states + `Feature`/`Improvement`/`Bug` categories, at the label scope the tracker adapter names, plus any priority vocabulary it defines |
 | Milestones | Every open issue carries exactly one, a third axis alongside category and state — see "## Milestones" |
 | Agent docs | `AGENTS.md` + `docs/agents/` (issue-tracker, triage-labels, domain) |
 | Domain docs | `CONTEXT.md` + `docs/adr/`, created lazily |

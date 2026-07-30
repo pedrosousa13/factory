@@ -4,11 +4,11 @@
 
 ### Issue tracker
 
-Issues live in Linear — project "{{PROJECT_NAME}}" on the {{TEAM_NAME}} team, via the Linear MCP tools. See `docs/agents/issue-tracker.md`.
+Issues live in {{TRACKER_NAME}} — {{TRACKER_LOCATION}}. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Canonical label names, as team labels on {{TEAM_NAME}}. See `docs/agents/triage-labels.md`.
+Canonical label names, as {{LABEL_SCOPE}}. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
