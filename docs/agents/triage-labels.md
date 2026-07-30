@@ -25,3 +25,19 @@ Alongside its state label, every issue gets exactly one category label. These al
 | `Bug`         | Something is wrong                   |
 
 Use these exact names — not `enhancement`, not lowercase `bug`.
+
+## Wayfinder labels
+
+The `/wayfinder` skill charts planning maps on this tracker: a map issue
+labeled `wayfinder:map`, and decision tickets labeled `wayfinder:research`,
+`wayfinder:prototype`, `wayfinder:grilling`, or `wayfinder:task`. These also
+exist as team labels on **Side projects**, created lazily the first time a
+map is charted here.
+
+An issue carrying any `wayfinder:*` label is a **planning artifact, not a
+work item**: it sits outside the triage state machine, carries no state
+label, no category label, and no milestone, and a triage sweep skips it
+entirely rather than bringing it up to the invariant. It never carries
+`ready-for-agent`, so it can never enter a Loop Session's Queue. How this
+tracker expresses the map, its tickets, blocking, and the frontier is in
+`docs/agents/issue-tracker.md`, under "Wayfinding operations".

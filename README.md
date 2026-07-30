@@ -6,7 +6,7 @@ The maintainer plans interactively; an AI Loop Session consumes the queue and on
 
 ## The loop at a glance
 
-1. **Plan** (you, interactive): `/grilling` → `/to-prd` → `/to-issues` files tracer-bullet issues to the project's issue tracker, labeled `ready-for-agent`.
+1. **Plan** (you, interactive): `/grilling` → `/to-prd` → `/to-issues` files tracer-bullet issues to the project's issue tracker, labeled `ready-for-agent`. An effort too big or foggy for one session gets charted first with `/wayfinder` — a map of decision tickets on the same tracker, resolved one per session until a spec is in reach; the loop never sees them (`PROTOCOL.md`, "Wayfinder maps").
 2. **Run** (AI, autonomous): `/factory` in the project repo starts a Loop Session:
    - reads the newest handoff in `.scratch/handoffs/`, if any
    - picks the next unblocked `ready-for-agent` issue — priority first, then oldest — and moves it to a started state

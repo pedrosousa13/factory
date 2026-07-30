@@ -83,6 +83,43 @@ bullet per row. A `/factory` Loop Session needs every one of them.
   Fetch it fresh when verifying a Pause note's claim — never compare
   against a value read earlier in the session.
 
+## Wayfinding operations
+
+Linear's answer to what the `/wayfinder` skill (`~/.claude/skills/wayfinder`)
+needs from a tracker. Wayfinder maps and their tickets are planning
+artifacts, not work items: they carry `wayfinder:*` labels in place of the
+triage axes, never `ready-for-agent`, so they can never enter a Loop
+Session's Queue (`PROTOCOL.md`, "Wayfinder maps";
+`docs/agents/triage-labels.md`, "Wayfinder labels").
+
+- **The map**: an ordinary issue in the **Factory** project labeled
+  `wayfinder:map`. Find a Project's maps with `list_issues` filtered by
+  `project: "Factory"` and `label: "wayfinder:map"`.
+- **Labels**: `wayfinder:map`, `wayfinder:research`, `wayfinder:prototype`,
+  `wayfinder:grilling`, `wayfinder:task` — team labels on **Side
+  projects**, created lazily by the first charting session:
+  `list_issue_labels` first, then `create_issue_label` only for the names
+  that are missing. Never create a label you haven't first confirmed is
+  missing.
+- **Child tickets**: `save_issue` with `parentId` set to the map — Linear's
+  native parent/sub-issue relation.
+- **Blocking**: Linear's native relations — `save_issue` with `blockedBy` /
+  `blocks` (append-only), wired in a second pass once every ticket has an
+  identifier. Read them back with `get_issue` `includeRelations: true`: a
+  ticket is blocked while any `blockedBy` relation points at an issue that
+  is not **Done** or **Canceled**.
+- **Frontier**: `list_issues` with `parentId` set to the map, keeping
+  tickets in an unstarted state (**Todo** or **Backlog**) with no assignee.
+  `list_issues` does not return relations, so confirm each candidate
+  unblocked with its own `get_issue` — the same per-candidate check the
+  loop's **Blocking** bullet uses.
+- **Claim**: `save_issue` setting `assignee: "me"` — the assignee is the
+  claim; an open, unassigned ticket is unclaimed.
+- **Resolve**: post the resolution with `save_comment`, then `save_issue`
+  setting `state` to **Done**. A ticket ruled out of scope closes as
+  **Canceled** instead — resolved and ruled-out stay distinguishable, the
+  same way landed and wontfix do.
+
 ## Reachability
 
 What the Factory's Preflight checks: the Linear MCP tools resolve, and both
