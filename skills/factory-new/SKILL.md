@@ -193,8 +193,12 @@ Session — for `{{PROJECT_NAME}}` on Linear, for `<name>` on GitHub (there is
 no separate project name to derive): grilling the maintainer's idea, then a
 PRD, then slicing it into issues filed to this Project's tracker as
 `ready-for-agent`. Say plainly that `/factory-new` itself has created zero
-issues — the Planning Session is the only place work gets created. Tell the
-maintainer that once the Queue has issues, their next command is `/factory`.
+issues — the Planning Session is the only place work gets created. Apply
+`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" convention from the
+first issues onward: propose the attack-surface test's outcome to the
+maintainer, and if the Project passes it, each milestone's slice includes
+its security-sweep issue, wired blocked-by. Tell the maintainer that once
+the Queue has issues, their next command is `/factory`.
 
 ## Hard rules
 

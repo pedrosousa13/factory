@@ -109,3 +109,24 @@ a decline. If the record is ambiguous or absent, treat the issue as **not**
 declined and propose a milestone again: re-asking costs one approval, while
 wrongly inferring a decline drops an issue out of the invariant silently and
 permanently.
+
+## Security sweeps
+
+If this Project passes the attack-surface test — its software accepts
+untrusted input, serves HTTP, authenticates anyone, stores user data, or
+calls third-party services — then every milestone containing issues that
+touch that surface also carries one **security-sweep issue**: a full OWASP
+Top 10 pass over the code as it stands, filed, triaged, and milestoned like
+any other issue, blocked by the milestone's attack-surface issues, its
+findings filed as new issues rather than fixed in the sweep. Planning
+Sessions file it alongside the milestone's other issues; an adoption sweep
+proposes it where missing.
+
+The maintainer may rule the Project fails the test, or decline sweeps
+outright — recorded in this Project's `CONTEXT.md` with this exact marker
+line:
+
+**Security sweeps: declined by the maintainer.**
+
+Detection is the marker line only. An ambiguous or absent record means not
+declined, and the sweep is proposed again.

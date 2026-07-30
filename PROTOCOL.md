@@ -497,6 +497,58 @@ a stamped repo it would be improvising against the live tracker. Add the
 section before charting a map here — re-running `/factory-adopt` retrofits
 it from the current template.
 
+## Security sweeps
+
+Security work must be planned work, or it never exists: the loop never
+invents work, and a Planning Session grilling a feature into issues has no
+reason to file an injection check on its own. So it is a convention,
+enforced at the same points as the milestone invariant.
+
+**The attack-surface test.** A Project needs security sweeps when its
+software accepts untrusted input, serves HTTP, authenticates anyone, stores
+user data, or calls third-party services. A Project that does none of
+these — a local-only tool, a conventions repo like the Factory's own — does
+not. An agent proposes the test's outcome; the maintainer decides it, and
+the decision holds until the Project's shape changes.
+
+**One sweep issue per milestone that touches the surface.** Every milestone
+containing issues that touch the attack surface also carries one
+security-sweep issue: a full OWASP Top 10 pass over the Project's code as
+it stands, filed, triaged, and milestoned like any other issue, and blocked
+by the milestone's attack-surface issues so it runs after they land. Its
+brief asks for findings filed as new issues — the sweep reports; it does
+not fix. The maintainer may consolidate several milestones' sweeps into
+fewer — an explicit decision, not a default.
+
+**Intertwined criteria, as a complement.** A Planning Session slicing an
+issue that touches the attack surface writes security acceptance criteria
+into that issue's brief. This is discipline for briefs, not a substitute
+for the sweep issue — the sweep is the artifact a session can check for.
+
+**Declining.** The maintainer may rule that the Project fails the
+attack-surface test, or decline sweeps outright. Record it in the Project's
+`CONTEXT.md` (creating the file if the Project has none yet — a standing
+decision is exactly what it exists to hold) with this exact marker line:
+
+**Security sweeps: declined by the maintainer.**
+
+Human-readable context belongs beneath the marker, but detection depends
+only on the marker — the same rule as declining a milestone. An ambiguous
+or absent record means *not declined*, and the sweep is proposed again.
+Fail toward asking.
+
+Three places enforce it:
+
+- **Planning Sessions.** Filing a milestone's issues includes filing its
+  security-sweep issue, wired blocked-by.
+- **`/factory-new`'s first Planning Session.** The same rule, from the
+  first issues onward.
+- **`/factory-adopt`'s re-triage sweep.** For each milestone with
+  attack-surface issues but no security-sweep issue — open or completed —
+  and no recorded decline, propose one in the same maintainer-approved
+  batches. This is also how a Project adopted before this convention
+  existed picks it up.
+
 ## The stamp
 
 What `/factory-new` installs and `/factory-adopt` retrofits — the conventions

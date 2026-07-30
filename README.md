@@ -43,6 +43,7 @@ Run `/factory-adopt` inside the repo. It will:
 - **Issue tracker**: GitHub Issues by default, Linear supported; one tracker per repo. See `docs/agents/issue-tracker.md` for the tool conventions.
 - **Triage labels**: the five canonical states, 1:1 names. See `docs/agents/triage-labels.md`.
 - **Domain docs**: single-context `CONTEXT.md` + `docs/adr/` per repo, created lazily. See `docs/agents/domain.md`.
+- **Security sweeps**: a Project with an attack surface carries an OWASP Top 10 sweep issue in every milestone that touches it; declines are recorded in its `CONTEXT.md`. See `PROTOCOL.md`, "Security sweeps".
 - **Git**: branch per issue, PR, auto-merge on green. No half-done work on main — parked issues live on their branch.
 - **Context discipline**: Loop Sessions stay under ~40% context; superpowers subagents do the implementation; `/handoff` bridges sessions.
 
