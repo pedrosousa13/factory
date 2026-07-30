@@ -107,8 +107,12 @@ bullet per row. A `/factory` Loop Session needs every one of them.
   `gh api repos/{{REPO}}/milestones --jq '.[] | "\(.number) \(.title)"'`,
   ascending `number` (creation order, stable between runs); set with
   `gh issue edit <number> --repo {{REPO}} --milestone "<title>"`. Read a
-  milestone's completion from its `open_issues` and `closed_issues` counts —
-  `gh api repos/{{REPO}}/milestones/<milestone-number>`.
+  milestone's completion by **counting issues**, open and closed, with the
+  two `gh issue list --milestone` queries below — never from the
+  `open_issues` / `closed_issues` fields on the milestone object. Those
+  counters are computed asynchronously and have been observed reporting
+  zero long after issues were assigned; the issue list is authoritative and
+  immediate.
 - **Milestone issue counts**: `gh issue list --repo {{REPO}} --state open --milestone "<title>" --json number,labels`,
   with no `ready-for-agent` filter, then bucketed by the triage label each
   issue carries. This is its own query, not a re-count of the Queue — the
