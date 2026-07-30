@@ -142,6 +142,49 @@ bullet per row. A `/factory` Loop Session needs every one of them.
   Fetch it fresh when verifying a Pause note's claim — never compare
   against a value read earlier in the session.
 
+## Wayfinding operations
+
+GitHub's answer to what the `/wayfinder` skill (`~/.claude/skills/wayfinder`)
+needs from a tracker. Wayfinder maps and their tickets are planning
+artifacts, not work items: they carry `wayfinder:*` labels in place of the
+triage axes, never `ready-for-agent` and never `in-progress`, so they can
+never enter a Loop Session's Queue ("Wayfinder maps" in `PROTOCOL.md`, the
+Factory plugin's own protocol document — not a file in this repo;
+"Wayfinder labels" in `docs/agents/triage-labels.md`).
+
+- **The map**: an ordinary issue on **{{REPO}}** labeled `wayfinder:map`.
+  Find a Project's maps with `gh issue list -R {{REPO}} --state open
+  --label wayfinder:map --limit 500 --json number,title`.
+- **Labels**: `wayfinder:map`, `wayfinder:research`, `wayfinder:prototype`,
+  `wayfinder:grilling`, `wayfinder:task` — repo labels on **{{REPO}}**,
+  created lazily by the first charting session: `gh label list -R {{REPO}}`
+  first, then `gh label create <label> -R {{REPO}}` only for the names that
+  are missing. Never create a label you haven't first confirmed is missing.
+- **Child tickets**: GitHub's native sub-issues — `gh issue edit <map> -R
+  {{REPO}} --add-sub-issue <ticket>`, the same relation the loop's
+  **Blocking** bullet reads. No conflict: under that bullet an open child
+  blocks its parent, and a map with open tickets *is* a map that isn't
+  finished — the map never carries `ready-for-agent`, so nothing ever
+  checks it as a Queue candidate anyway.
+- **Blocking between tickets**: a sub-issue has exactly one parent and the
+  map holds that slot, so ticket-to-ticket edges use the body convention
+  the loop already reads — a `Blocked by #N` line in the blocked ticket's
+  body, added in a second pass once every ticket has a number. A ticket is
+  blocked while any issue such a line names is still open.
+- **Frontier**: read the map's children from `gh issue view <map> -R
+  {{REPO}} --json subIssues`, keep the `OPEN` ones, then confirm each
+  candidate with its own `gh issue view <n> -R {{REPO}} --json
+  assignees,body,state` — unclaimed means no assignee; unblocked means no
+  `Blocked by #N` line naming a still-open issue. The per-candidate view is
+  the authority here for the same reason it is in Queue selection: the
+  listing lags.
+- **Claim**: `gh issue edit <n> -R {{REPO}} --add-assignee @me` — the
+  assignee is the claim; an open, unassigned ticket is unclaimed.
+- **Resolve**: post the resolution with `gh issue comment`, then `gh issue
+  close <n> -R {{REPO}} --reason completed`. A ticket ruled out of scope
+  closes with `--reason "not planned"` instead — resolved and ruled-out
+  stay distinguishable, the same way landed and wontfix do.
+
 ## Reachability
 
 What the Factory's Preflight checks: `gh` resolves and is authenticated,

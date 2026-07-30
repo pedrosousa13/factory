@@ -473,6 +473,30 @@ the sweep proposes a milestone again. Re-asking costs the maintainer one
 approval; wrongly inferring a decline from vague prose silently strips an
 issue out of the invariant forever. Fail toward asking.
 
+## Wayfinder maps
+
+A Planning Session may chart an effort too large or too foggy for one
+session with the `/wayfinder` skill (`~/.claude/skills/wayfinder`): a map
+issue plus decision tickets on the Project's tracker, each carrying a
+`wayfinder:*` label. The finished map's destination — typically a spec —
+feeds the normal slicing flow that produces `ready-for-agent` issues; the
+map itself never does.
+
+Wayfinder issues are planning artifacts, not work items, and every
+invariant and sweep in this document skips them: no category label, no
+state label, no milestone, no priority label. They never carry
+`ready-for-agent`, so they can never enter a Queue — the loop and a map
+share a tracker without either seeing the other. How a tracker expresses
+the map, its child tickets, blocking, and the frontier is the adapter's
+business: a "Wayfinding operations" section in
+`docs/agents/issue-tracker.md`. The section is optional — a repo stamped
+before it existed still satisfies the loop's stamp check — but a repo
+without it leaves `/wayfinder` with no per-tracker instructions: the skill
+falls back to local markdown only when no tracker is provided at all, so on
+a stamped repo it would be improvising against the live tracker. Add the
+section before charting a map here — re-running `/factory-adopt` retrofits
+it from the current template.
+
 ## The stamp
 
 What `/factory-new` installs and `/factory-adopt` retrofits — the conventions

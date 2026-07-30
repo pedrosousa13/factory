@@ -4,8 +4,10 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 **The label set is tracker-dependent.** The eight labels on this page's first
 two tables — five triage states plus three categories — are universal: every
-Project carries them whatever its tracker. Anything below them exists only on
-trackers that need it, and is spelled out as such.
+Project carries them whatever its tracker, created at stamp time. The
+wayfinder labels below apply on every tracker too, but are created lazily,
+not at stamp time. Everything after them exists only on trackers that need
+it, and is spelled out as such.
 
 These labels live wherever this repo's tracker scopes labels — a team, an
 organization, the repo itself. `docs/agents/issue-tracker.md` names the
@@ -33,9 +35,26 @@ Alongside its state label, every issue gets exactly one category label. These ar
 
 Use these exact names — not `enhancement`, not lowercase `bug`.
 
+## Wayfinder labels
+
+The `/wayfinder` skill charts planning maps on this tracker: a map issue
+labeled `wayfinder:map`, and decision tickets labeled `wayfinder:research`,
+`wayfinder:prototype`, `wayfinder:grilling`, or `wayfinder:task`. These are
+scoped the same way as the state labels above, created lazily the first
+time a map is charted here.
+
+An issue carrying any `wayfinder:*` label is a **planning artifact, not a
+work item**: it sits outside the triage state machine, carries no state
+label, no category label, no milestone, and no priority label, and a triage
+sweep skips it entirely rather than bringing it up to the invariant. It
+never carries `ready-for-agent`, so it can never enter a Loop Session's
+Queue. How this tracker expresses the map, its tickets, blocking, and the
+frontier is in `docs/agents/issue-tracker.md`, under "Wayfinding
+operations".
+
 ## Labels that stand in for a missing field
 
-The eight labels above are universal. Two further groups exist **only** where
+The eight labels in the first two tables are universal. Two further groups exist **only** where
 the tracker has no native field for what they express — which is to say on
 GitHub, whose issues have no started state and no priority. Where the tracker
 does carry those as fields, these labels must not be created: the field is the
