@@ -148,8 +148,9 @@ GitHub's answer to what the `/wayfinder` skill (`~/.claude/skills/wayfinder`)
 needs from a tracker. Wayfinder maps and their tickets are planning
 artifacts, not work items: they carry `wayfinder:*` labels in place of the
 triage axes, never `ready-for-agent` and never `in-progress`, so they can
-never enter a Loop Session's Queue (`PROTOCOL.md`, "Wayfinder maps";
-`docs/agents/triage-labels.md`, "Wayfinder labels").
+never enter a Loop Session's Queue ("Wayfinder maps" in `PROTOCOL.md`, the
+Factory plugin's own protocol document — not a file in this repo;
+"Wayfinder labels" in `docs/agents/triage-labels.md`).
 
 - **The map**: an ordinary issue on **{{REPO}}** labeled `wayfinder:map`.
   Find a Project's maps with `gh issue list -R {{REPO}} --state open

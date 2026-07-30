@@ -491,8 +491,11 @@ the map, its child tickets, blocking, and the frontier is the adapter's
 business: a "Wayfinding operations" section in
 `docs/agents/issue-tracker.md`. The section is optional — a repo stamped
 before it existed still satisfies the loop's stamp check — but a repo
-without it defaults `/wayfinder` to its local-markdown tracker instead of
-this Project's own, so add it before charting a map here.
+without it leaves `/wayfinder` with no per-tracker instructions: the skill
+falls back to local markdown only when no tracker is provided at all, so on
+a stamped repo it would be improvising against the live tracker. Add the
+section before charting a map here — re-running `/factory-adopt` retrofits
+it from the current template.
 
 ## The stamp
 
