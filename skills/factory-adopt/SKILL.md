@@ -1,6 +1,6 @@
 ---
 name: factory-adopt
-description: Bring an already-existing project under Factory conventions — Adoption, per ${CLAUDE_PLUGIN_ROOT}/CONTEXT.md's glossary. Detects which issue tracker the repo already uses (Linear or GitHub) instead of asking blind, then stamps the repo idempotently (the chosen tracker's setup, a GitHub remote, triage labels, agent docs, .scratch/ gitignore, all created only where missing and never overwritten), then sweeps every open issue through the triage state machine — wayfinder planning artifacts excepted — so it carries exactly one category + one state label + one milestone (plus a priority label, on GitHub), with agent briefs written for anything ready-for-agent. Use when the user runs /factory-adopt inside an existing repo.
+description: Bring an already-existing project under Factory conventions — Adoption, per ${CLAUDE_PLUGIN_ROOT}/CONTEXT.md's glossary. Detects which issue tracker the repo already uses (Linear or GitHub) instead of asking blind, then stamps the repo idempotently (the chosen tracker's setup, a GitHub remote, triage labels, agent docs, .scratch/ gitignore, all created only where missing and never overwritten), then sweeps every open issue through the triage state machine — wayfinder planning artifacts excepted — so it carries exactly one category + one state label + one milestone (plus a priority label, on GitHub), with agent briefs written for anything ready-for-agent and per-milestone OWASP security-sweep issues proposed where the Project's attack surface calls for them. Use when the user runs /factory-adopt inside an existing repo.
 ---
 
 # /factory-adopt — bring an existing repo under Factory conventions
@@ -232,6 +232,21 @@ than the basename is deliberate: preserve it. If a file already exists:
   against the file rather than eyeballing them. A file that is merely similar
   does not match, and treating it as a match would silently leave a repo
   half-stamped.
+- and its content differs from the rendered template **only by lacking
+  whole sections the template carries** — the signature of a repo stamped
+  by an older Factory, before those sections existed — propose inserting
+  exactly the missing sections, placeholders filled, each at the position
+  the template carries it, rather than presenting a whole-file diff. The
+  position matters: an approved insertion leaves the file byte-identical
+  to the rendered template, so the next run lands in the "matches" case
+  above; appending at the end would reorder sections and re-surface a
+  whole-file diff on every later run. Still maintainer-approved, never
+  silent; any difference beyond cleanly missing sections falls through to
+  the general case below. This is how an already-adopted repo picks up
+  conventions added since its stamp — a missing "Wayfinding operations"
+  section in `issue-tracker.md`, a missing "Security sweeps" section in
+  `triage-labels.md` — without re-litigating a file the maintainer already
+  accepted.
 - and its content differs — do not overwrite it. Surface the diff to the
   maintainer and let them decide whether to adopt the template version, keep
   theirs, or merge by hand.
@@ -279,7 +294,8 @@ line — don't rewrite or reorder the rest of the file. If it already ignores
 A second run of Phase 1 must find: `origin` present; the Agent skills block
 already fully merged into whichever of `AGENTS.md`/`CLAUDE.md` carries it;
 every `docs/agents/*` file already matching the template for the chosen
-tracker; `.gitignore` already ignoring `.scratch/`; the tracker itself
+tracker (an approved retrofit insertion converges a file back to exactly
+that match, so a retrofitted repo reaches this state too); `.gitignore` already ignoring `.scratch/`; the tracker itself
 already set up — the Linear project already existing, on Linear, or nothing
 further needed, on GitHub; and every label for the chosen tracker already
 present — the eight canonical names on Linear, those eight plus
@@ -353,6 +369,25 @@ sweep-specific rules.
   that same section. Before proposing a milestone to an unassigned issue,
   check its comments for the marker: an issue that already carries one is
   left alone, not re-proposed every sweep.
+- **Security sweeps, a per-milestone check.** Apply
+  `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" section: propose
+  the attack-surface test's outcome to the maintainer, and check the
+  Project's `CONTEXT.md` for the decline marker,
+  `**Security sweeps: declined by the maintainer.**` If the Project passes
+  the test and no decline is recorded, then for each milestone containing
+  attack-surface issues but no security-sweep issue — open **or**
+  completed; a landed sweep satisfies its milestone — propose one in the
+  same maintainer-approved batches: a full OWASP Top 10 pass, filed and
+  triaged like any other issue, blocked by the milestone's attack-surface
+  issues, findings filed as new `needs-triage` issues rather than fixed in
+  the sweep. The check enumerates the Project's milestones, not just its
+  open issues — a milestone whose attack-surface issues have all landed is
+  still checked. This is also how a Project adopted before this convention
+  existed picks it up. If the maintainer declines the proposal, record it
+  exactly as that section specifies — the marker line in the Project's
+  `CONTEXT.md` — so the decision persists and no later sweep re-asks. If
+  the Project fails the test or a decline is recorded, say so once in the
+  sweep report and propose nothing.
 - **Priority, a fourth thing on GitHub.** GitHub issues have no native
   priority field, so without a priority label the Queue has no order at
   all — `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s tracker contract requires a deterministic Queue
@@ -402,7 +437,10 @@ sweep-specific rules.
   invariant. Re-list open issues at the end and verify each has exactly one
   category label, exactly one state label, and — if the project has
   milestones defined — exactly one milestone or an explicit decline comment
-  in its place, and — on GitHub — exactly one priority label. Report the final
+  in its place, and — on GitHub — exactly one priority label. Verify too
+  that every milestone with attack-surface issues carries its
+  security-sweep issue, unless the Project failed the attack-surface test
+  or its `CONTEXT.md` records the decline marker. Report the final
   tally (issue count, how many landed in each state, how many carry a
   milestone vs. a recorded decline, and on GitHub how many carry each
   priority) to the maintainer. Don't declare the sweep done on assumption —
