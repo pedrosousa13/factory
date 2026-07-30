@@ -117,8 +117,9 @@ untrusted input, serves HTTP, authenticates anyone, stores user data, or
 calls third-party services — then every milestone containing issues that
 touch that surface also carries one **security-sweep issue**: a full OWASP
 Top 10 pass over the code as it stands, filed, triaged, and milestoned like
-any other issue, blocked by the milestone's attack-surface issues, its
-findings filed as new issues rather than fixed in the sweep. Planning
+any other issue (category `Improvement`), blocked by the milestone's
+attack-surface issues, its findings filed as new `needs-triage` issues
+rather than fixed in the sweep. Planning
 Sessions file it alongside the milestone's other issues; an adoption sweep
 proposes it where missing.
 

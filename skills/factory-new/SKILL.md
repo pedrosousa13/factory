@@ -196,9 +196,11 @@ PRD, then slicing it into issues filed to this Project's tracker as
 issues — the Planning Session is the only place work gets created. Apply
 `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" convention from the
 first issues onward: propose the attack-surface test's outcome to the
-maintainer, and if the Project passes it, each milestone's slice includes
-its security-sweep issue, wired blocked-by. Tell the maintainer that once
-the Queue has issues, their next command is `/factory`.
+maintainer, and if the Project passes it, every milestone whose issues
+touch the attack surface gets its security-sweep issue, wired blocked-by.
+If the maintainer declines, record it exactly as that section specifies —
+the marker line in the Project's `CONTEXT.md`. Tell the maintainer that
+once the Queue has issues, their next command is `/factory`.
 
 ## Hard rules
 
@@ -211,7 +213,10 @@ the Queue has issues, their next command is `/factory`.
 - No AI attribution anywhere — not in commits, not in the PR (there is no PR
   here, but the rule still applies to the initial commit), not in the repo.
 - Domain docs (`CONTEXT.md`, `docs/adr/`) are created lazily by later work
-  (`/domain-modeling`), never by this skill.
+  (`/domain-modeling`), never by this skill. One exception: recording a
+  security-sweeps decline, which `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+  "Security sweeps" section directs into `CONTEXT.md`, creating the file if
+  it must.
 - This skill creates zero issues, on either tracker. Full stop.
 
 ## Cleanup / throwaway

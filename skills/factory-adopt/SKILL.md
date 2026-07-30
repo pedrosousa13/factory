@@ -234,11 +234,15 @@ than the basename is deliberate: preserve it. If a file already exists:
   half-stamped.
 - and its content differs from the rendered template **only by lacking
   whole sections the template carries** — the signature of a repo stamped
-  by an older Factory, before those sections existed — propose appending
-  exactly the missing sections, placeholders filled, rather than
-  presenting a whole-file diff. Still maintainer-approved, never silent;
-  any difference beyond cleanly missing sections falls through to the
-  general case below. This is how an already-adopted repo picks up
+  by an older Factory, before those sections existed — propose inserting
+  exactly the missing sections, placeholders filled, each at the position
+  the template carries it, rather than presenting a whole-file diff. The
+  position matters: an approved insertion leaves the file byte-identical
+  to the rendered template, so the next run lands in the "matches" case
+  above; appending at the end would reorder sections and re-surface a
+  whole-file diff on every later run. Still maintainer-approved, never
+  silent; any difference beyond cleanly missing sections falls through to
+  the general case below. This is how an already-adopted repo picks up
   conventions added since its stamp — a missing "Wayfinding operations"
   section in `issue-tracker.md`, a missing "Security sweeps" section in
   `triage-labels.md` — without re-litigating a file the maintainer already
@@ -290,7 +294,8 @@ line — don't rewrite or reorder the rest of the file. If it already ignores
 A second run of Phase 1 must find: `origin` present; the Agent skills block
 already fully merged into whichever of `AGENTS.md`/`CLAUDE.md` carries it;
 every `docs/agents/*` file already matching the template for the chosen
-tracker; `.gitignore` already ignoring `.scratch/`; the tracker itself
+tracker (an approved retrofit insertion converges a file back to exactly
+that match, so a retrofitted repo reaches this state too); `.gitignore` already ignoring `.scratch/`; the tracker itself
 already set up — the Linear project already existing, on Linear, or nothing
 further needed, on GitHub; and every label for the chosen tracker already
 present — the eight canonical names on Linear, those eight plus
@@ -374,10 +379,15 @@ sweep-specific rules.
   completed; a landed sweep satisfies its milestone — propose one in the
   same maintainer-approved batches: a full OWASP Top 10 pass, filed and
   triaged like any other issue, blocked by the milestone's attack-surface
-  issues, findings filed as new issues rather than fixed in the sweep.
-  This is also how a Project adopted before this convention existed picks
-  it up. If the Project fails the test or a decline is recorded, say so
-  once in the sweep report and propose nothing.
+  issues, findings filed as new `needs-triage` issues rather than fixed in
+  the sweep. The check enumerates the Project's milestones, not just its
+  open issues — a milestone whose attack-surface issues have all landed is
+  still checked. This is also how a Project adopted before this convention
+  existed picks it up. If the maintainer declines the proposal, record it
+  exactly as that section specifies — the marker line in the Project's
+  `CONTEXT.md` — so the decision persists and no later sweep re-asks. If
+  the Project fails the test or a decline is recorded, say so once in the
+  sweep report and propose nothing.
 - **Priority, a fourth thing on GitHub.** GitHub issues have no native
   priority field, so without a priority label the Queue has no order at
   all — `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s tracker contract requires a deterministic Queue
