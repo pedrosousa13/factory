@@ -246,7 +246,11 @@ than the basename is deliberate: preserve it. If a file already exists:
   conventions added since its stamp — a missing "Wayfinding operations"
   section in `issue-tracker.md`, a missing "Security sweeps" section in
   `triage-labels.md` — without re-litigating a file the maintainer already
-  accepted.
+  accepted. The same retrofit covers the one-line tracker marker
+  (`<!-- factory:tracker kind=... -->`, immediately after the H1 in
+  `issue-tracker.md`) when it is the only thing missing: propose inserting
+  it at that same position, maintainer-approved, rather than falling
+  through to the whole-file diff below over one absent line.
 - and its content differs — do not overwrite it. Surface the diff to the
   maintainer and let them decide whether to adopt the template version, keep
   theirs, or merge by hand.
@@ -335,10 +339,11 @@ a default:
   issues below never get proposed. See "Security sweeps, a per-milestone
   check" below for exactly how.
 
-Write `stampVersion` as the current stamp version. Write only these four
-fields — `stampVersion` and the three decisions above. Every other setting
-either derives from the environment or takes a default, and neither belongs
-in a freshly written file.
+Write `stampVersion` as the current stamp version, `STAMP_VERSION` in
+`${CLAUDE_PLUGIN_ROOT}/runtime/src/version.ts` — the single source of truth
+for this value. Write only these four fields — `stampVersion` and the three
+decisions above. Every other setting either derives from the environment or
+takes a default, and neither belongs in a freshly written file.
 
 `.factory/config.json` is committed — it is the Project's settings, not
 scratch state. Add `.factory/run.lock` and `.factory/journal.json` to

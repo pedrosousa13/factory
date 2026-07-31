@@ -85,10 +85,12 @@ fix — never a bare "preflight failed." Shape:
   current `stampVersion` — see the stamp check below.
 
 **The stamp check.** `.factory/config.json` existing, parsing, and carrying
-a `stampVersion` at the plugin's current stamp version means the repo is
-stamped for v2. The check below — `docs/agents/issue-tracker.md` present
-with a `Factory loop operations` section — is the legacy v1 detection: it
-finds a stamp predating `config.json`.
+a `stampVersion` at the plugin's current stamp version — `STAMP_VERSION` in
+`${CLAUDE_PLUGIN_ROOT}/runtime/src/version.ts`, the single source of truth
+for this value — means the repo is stamped for v2. The check below —
+`docs/agents/issue-tracker.md` present with a `Factory loop operations`
+section — is the legacy v1 detection: it finds a stamp predating
+`config.json`.
 
 If `docs/agents/issue-tracker.md` is missing, or exists but carries no
 `Factory loop operations` section, the repo is not stamped for the loop: tell

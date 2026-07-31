@@ -8,43 +8,35 @@
 import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { effective, parseConfig } from "../src/config";
-import type { Detected, Effective, EffectiveSettings } from "../src/config";
+import type { Effective, EffectiveSettings } from "../src/config";
 
 const CONFIG_PATH = ".factory/config.json";
 
 // ───── git facts
 
-function detectDefaultBranch(): string {
+// Returns both the branch and whether a git symref genuinely supplied it —
+// the fallback "main" below is a default, not a detection, and the caller
+// must be able to tell the two apart when it reports the source.
+function detectDefaultBranch(): { value: string; source: "detected" | "default" } {
   try {
     const ref = execFileSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     const branch = ref.split("/").pop();
-    if (branch) return branch;
+    if (branch) return { value: branch, source: "detected" };
   } catch {
     // no origin remote, no HEAD symref, or not a git repo at all — fall
     // through to the default below.
   }
-  return "main";
-}
-
-function detect(): Detected {
-  return {
-    defaultBranch: detectDefaultBranch(),
-    // No harness beyond Claude Code is wired up yet in this slice, and no
-    // notification channel exists to detect — fixed until a later task
-    // defines real detection for these.
-    harnessKind: "claude-code",
-    notificationChannel: "none",
-  };
+  return { value: "main", source: "default" };
 }
 
 // ───── output
 
 function printNotStamped(): void {
   console.error(`${CONFIG_PATH} not found — this repo is not stamped for the loop.`);
-  console.error(`Fix: run the Factory stamp skill to create ${CONFIG_PATH}.`);
+  console.error(`Fix: run the Factory adopt skill to create ${CONFIG_PATH}.`);
 }
 
 interface Row {
@@ -72,7 +64,6 @@ function printTable(settings: EffectiveSettings): void {
     row("notifierCommand", settings.notifierCommand),
     row("trackerTokenVar", settings.trackerTokenVar),
     row("defaultBranch", settings.defaultBranch),
-    row("notificationChannel", settings.notificationChannel),
     { setting: "lockPath", value: settings.lockPath, source: "fixed" },
     { setting: "journalPath", value: settings.journalPath, source: "fixed" },
   ].filter((r): r is Row => r !== null);
@@ -96,7 +87,21 @@ function main(): void {
     process.exit(1);
   }
 
-  printTable(effective(result.config, detect()));
+  const branch = detectDefaultBranch();
+  const settings = effective(result.config, {
+    defaultBranch: branch.value,
+    // No detection spec exists yet for the notification channel, so there
+    // is nothing genuine to report — this placeholder satisfies the type
+    // without printing a row (see the row list below), and must not be
+    // read as a real detection.
+    notificationChannel: "none",
+  });
+  // effective() tags every Detected fact as "detected"; a symref lookup
+  // that failed and fell back to "main" is a default, not a genuine
+  // detection, so correct the source here.
+  settings.defaultBranch = { value: branch.value, source: branch.source };
+
+  printTable(settings);
 }
 
 main();

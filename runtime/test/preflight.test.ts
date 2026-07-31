@@ -29,11 +29,66 @@ test("all sources agree and everything checks out: ok", () => {
   expect(result).toEqual({ ok: true });
 });
 
-test("trackerReachable 'not-asked' does not fail the green path", () => {
+// ───── trackerReachable "not-asked"
+
+test("'not-asked' on an otherwise clean board is itself a failure", () => {
   const facts = greenFacts();
   facts.trackerReachable = "not-asked";
   const result = preflight(facts);
-  expect(result).toEqual({ ok: true });
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/never checked/);
+});
+
+test("'not-asked' is excused when config is invalid — that failure already explains it", () => {
+  const facts = greenFacts();
+  facts.config = { ok: false, errors: ["attackSurface: required"] };
+  facts.trackerReachable = "not-asked";
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/attackSurface/);
+});
+
+test("'not-asked' is excused when the adapter doc is missing entirely", () => {
+  const facts = greenFacts();
+  facts.adapterMarker = "missing-file";
+  facts.trackerReachable = "not-asked";
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/not stamped for the loop/);
+});
+
+test("'not-asked' is excused when the adapter marker is missing", () => {
+  const facts = greenFacts();
+  facts.adapterMarker = "missing-marker";
+  facts.trackerReachable = "not-asked";
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/no machine-readable marker/);
+});
+
+test("'not-asked' is excused when config vs adapter marker disagree", () => {
+  const facts = greenFacts();
+  facts.adapterMarker = { kind: "linear" };
+  facts.trackerReachable = "not-asked";
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toContain("github");
+  expect(result.failures[0].what).toContain("linear");
 });
 
 // ───── each single failure

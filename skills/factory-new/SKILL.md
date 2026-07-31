@@ -186,6 +186,33 @@ steps 2, 3, and 6 branch.
    exactly what `/factory` and `/factory-adopt` check to decide a repo is
    stamped, so this file matters more than the others.
 
+8. **Write `.factory/config.json`**: the Project's settings file, per
+   `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Prerequisites" section. Three
+   decisions go into it, and none of them takes a default:
+   - **Tracker.** Already settled in "Choose a tracker" above (and, on
+     Linear, "Derive the Linear project name") — write it as `tracker.kind`
+     (`"github"` or `"linear"`), plus `tracker.repo` when the tracker is
+     GitHub. A brand-new repo has nothing to detect the tracker from, so
+     this is simply the answer already given — with GitHub as the
+     suggested default — not a fresh detection.
+   - **Merge policy.** Ask the maintainer directly. Nothing about a
+     brand-new repo reveals whether the loop may merge its own work, so
+     this is always a fresh question. Write the answer as `merge.policy`.
+   - **Attack surface.** Ask the maintainer directly, the same way. Write
+     the answer as `attackSurface`.
+
+   Write `stampVersion` as `STAMP_VERSION` in
+   `${CLAUDE_PLUGIN_ROOT}/runtime/src/version.ts` — the single source of
+   truth for this value. Write only these four fields — `stampVersion` and
+   the three decisions above.
+   `${CLAUDE_PLUGIN_ROOT}/templates/stamp/gitignore`, already copied to
+   `.gitignore` in step 4, ignores `.factory/run.lock` and
+   `.factory/journal.json` — the runtime's own working files, neither ever
+   committed. `.factory/config.json` itself is committed — it is the
+   Project's settings, not scratch state — so stage it, commit it (no AI
+   attribution, same as step 5), and push it, the same way step 6 pushed
+   the initial commit.
+
 ## End state: start a Planning Session
 
 Once the build steps above are verified, stop building and start a Planning

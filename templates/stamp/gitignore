@@ -1,1 +1,3 @@
 .scratch/
+.factory/run.lock
+.factory/journal.json

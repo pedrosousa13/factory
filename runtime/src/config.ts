@@ -26,11 +26,8 @@ export type ParseResult =
 
 // ───── detected environment facts
 
-export type HarnessKind = "claude-code" | "codex" | "pi";
-
 export interface Detected {
   defaultBranch: string;
-  harnessKind: HarnessKind;
   notificationChannel: string;
 }
 

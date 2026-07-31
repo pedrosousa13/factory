@@ -451,7 +451,6 @@ test("an enum value given as an array is quoted with JSON.stringify, not mistake
 
 const detected: Detected = {
   defaultBranch: "main",
-  harnessKind: "claude-code",
   notificationChannel: "claude-code-notification-hook",
 };
 

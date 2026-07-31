@@ -104,22 +104,37 @@ export function preflight(facts: PreflightFacts): PreflightResult {
 
   // three-source contradiction: config.json's tracker.kind must agree with
   // the adapter doc's marker.
-  if (
-    facts.config.ok &&
-    typeof facts.adapterMarker === "object" &&
-    facts.adapterMarker.kind !== facts.config.config.tracker.kind
-  ) {
+  const adapterKind = typeof facts.adapterMarker === "object" ? facts.adapterMarker.kind : null;
+  const trackerMismatch = facts.config.ok && adapterKind !== null && adapterKind !== facts.config.config.tracker.kind;
+  if (trackerMismatch && facts.config.ok) {
     const configKind = facts.config.config.tracker.kind;
-    const markerKind = facts.adapterMarker.kind;
     failures.push({
-      what: `config.json declares tracker "${configKind}" but the adapter doc marker declares "${markerKind}"`,
+      what: `config.json declares tracker "${configKind}" but the adapter doc marker declares "${adapterKind}"`,
       why: "the three preflight sources (config, adapter marker, live tracker) must agree on which tracker the loop uses; a mismatch means the run cannot trust any of them",
-      fix: `run the Factory adopt skill to regenerate the adapter doc for "${configKind}", or correct tracker.kind in .factory/config.json to "${markerKind}"`,
+      fix: `run the Factory adopt skill to regenerate the adapter doc for "${configKind}", or correct tracker.kind in .factory/config.json to "${adapterKind}"`,
     });
   }
 
-  // live tracker reachability.
-  if (facts.trackerReachable !== "not-asked" && facts.trackerReachable.result === "unreachable") {
+  // live tracker reachability. "not-asked" means the host never ran the
+  // check at all. That is excused only when another collected failure
+  // already explains why the edge couldn't ask — an invalid config, or an
+  // adapter marker that's missing or mismatched. On an otherwise clean
+  // board, "not-asked" is itself a failure: the loop must not silently
+  // skip confirming the tracker is reachable.
+  if (facts.trackerReachable === "not-asked") {
+    const excused =
+      !facts.config.ok ||
+      facts.adapterMarker === "missing-file" ||
+      facts.adapterMarker === "missing-marker" ||
+      trackerMismatch;
+    if (!excused) {
+      failures.push({
+        what: "tracker reachability was never checked",
+        why: "preflight must confirm the tracker is reachable before the loop starts, and nothing else on the board explains why that check didn't run",
+        fix: "re-run preflight with a host that asks the tracker-reachable question",
+      });
+    }
+  } else if (facts.trackerReachable.result === "unreachable") {
     failures.push({
       what: "the tracker is not reachable or not authenticated",
       why: facts.trackerReachable.why,

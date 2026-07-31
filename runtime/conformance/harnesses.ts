@@ -99,11 +99,13 @@ export function runHarness(name: HarnessName, prompt: string, cwd: string): Harn
 
 // ──────────────────────────────────────────────────────────────────────── main
 
-const name = process.argv[2] as HarnessName | undefined;
-if (name === "claude" || name === "codex" || name === "pi") {
-  const run = runHarness(name, 'Reply with exactly the JSON {"ok":true} and nothing else.', import.meta.dir);
-  console.log(JSON.stringify(run));
-} else if (name !== undefined) {
-  console.error("usage: bun harnesses.ts claude|codex|pi");
-  process.exit(1);
+if (import.meta.main) {
+  const name = process.argv[2] as HarnessName | undefined;
+  if (name === "claude" || name === "codex" || name === "pi") {
+    const run = runHarness(name, 'Reply with exactly the JSON {"ok":true} and nothing else.', import.meta.dir);
+    console.log(JSON.stringify(run));
+  } else if (name !== undefined) {
+    console.error("usage: bun harnesses.ts claude|codex|pi");
+    process.exit(1);
+  }
 }
