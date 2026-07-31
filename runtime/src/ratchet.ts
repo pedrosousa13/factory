@@ -36,13 +36,25 @@ export function applyOverrides(config: FactoryConfig, overrides: RunOverrides): 
   const refusals: string[] = [];
 
   // merge: tightening (any policy -> human) is always allowed; loosening
-  // (human -> any non-human policy) is refused.
+  // (human -> any non-human policy) is refused; a lateral swap between two
+  // different auto policies (e.g. squash -> rebase) neither tightens nor
+  // loosens, so it is refused too.
   let mergePolicy = config.merge.policy;
   if (overrides.merge !== undefined) {
     if (config.merge.policy === "human" && overrides.merge !== "human") {
       refusals.push(
         `--merge=${overrides.merge} loosens the committed "human" merge policy; ` +
           `edit and commit ${CONFIG_PATH} instead`,
+      );
+    } else if (
+      config.merge.policy !== "human" &&
+      overrides.merge !== "human" &&
+      overrides.merge !== config.merge.policy
+    ) {
+      refusals.push(
+        `--merge=${overrides.merge} is lateral to the committed "${config.merge.policy}" ` +
+          `merge policy; run overrides ratchet toward safety only, and a lateral change ` +
+          `neither tightens nor loosens, so it is not allowed; edit and commit ${CONFIG_PATH} instead`,
       );
     } else {
       mergePolicy = overrides.merge;
