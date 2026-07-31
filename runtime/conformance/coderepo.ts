@@ -68,9 +68,10 @@ export const IMPLEMENT_SHAPE = `type ImplementResult =
   | { result: "failed"; reason: string };`;
 
 export const CLEAR_BRIEF =
-  "On the current branch, edit greet.ts so greet returns 'Hi, ' + name instead of 'Hello, ' + name, " +
-  "update check.ts's expectation to match, run `bun check.ts` to confirm it exits 0, and commit the " +
-  "change with message 'Change greeting to Hi'. Then reply with ONLY the JSON result.";
+  "Create and switch to a new branch named '42-test/greeting', then edit greet.ts so greet returns " +
+  "'Hi, ' + name instead of 'Hello, ' + name, update check.ts's expectation to match, run " +
+  "`bun check.ts` to confirm it exits 0, and commit the change with message 'Change greeting to Hi'. " +
+  "Then reply with ONLY the JSON result.";
 
 export const VAGUE_BRIEF =
   "Improve the greeting. If anything essential is unspecified or ambiguous, do not guess — reply " +
