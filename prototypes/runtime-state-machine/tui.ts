@@ -43,7 +43,7 @@ type World = {
   caps: Caps;
   journal: { at: number; note: string }[];
   branch: { name: string; issue: string; pushed: boolean } | null;
-  trackerInProgress: { issue: string; assignee: string | null } | null;
+  tracker: { issue: string; state: "started" | "parked"; assignee: string | null } | null;
   armQuestion: boolean;
   armImplFail: boolean;
   armGateFail: boolean;
@@ -56,7 +56,7 @@ function freshWorld(keepJournal = false, prev?: World): World {
     caps: prev ? prev.caps : { superpowers: true, mattTdd: true, notify: true, tests: true, typecheck: true },
     journal: keepJournal && prev ? prev.journal : [],
     branch: prev ? prev.branch : null,
-    trackerInProgress: prev ? prev.trackerInProgress : null,
+    tracker: prev ? prev.tracker : null,
     armQuestion: false,
     armImplFail: false,
     armDecline: false,
@@ -74,7 +74,7 @@ function perform(w: World, e: Effect): { data?: unknown; err?: string } {
         data: {
           journalLast: w.journal.at(-1) ?? null,
           branch: w.branch,
-          trackerInProgress: w.trackerInProgress,
+          tracker: w.tracker,
         } satisfies Snapshot,
       };
     case "tracker.candidates":
@@ -84,18 +84,25 @@ function perform(w: World, e: Effect): { data?: unknown; err?: string } {
     case "tracker.claim": {
       const i = w.issues.find((x) => x.id === e.issue)!;
       i.assignee = e.actor;
-      w.trackerInProgress = { issue: i.id, assignee: e.actor };
+      w.tracker = { issue: i.id, state: "started", assignee: e.actor };
+      return {};
+    }
+    case "tracker.unclaim": {
+      const i = w.issues.find((x) => x.id === e.issue);
+      if (i) { i.assignee = null; i.agentReady = false; }
+      w.tracker = null;
       return {};
     }
     case "tracker.state":
-      if (e.state === "parked" || e.state === "done") {
-        w.trackerInProgress = null;
-        if (e.state === "done") {
-          w.issues = w.issues.filter((i) => i.id !== e.issue);
-          w.branch = null;
-        }
+      if (e.state === "parked") w.tracker = { issue: e.issue, state: "parked", assignee: null };
+      if (e.state === "done") {
+        w.tracker = null;
+        w.issues = w.issues.filter((i) => i.id !== e.issue);
+        w.branch = null;
       }
       return {};
+    case "git.sync":
+      return { data: { branches: w.branch ? [w.branch.name] : [] } };
     case "git.worktree":
       w.branch = { name: e.branch, issue: e.issue, pushed: false };
       return {};
@@ -123,6 +130,11 @@ function perform(w: World, e: Effect): { data?: unknown; err?: string } {
     default:
       return {};
   }
+}
+
+/** The parked issue: not agentReady, with a pushed branch pointed at it. */
+function parkedIssue(w: World): IssueFacts | undefined {
+  return w.issues.find((i) => !i.agentReady && w.branch?.issue === i.id && w.branch?.pushed);
 }
 
 // ───────────────────────────────────────────────────────────────── the loop
@@ -200,11 +212,13 @@ function render() {
   queue.slice(0, 5).forEach((e, i) => lines.push(`  ${i === 0 ? Y("▶") : " "} ${describe(e)}`));
   if (queue.length > 5) lines.push(D(`  … ${queue.length - 5} more`));
   lines.push("");
+  const parked = parkedIssue(world);
   lines.push(
     `${B("world")} ${D(
       `branch=${world.branch ? `${world.branch.name}${world.branch.pushed ? " (pushed)" : ""}` : "none"}  ` +
-        `tracker=${world.trackerInProgress ? `${world.trackerInProgress.issue}@${world.trackerInProgress.assignee}` : "idle"}  ` +
-        `journal=${world.journal.length}  open=${world.issues.length}`,
+        `tracker=${world.tracker ? `${world.tracker.issue}@${world.tracker.assignee ?? "-"}(${world.tracker.state})` : "idle"}  ` +
+        `journal=${world.journal.length}  open=${world.issues.length}` +
+        (parked ? `  parked=${parked.id}` : ""),
     )}`,
   );
   const armed = [
@@ -219,7 +233,7 @@ function render() {
   state.trace.forEach((t) => lines.push(D("  " + t)));
   lines.push("");
   lines.push(
-    D("[enter] perform next  [f] fail next  [t] +5min  [a] answer  [r] restart run\n") +
+    D("[enter] perform next  [f] fail next  [t] +5min  [a] answer  [A] answer parked  [r] restart run\n") +
       D("[Q] arm question  [X] arm impl-fail  [G] arm gate-fail  [D] arm decline\n") +
       D("[k] crash+restart (keep journal)  [K] crash+restart (wipe journal)\n") +
       D("[m] merge policy  [s] superpowers  [p] scope  [h] headless  [q] quit"),
@@ -258,6 +272,11 @@ function handleKey(key: string) {
     case "a":
       dispatch({ k: "answer", text: "the coordinator owns it" });
       break;
+    case "A": {
+      const parked = parkedIssue(world);
+      if (parked) parked.agentReady = true;
+      break;
+    }
     case "Q":
       world.armQuestion = true;
       break;

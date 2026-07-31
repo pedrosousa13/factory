@@ -56,7 +56,7 @@ export type IssueFacts = {
 export type Snapshot = {
   journalLast: JournalEntry | null;
   branch: { name: string; issue: string; pushed: boolean } | null;
-  trackerInProgress: { issue: string; assignee: string | null } | null;
+  tracker: { issue: string; state: "started" | "parked"; assignee: string | null } | null;
 };
 
 export type JournalEntry = { at: number; note: string };
@@ -79,6 +79,7 @@ export type Effect = { id: EffectId } & (
   | { k: "tracker.claim"; issue: string; actor: string }
   | { k: "tracker.comment"; issue: string; text: string }
   | { k: "tracker.state"; issue: string; state: "started" | "parked" | "done" }
+  | { k: "tracker.unclaim"; issue: string }
   | { k: "git.sync" }
   | { k: "git.worktree"; issue: string; branch: string }
   | { k: "git.push"; branch: string }
@@ -405,9 +406,17 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
       return { state: s, effects: [] };
     }
 
-    // S14: always branch from a fresh default branch, in an isolated worktree.
+    // S14: branch from a fresh default branch, unless a parked issue's pushed
+    // branch already exists — then resume it instead of orphaning the work.
     case "git.sync": {
       const w = s.work!;
+      const branches = (data as { branches: string[] }).branches;
+      if (branches.includes(w.branch)) {
+        return emit(
+          say({ ...s, work: { ...w, step: "implementing", resumed: true } }, `resuming pushed branch ${w.branch}`),
+          { k: "agent.implement", issue: w.issue.id, branch: w.branch, tdd: w.tdd },
+        );
+      }
       return emit(s, { k: "git.worktree", issue: w.issue.id, branch: w.branch });
     }
 
@@ -487,6 +496,7 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
       return emit(
         s,
         { k: "tracker.comment", issue: w.issue.id, text: w.question ?? "parked" },
+        { k: "tracker.unclaim", issue: w.issue.id },
         { k: "tracker.state", issue: w.issue.id, state: "parked" },
       );
     }
@@ -512,10 +522,10 @@ function retire(s: RunState, id: EffectId): RunState {
 
 /** S19/S20: Git and the tracker are truth; the journal only speeds this up. */
 function reconcile(s: RunState, snap: Snapshot): Out {
-  const t = snap.trackerInProgress;
+  const t = snap.tracker;
   const b = snap.branch;
 
-  if (t && b && t.issue === b.issue) {
+  if (t && t.state === "started" && b && t.issue === b.issue) {
     if (t.assignee !== s.settings.actor) {
       return emit(say(s, `${t.issue} is held by ${t.assignee ?? "nobody"}; leaving it`), {
         k: "lease.acquire",
@@ -556,20 +566,29 @@ function reconcile(s: RunState, snap: Snapshot): Out {
   // The mirror half-transition: claimed on the tracker, but no branch yet.
   // The branch name is derived from the title, so recovery must re-read the
   // issue before it can name the branch it is resuming.
-  if (t && !b && t.assignee === s.settings.actor) {
+  if (t && t.state === "started" && !b && t.assignee === s.settings.actor) {
     return emit(say(s, `${t.issue} claimed with no branch; re-reading to resume`), {
       k: "tracker.read",
       issue: t.issue,
     });
   }
 
-  // A half-applied transition: branch exists but the tracker never moved.
-  if (b && !t) {
-    return emit(say(s, `orphan branch ${b.name}; completing the park`), {
-      k: "tracker.state",
-      issue: b.issue,
-      state: "parked",
+  // A completed Park is normal state, not a half-transition: leave it parked.
+  if (b && (!t || t.state === "parked") && b.pushed) {
+    return emit(say(s, `parked branch ${b.name} is at rest`), {
+      k: "lease.acquire",
+      actor: s.settings.actor,
     });
+  }
+
+  // A half-applied Park: branch exists, unpushed, and the tracker never
+  // recorded it — crash between worktree and push. Repair by completing it.
+  if (b && !t && !b.pushed) {
+    return emit(
+      say(s, `orphan branch ${b.name}; completing the park`),
+      { k: "tracker.unclaim", issue: b.issue },
+      { k: "tracker.state", issue: b.issue, state: "parked" },
+    );
   }
 
   return emit(say(s, "nothing to reconcile"), { k: "lease.acquire", actor: s.settings.actor });
