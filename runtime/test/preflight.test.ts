@@ -142,7 +142,7 @@ test("repo stamp older than plugin: migration pending, blocks execution only", (
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("repo stamp newer than plugin: update-the-plugin failure, not blocksExecutionOnly", () => {
+test("repo stamp newer than plugin: update-the-plugin failure, also blocksExecutionOnly", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: "3.0.0", plugin: "2.0.0" };
   const result = preflight(facts);
@@ -152,7 +152,7 @@ test("repo stamp newer than plugin: update-the-plugin failure, not blocksExecuti
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].what).toMatch(/newer/);
   expect(result.failures[0].fix).toMatch(/update the Factory plugin/);
-  expect(result.failures[0].blocksExecutionOnly).toBeUndefined();
+  expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
 test("repo with no stamp at all is treated as older than the plugin", () => {
@@ -164,6 +164,31 @@ test("repo with no stamp at all is treated as older than the plugin", () => {
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
+  expect(result.failures[0].fix).toMatch(/run the Factory adopt skill to stamp this repo/);
+  expect(result.failures[0].fix).toMatch(/migration step if it carries a legacy v1 stamp/);
+});
+
+test("both stale and newer stamp failures carry blocksExecutionOnly; push-check failure does not", () => {
+  const staleFacts = greenFacts();
+  staleFacts.stampVersion = { repo: "1.0.0", plugin: "2.0.0" };
+  const stale = preflight(staleFacts);
+  expect(stale.ok).toBe(false);
+  if (stale.ok) return;
+  expect(stale.failures[0].blocksExecutionOnly).toBe(true);
+
+  const newerFacts = greenFacts();
+  newerFacts.stampVersion = { repo: "3.0.0", plugin: "2.0.0" };
+  const newer = preflight(newerFacts);
+  expect(newer.ok).toBe(false);
+  if (newer.ok) return;
+  expect(newer.failures[0].blocksExecutionOnly).toBe(true);
+
+  const pushFailFacts = greenFacts();
+  pushFailFacts.pushCheck = { ok: false, detail: "push blocked" };
+  const pushFail = preflight(pushFailFacts);
+  expect(pushFail.ok).toBe(false);
+  if (pushFail.ok) return;
+  expect(pushFail.failures[0].blocksExecutionOnly).toBeUndefined();
 });
 
 // ───── compareStamp
@@ -187,4 +212,23 @@ test("compareStamp: differing segment counts treat missing segments as 0", () =>
   expect(compareStamp("2.0", "2.0.0")).toBe(0);
   expect(compareStamp("2", "2.0.0")).toBe(0);
   expect(compareStamp("2.1", "2.0.0")).toBe(1);
+});
+
+test("compareStamp does a full dotted compare, not major-only: a minor-ahead repo stamp diverges from its plugin", () => {
+  // A major-only compare would call "2.5.0" and "2.3.0" equal (same major).
+  // The full compare says 2.5.0 is newer, which is what preflight needs: a
+  // repo stamped by a future plugin (say 2.5.0) must trigger the
+  // update-the-plugin failure against an older-minor plugin (2.3.0), not
+  // pass silently as "same version".
+  expect(compareStamp("2.5.0", "2.3.0")).toBe(1);
+
+  const facts = greenFacts();
+  facts.stampVersion = { repo: "2.5.0", plugin: "2.3.0" };
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/newer/);
+  expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });

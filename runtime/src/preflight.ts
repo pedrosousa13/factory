@@ -92,13 +92,13 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: "the tracker adapter doc is missing — repo is not stamped for the loop",
       why: "preflight reads the adapter doc's machine-readable marker to confirm the stamped tracker kind before the loop starts",
-      fix: "run the Factory stamp/adopt skill to install the tracker adapter doc",
+      fix: "run the Factory adopt skill to install the tracker adapter doc",
     });
   } else if (facts.adapterMarker === "missing-marker") {
     failures.push({
       what: "the tracker adapter doc has no machine-readable marker — repo is not stamped for the loop",
       why: "prose edits to the adapter doc must not be able to silently change which tracker the loop trusts",
-      fix: "re-run the Factory stamp skill to rewrite the adapter doc with its marker",
+      fix: "run the Factory adopt skill to rewrite the adapter doc with its marker",
     });
   }
 
@@ -114,7 +114,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: `config.json declares tracker "${configKind}" but the adapter doc marker declares "${markerKind}"`,
       why: "the three preflight sources (config, adapter marker, live tracker) must agree on which tracker the loop uses; a mismatch means the run cannot trust any of them",
-      fix: `re-run the Factory stamp skill to regenerate the adapter doc for "${configKind}", or correct tracker.kind in .factory/config.json to "${markerKind}"`,
+      fix: `run the Factory adopt skill to regenerate the adapter doc for "${configKind}", or correct tracker.kind in .factory/config.json to "${markerKind}"`,
     });
   }
 
@@ -144,7 +144,10 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: `repo stamp "${facts.stampVersion.repo ?? "none"}" is older than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "a stale stamp means the repo's config and docs may not match what this plugin version expects",
-      fix: "run the Factory migration step to bring the repo stamp up to date, then re-run preflight",
+      fix:
+        facts.stampVersion.repo === null
+          ? "run the Factory adopt skill to stamp this repo, or the migration step if it carries a legacy v1 stamp"
+          : "run the Factory migration step to bring the repo stamp up to date, then re-run preflight",
       blocksExecutionOnly: true,
     });
   } else if (cmp > 0) {
@@ -152,6 +155,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
       what: `repo stamp "${facts.stampVersion.repo}" is newer than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "the installed plugin predates this stamp version and cannot guarantee it understands the repo's config and docs",
       fix: `update the Factory plugin to a version that supports stamp "${facts.stampVersion.repo}" or newer`,
+      blocksExecutionOnly: true,
     });
   }
 
