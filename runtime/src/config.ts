@@ -28,7 +28,8 @@ export type ParseResult =
 
 export interface Detected {
   defaultBranch: string;
-  notificationChannel: string;
+  // notificationChannel is a derived setting (PRD §3): it returns here once
+  // a real detection spec exists for it. No edge fabricates one yet.
 }
 
 // ───── effective settings
@@ -52,7 +53,8 @@ export interface EffectiveSettings {
   notifierCommand?: Effective<string>;
   trackerTokenVar?: Effective<string>;
   defaultBranch: Effective<string>;
-  notificationChannel: Effective<string>;
+  // notificationChannel: returns here once it derives from a real detection
+  // spec (PRD §3).
   lockPath: string;
   journalPath: string;
 }
@@ -312,7 +314,6 @@ export function effective(config: FactoryConfig, detected: Detected): EffectiveS
         ? { value: config.answerWindowMinutes, source: "config" }
         : { value: ANSWER_WINDOW_MINUTES_DEFAULT, source: "default" },
     defaultBranch: { value: detected.defaultBranch, source: "detected" },
-    notificationChannel: { value: detected.notificationChannel, source: "detected" },
     lockPath: LOCK_PATH,
     journalPath: JOURNAL_PATH,
   };

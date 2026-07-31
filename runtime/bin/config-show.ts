@@ -88,14 +88,7 @@ function main(): void {
   }
 
   const branch = detectDefaultBranch();
-  const settings = effective(result.config, {
-    defaultBranch: branch.value,
-    // No detection spec exists yet for the notification channel, so there
-    // is nothing genuine to report — this placeholder satisfies the type
-    // without printing a row (see the row list below), and must not be
-    // read as a real detection.
-    notificationChannel: "none",
-  });
+  const settings = effective(result.config, { defaultBranch: branch.value });
   // effective() tags every Detected fact as "detected"; a symref lookup
   // that failed and fell back to "main" is a default, not a genuine
   // detection, so correct the source here.

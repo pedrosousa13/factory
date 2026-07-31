@@ -451,7 +451,6 @@ test("an enum value given as an array is quoted with JSON.stringify, not mistake
 
 const detected: Detected = {
   defaultBranch: "main",
-  notificationChannel: "claude-code-notification-hook",
 };
 
 test("effective() tags config-provided values as config", () => {
@@ -526,10 +525,6 @@ test("effective() tags detected facts as detected", () => {
   const settings = effective(parsed.config, detected);
 
   expect(settings.defaultBranch).toEqual({ value: "main", source: "detected" });
-  expect(settings.notificationChannel).toEqual({
-    value: "claude-code-notification-hook",
-    source: "detected",
-  });
 });
 
 test("effective() reports the fixed lock and journal paths", () => {
