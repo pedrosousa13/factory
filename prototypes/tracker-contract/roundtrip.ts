@@ -126,20 +126,22 @@ function sceneThree(ticket: TicketFacts): void {
   line("ask", JSON.stringify(ask));
   line("agent", JSON.stringify(raw));
   const checked1 = check(ask, raw);
-  const why1 = checked1.ok ? "" : checked1.why;
-  line("check", `FAIL — ${why1}`);
+  line("check", checked1.ok ? "ok" : `FAIL — ${checked1.why}`);
   line("factory", "garbled — re-asking tracker.setState once");
 
   line("ask", JSON.stringify(ask));
   line("agent", JSON.stringify(raw));
   const checked2 = check(ask, raw);
-  const why2 = checked2.ok ? "" : checked2.why;
-  line("check", `FAIL — ${why2}`);
+  line("check", checked2.ok ? "ok" : `FAIL — ${checked2.why}`);
 
+  const why1 = checked1.ok ? "" : checked1.why;
+  const why2 = checked2.ok ? "" : checked2.why;
   line(
     "factory",
     `stopping — tracker.setState on ${ticket.id} failed twice:\n` +
-      `  1) ${why1}\n  2) ${why2}\nnothing was decided; a human should look at ${ticket.id}.`,
+      `  1) ${why1}\n  2) ${why2}\n` +
+      `${ticket.id} is still claimed by factory with no state change applied; ` +
+      `a human must resolve that outstanding claim.`,
   );
 }
 

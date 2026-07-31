@@ -19,6 +19,10 @@ terms, in phrasebook.md. Factory checks the shape of every answer before it deci
 using the check function. Planning skills read only the phrasebook. Only autonomous
 execution needs the checked vocabulary.
 
+A lease is not a tracker concept: the runtime holds it itself, through its own
+`lease.*` effects (see the sibling runtime prototype's machine.ts). This contract covers
+only ticket-level claims — claim, unclaim, state — not run-level exclusivity.
+
 ## The files
 
 - `contract.ts` — the neutral Ask/Answer vocabulary and the `check` function that
@@ -49,4 +53,16 @@ Watch for four scenes:
 
 ## Findings
 
-- [ ]
+- The Ask vocabulary covers all six `tracker.*` effects the sibling runtime prototype
+  emits (candidates, read, claim, comment, state, unclaim), plus `reachable`,
+  `milestones`, `milestoneCounts`, and `verify`. Naming divergences to reconcile when the
+  two merge: `tracker.setState` vs `tracker.state`; `Urgency` has `"none"` where the
+  sibling's `Priority` does not; `TicketFacts.ready`/`claimedBy` vs
+  `IssueFacts.agentReady`/`assignee`; `createdAt` as a string here vs a number there.
+- `check`'s plain, non-generic signature returns the full answer union, forcing
+  caller-side casts (see Scene 1) — an API-shape question for the real runtime.
+- The garble/bad-news split held in every scene: the checker rejects malformed answers,
+  never shape-valid bad news.
+- A lease is not a tracker concept; it stays with the runtime's `lease.*` effects.
+- `tracker.verify` exists for the "listings lag writes" warning in the phrasebook, but no
+  scene exercises it yet.

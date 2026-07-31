@@ -14,11 +14,12 @@ agent brings its own tools.
 | ------------------- | --------------------------------------------------------------------- |
 | claimed by X        | the issue's assignee is X                                             |
 | unclaimed           | the issue has no assignee                                             |
+| release a claim     | clear the assignee — its own act, not implied by any state change     |
 | ready               | carries the `ready-for-agent` label                                   |
 | urgency P0..P3      | labels `P0`..`P3`; no label = none                                    |
 | unstarted           | open, `ready-for-agent`, no `in-progress` label                       |
 | started             | carries the `in-progress` label                                      |
-| parked              | `ready-for-agent` swapped for `needs-info`, claim released            |
+| parked              | `ready-for-agent` swapped for `needs-info`                            |
 | done                | closed as completed                                                  |
 | canceled            | closed as not planned                                                |
 | milestone           | the issue's milestone field                                           |

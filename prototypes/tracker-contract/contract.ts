@@ -12,6 +12,8 @@
 
 export type Urgency = "P0" | "P1" | "P2" | "P3" | "none";
 export type IssueState = "unstarted" | "started" | "parked" | "done" | "canceled";
+/** The open-ended subset of IssueState: everything that hasn't reached a final state. */
+export type OpenState = "unstarted" | "started" | "parked";
 
 /** One ticket, as Factory needs to see it. Everything the loop decides on. */
 export type TicketFacts = {
@@ -52,7 +54,8 @@ export type SetStateAnswer = { result: "ok" };
 export type UnclaimAnswer = { result: "ok" };
 export type CommentAnswer = { result: "ok" };
 export type MilestonesAnswer = { result: "ok"; milestones: string[] };
-export type MilestoneCountsAnswer = { result: "ok"; counts: Record<IssueState, number> };
+/** Open tickets only — done/canceled tickets don't get counted here. */
+export type MilestoneCountsAnswer = { result: "ok"; counts: Record<OpenState, number> };
 export type VerifyAnswer =
   | { result: "ok"; state: IssueState; claimedBy: string | null }
   | { result: "missing" };
@@ -75,6 +78,7 @@ export type Answer = {
 
 const URGENCIES: Urgency[] = ["P0", "P1", "P2", "P3", "none"];
 const STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
+const OPEN_STATES: OpenState[] = ["unstarted", "started", "parked"];
 
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null;
@@ -190,8 +194,8 @@ export function check(
     case "tracker.milestoneCounts": {
       if (result !== "ok") return bad(`result: ${JSON.stringify(result)} is not ok`);
       if (!isObj(raw.counts)) return bad("counts: not an object");
-      const counts = {} as Record<IssueState, number>;
-      for (const s of STATES) {
+      const counts = {} as Record<OpenState, number>;
+      for (const s of OPEN_STATES) {
         const v = raw.counts[s];
         if (typeof v !== "number") return bad(`counts.${s}: not a number`);
         counts[s] = v;
