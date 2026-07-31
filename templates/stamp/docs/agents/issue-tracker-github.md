@@ -1,5 +1,7 @@
 # Issue tracker: GitHub
 
+<!-- factory:tracker kind=github -->
+
 Issues and PRDs for this repo live as GitHub issues on **{{REPO}}**.
 
 Use the `gh` CLI for all operations. Pass `-R {{REPO}}` explicitly on every
