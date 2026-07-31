@@ -38,8 +38,8 @@ bun prototypes/tracker-contract/roundtrip.ts
 
 Watch for four scenes:
 
-- Scene 1, clean pick: three candidates arrive, the check removes the blocked ticket,
-  and queue order picks the oldest open P1 ticket.
+- Scene 1, clean pick: three candidates arrive, the check passes, Factory filters out
+  the blocked ticket, and queue order picks the oldest open P1 ticket.
 - Scene 2, garbled once: the first claim answer fails the check, Factory asks again, and
   the second answer passes and claims the ticket.
 - Scene 3, garbled twice: the same state-change answer fails the check twice, so Factory
