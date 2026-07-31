@@ -7,7 +7,23 @@ Throwaway. It answers one question, from
 > lifecycle transitions, recovery, and harness-neutral execution without
 > absorbing judgment-heavy skill behavior?
 
-Run it:
+Run the scenario runner — one command, no keys, prints every baseline
+scenario as a labelled walkthrough:
+
+```
+bun prototypes/runtime-state-machine/scenarios.ts
+bun prototypes/runtime-state-machine/scenarios.ts S18   # just one scenario
+```
+
+Each block shows the scenario's starting facts (`given`), the condensed
+setup (`...`), the effects that are the scenario's substance (`→`), any
+clock advance or host-side event, and the durable `result`. Scenarios known
+not to hold today print a trailing `⚠ diverges` line instead of a clean
+walkthrough. Read `scenarios.ts` top to bottom for the scenario table itself
+— it is written to be read, not just run.
+
+For poking at edge cases by hand — arming a specific failure, watching one
+effect resolve at a time, crashing mid-transition — run the TUI instead:
 
 ```
 bun prototypes/runtime-state-machine/tui.ts
@@ -78,14 +94,16 @@ branch instead of creating a fresh worktree.
 
 ## Baseline scenarios it exercises
 
-From `docs/research/factory-v2-baseline.md`: S06, S07, S09, S11, S12,
-S13, S14, S15, S16, S17, S18, S19*, S20.
+`scenarios.ts` drives every scenario listed in `docs/research/factory-v2-baseline.md`
+that this reducer models: S06, S07, S09, S10, S11 (both halves), S12, S13,
+S14, S15 (both halves), S16, S17 (both halves), S18, S19, S20 — plus a local
+`P01` covering the maintainer-approved Park policy (park, re-ready,
+re-pickup) that the baseline doc doesn't number. S01–S05, S08, S21–S25 are
+out of scope: Preflight, setup, Adoption, pagination, Handoffs, and
+cross-harness parity are not modelled here.
 
-S10 is not fully exercised: the empty-queue report states that no unblocked
-work remains, but its text carries no progress or open-issue counts. \* S19
-asks for idempotent completion of an interrupted Park; what's implemented
-converges but re-asks the maintainer's question on resume instead
-(Finding 6).
+S10 and S19 print a clean walkthrough followed by a `⚠ diverges` line; see
+Findings 6 below for why.
 
 ## Findings
 
