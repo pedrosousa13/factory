@@ -102,8 +102,11 @@ re-pickup) that the baseline doc doesn't number. S01–S05, S08, S21–S25 are
 out of scope: Preflight, setup, Adoption, pagination, Handoffs, and
 cross-harness parity are not modelled here.
 
-S10 and S19 print a clean walkthrough followed by a `⚠ diverges` line; see
-Findings 6 below for why.
+S10 and S19 both print a clean walkthrough followed by a `⚠ diverges` line,
+for different reasons. S10's empty-queue report states truthfully that no
+unblocked work remains, but it carries no progress or open-issue counts,
+which is what S10 requires. S19's reason is the journal gap — see Finding 6
+below.
 
 ## Findings
 

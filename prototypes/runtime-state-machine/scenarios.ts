@@ -9,12 +9,22 @@
  * mechanics tui.ts's `perform()` + key loop exercise by hand. What differs
  * per scenario is only: the starting facts, the answers to interesting
  * effects, and which of the resulting effects are the scenario's substance
- * (`show`, printed as `→`) versus setup noise (`hide`, printed as nothing,
+ * (`show`, printed as `→`) versus setup noise (`skip`, printed as nothing,
  * or `note`, printed as a condensed `...` line).
  *
+ * Every `note`/`show` beat names the effect KIND it expects next; `skip`
+ * beats drain the queue up to (not including) a named kind instead of
+ * counting effects. If a beat's expected kind doesn't match what the queue
+ * actually produced — or the queue runs dry first — that is printed as a
+ * visible `[!!]` marker instead of confident-but-wrong narration, and
+ * counted in the "narration mismatches" summary line. That is how a change
+ * in machine.ts's effect sequence gets caught: the mismatch is impossible to
+ * miss in the output, never a silent drift between the transcript and what
+ * actually fired.
+ *
  * THROWAWAY: this prints; it does not assert or throw. A wrong answer table
- * shows up as a wrong transcript, which is the point — the maintainer reads
- * it to spot the transition that's off.
+ * (or a real mismatch) shows up in the transcript, which is the point — the
+ * maintainer reads it to spot the transition that's off.
  */
 
 import {
@@ -40,8 +50,8 @@ const MIN = 60_000;
 
 // ───────────────────────────────────────────────────────────── left column
 // Symbolic markers ("...", "→") center in a 9-wide field; word markers
-// ("given", "+15m", "result") left-anchor after two spaces. Matches the
-// brief's worked example byte-for-byte.
+// ("given", "+15m", "result", "[!!]") left-anchor after two spaces. Matches
+// the brief's worked example byte-for-byte.
 
 const COL = 9;
 function sym(m: string): string {
@@ -78,31 +88,34 @@ type Resolve = { data?: unknown } | { err: string };
 type Fmt = (e: any, res: Resolve) => string;
 
 type Beat =
-  | { kind: "hide"; answer?: Resolve }
-  | { kind: "note"; fmt: Fmt; answer?: Resolve }
-  | { kind: "show"; fmt: Fmt; answer?: Resolve }
+  /** Drain the queue, hiding effects, up to (not including) the next effect
+   *  of kind `through`. Omit `through` to drain whatever is left right now
+   *  (used only when nothing further is narrated before a host-side event). */
+  | { kind: "skip"; through?: Effect["k"] }
+  | { kind: "note"; on: Effect["k"]; fmt: Fmt; answer?: Resolve }
+  | { kind: "show"; on: Effect["k"]; fmt: Fmt; answer?: Resolve }
   | { kind: "event"; event: Event; left: string; text: string };
 
-const hide = (answer?: Resolve): Beat => ({ kind: "hide", answer });
-const note = (fmt: Fmt, answer?: Resolve): Beat => ({ kind: "note", fmt, answer });
-const show = (fmt: Fmt, answer?: Resolve): Beat => ({ kind: "show", fmt, answer });
+const skip = (through?: Effect["k"]): Beat => ({ kind: "skip", through });
+const note = (on: Effect["k"], fmt: Fmt, answer?: Resolve): Beat => ({ kind: "note", on, fmt, answer });
+const show = (on: Effect["k"], fmt: Fmt, answer?: Resolve): Beat => ({ kind: "show", on, fmt, answer });
 const evt = (event: Event, left: string, text: string): Beat => ({ kind: "event", event, left, text });
-/** N boilerplate effects that carry no scenario-specific meaning. */
-const H = (n: number): Beat[] => Array.from({ length: n }, () => hide());
 
 type RunCfg = {
-  mode: Mode;
-  scope: Scope;
-  settings: Settings;
+  mode?: Mode;
+  scope?: Scope;
+  settings?: Settings;
   now?: number;
-  caps: Caps;
+  caps?: Caps;
   issues: IssueFacts[];
   snapshot?: Snapshot;
   branches?: string[];
   beats: Beat[];
 };
 
-function defaultAnswer(cfg: RunCfg, e: Effect): Resolve {
+type ResolvedCfg = RunCfg & { mode: Mode; scope: Scope; settings: Settings; caps: Caps };
+
+function defaultAnswer(cfg: ResolvedCfg, e: Effect): Resolve {
   switch (e.k) {
     case "host.preflight":
       return { data: cfg.caps };
@@ -125,31 +138,83 @@ function defaultAnswer(cfg: RunCfg, e: Effect): Resolve {
   }
 }
 
-/** The shared driver: run.start, then perform the queue head beat by beat. */
-function runBeats(cfg: RunCfg): string[] {
+/** Result of running a scenario (or half of one): printed lines plus a count
+ *  of narration/effect mismatches encountered along the way. */
+type Beats = { lines: string[]; mismatches: number };
+
+function merge(...parts: Beats[]): Beats {
+  return { lines: parts.flatMap((p) => p.lines), mismatches: parts.reduce((n, p) => n + p.mismatches, 0) };
+}
+const manual = (lines: string[]): Beats => ({ lines, mismatches: 0 });
+
+/** The shared driver: run.start, then perform the queue head beat by beat,
+ *  checking every note/show against the effect kind it claims to narrate. */
+function runBeats(raw: RunCfg): Beats {
+  const cfg: ResolvedCfg = {
+    ...raw,
+    mode: raw.mode ?? "interactive",
+    scope: raw.scope ?? { milestone: null },
+    settings: raw.settings ?? SETTINGS,
+    caps: raw.caps ?? CAPS_FULL,
+  };
   let state: RunState = initial();
   let queue: Effect[] = [];
   const lines: string[] = [];
+  let mismatches = 0;
+
   const dispatch = (ev: Event) => {
     const out = step(state, ev);
     state = out.state;
     queue = [...queue, ...out.effects];
   };
+  const resolve = (e: Effect, res: Resolve) =>
+    dispatch("err" in res ? { k: "err", id: e.id, reason: res.err } : { k: "ok", id: e.id, data: (res as any).data });
+  const mismatch = (expected: string, got: string) => {
+    lines.push(row(word("[!!]"), `expected ${expected}, got ${got}`));
+    mismatches++;
+  };
+
   dispatch({ k: "run.start", mode: cfg.mode, scope: cfg.scope, settings: cfg.settings, now: cfg.now ?? 0 });
+
   for (const b of cfg.beats) {
     if (b.kind === "event") {
       dispatch(b.event);
       lines.push(row(word(b.left), b.text));
       continue;
     }
+    if (b.kind === "skip") {
+      if (b.through === undefined) {
+        let e = queue.shift();
+        while (e) {
+          resolve(e, defaultAnswer(cfg, e));
+          e = queue.shift();
+        }
+      } else {
+        while (queue.length && queue[0].k !== b.through) {
+          const e = queue.shift()!;
+          resolve(e, defaultAnswer(cfg, e));
+        }
+        if (!queue.length) mismatch(b.through, "nothing — queue ran empty");
+      }
+      continue;
+    }
+    // note | show
     const e = queue.shift();
-    if (!e) continue;
+    if (!e) {
+      mismatch(b.on, "nothing — queue ran empty");
+      continue;
+    }
+    if (e.k !== b.on) {
+      resolve(e, defaultAnswer(cfg, e));
+      mismatch(b.on, e.k);
+      continue;
+    }
     const res = b.answer ?? defaultAnswer(cfg, e);
-    dispatch("err" in res ? { k: "err", id: e.id, reason: res.err } : { k: "ok", id: e.id, data: (res as any).data });
+    resolve(e, res);
     if (b.kind === "show") lines.push(row(sym("→"), b.fmt(e, res)));
-    else if (b.kind === "note") lines.push(row(sym("..."), D(b.fmt(e, res))));
+    else lines.push(row(sym("..."), D(b.fmt(e, res))));
   }
-  return lines;
+  return { lines, mismatches };
 }
 
 // ──────────────────────────────────────────────────────────── scenario table
@@ -159,7 +224,7 @@ type Scenario = {
   title: string;
   tag: "preserve" | "correct";
   given: string[];
-  body: () => string[];
+  body: () => Beats;
   result: string;
   diverges?: string;
 };
@@ -173,15 +238,11 @@ const SCENARIOS: Scenario[] = [
     title: "Select deterministically",
     tag: "preserve",
     given: [
-      "candidates: 52 (P0, age 1, blocked by 99), 51 (P0, age 2), 50 (P0, age 9), 53 (P1, age 3)",
+      "candidates: 52 (P0, created 1, blocked by 99), 51 (P0, created 2), 50 (P0, created 9), 53 (P1, created 3)",
       "all agent-ready, unassigned",
     ],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [
           iss("52", "Oldest but blocked issue", "P0", 1, null, ["99"]),
           iss("51", "Second-oldest P0 issue", "P0", 2),
@@ -189,10 +250,10 @@ const SCENARIOS: Scenario[] = [
           iss("53", "P1 issue", "P1", 3),
         ],
         beats: [
-          ...H(3), // preflight, snapshot, lease.acquire
-          show(() => "tracker.candidates → sorted 52, 51, 50, 53 (priority, then age)"),
-          show((e) => `tracker.read ${e.issue} — 52 skipped (blocked by 99)`),
-          show((e) => `tracker.claim ${e.issue}`),
+          skip("tracker.candidates"),
+          show("tracker.candidates", () => "tracker.candidates → sorted 52, 51, 50, 53 (priority, then age)"),
+          show("tracker.read", (e) => `tracker.read ${e.issue} — 52 skipped (blocked by 99)`),
+          show("tracker.claim", (e) => `tracker.claim ${e.issue}`),
         ],
       }),
     result: "issue 51 claimed: oldest unblocked P0 candidate — 52 outranked it but was blocked, 50 and 53 rank lower",
@@ -206,16 +267,13 @@ const SCENARIOS: Scenario[] = [
     given: ["scope: milestone A", "60 is in milestone A (P1); 61 has no milestone (P2)"],
     body: () =>
       runBeats({
-        mode: "interactive",
         scope: { milestone: "A" },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [iss("60", "Milestone A work", "P1", 1, "A"), iss("61", "Unfiled work", "P2", 2, null)],
         beats: [
-          ...H(3),
-          show(() => "tracker.candidates → both 60 and 61 enter the pool (61 has no milestone)"),
-          show((e) => `tracker.read ${e.issue}`),
-          show((e) => `tracker.claim ${e.issue}`),
+          skip("tracker.candidates"),
+          show("tracker.candidates", () => "tracker.candidates → both 60 and 61 enter the pool (61 has no milestone)"),
+          show("tracker.read", (e) => `tracker.read ${e.issue}`),
+          show("tracker.claim", (e) => `tracker.claim ${e.issue}`),
         ],
       }),
     result: "pool included 60 (milestone A) and 61 (unfiled); 60 claimed first by priority — scope did not drop the unfiled issue",
@@ -231,19 +289,15 @@ const SCENARIOS: Scenario[] = [
       const issue70 = iss("70", "Stale-looking issue", "P0", 1);
       const issue71 = iss("71", "Backup issue", "P1", 2);
       return runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [issue70, issue71],
         beats: [
-          ...H(3),
-          show(() => "tracker.candidates → 2 candidates (stale): 70, 71"),
-          show((e) => `tracker.read ${e.issue} → now assigned to someone else; skipped`, {
+          skip("tracker.candidates"),
+          show("tracker.candidates", () => "tracker.candidates → 2 candidates (stale): 70, 71"),
+          show("tracker.read", (e) => `tracker.read ${e.issue} → now assigned to someone else; skipped`, {
             data: { ...issue70, assignee: "other" },
           }),
-          show((e) => `tracker.read ${e.issue} → still eligible`),
-          show((e) => `tracker.claim ${e.issue}`),
+          show("tracker.read", (e) => `tracker.read ${e.issue} → still eligible`),
+          show("tracker.claim", (e) => `tracker.claim ${e.issue}`),
         ],
       });
     },
@@ -255,18 +309,16 @@ const SCENARIOS: Scenario[] = [
     id: "S10",
     title: "Report an empty scoped Queue accurately",
     tag: "preserve",
-    given: ["scope: milestone m1", "no agent-ready, unblocked issues remain in m1"],
+    given: ["headless run", "scope: milestone m1", "no agent-ready, unblocked issues remain in m1"],
     body: () =>
       runBeats({
         mode: "headless",
         scope: { milestone: "m1" },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [],
         beats: [
-          ...H(3),
-          show(() => "tracker.candidates → 0 candidates"),
-          show((e) => `host.report "${e.text}"`),
+          skip("tracker.candidates"),
+          show("tracker.candidates", () => "tracker.candidates → 0 candidates"),
+          show("host.report", (e) => `host.report "${e.text}"`),
         ],
       }),
     result: "reports \"no unblocked agent-ready work in milestone m1\" — true, but carries no progress or open-issue counts",
@@ -283,11 +335,12 @@ const SCENARIOS: Scenario[] = [
     body: () =>
       runBeats({
         mode: "headless",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [],
-        beats: [...H(3), show(() => "tracker.candidates → 0 candidates"), show((e) => `host.report "${e.text}" — run ends`)],
+        beats: [
+          skip("tracker.candidates"),
+          show("tracker.candidates", () => "tracker.candidates → 0 candidates"),
+          show("host.report", (e) => `host.report "${e.text}" — run ends`),
+        ],
       }),
     result: "headless run reports the empty queue and stops; nothing is invented to work on",
   },
@@ -298,15 +351,11 @@ const SCENARIOS: Scenario[] = [
     given: ["interactive run, empty queue"],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [],
         beats: [
-          ...H(3),
-          show(() => "tracker.candidates → 0 candidates"),
-          show(() => "host.offerPlanning — a separate Planning Session is offered"),
+          skip("tracker.candidates"),
+          show("tracker.candidates", () => "tracker.candidates → 0 candidates"),
+          show("host.offerPlanning", () => "host.offerPlanning — a separate Planning Session is offered"),
         ],
       }),
     result: "interactive run offers a separate Planning Session instead of inventing work",
@@ -320,17 +369,14 @@ const SCENARIOS: Scenario[] = [
     given: ["two candidates, 80 (P0) and 81 (P1); another worker claims 80 first"],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [iss("80", "Contended issue", "P0", 1), iss("81", "Fallback issue", "P1", 2)],
         beats: [
-          ...H(4), // preflight, snapshot, lease.acquire, candidates
-          hide(), // tracker.read 80
-          show((e) => `tracker.claim ${e.issue} → lost the race (already assigned)`, { err: "already assigned" }),
-          hide(), // tracker.read 81
-          show((e) => `tracker.claim ${e.issue} → won`),
+          skip("tracker.claim"), // preflight, snapshot, lease.acquire, candidates, read 80
+          show("tracker.claim", (e) => `tracker.claim ${e.issue} → lost the race (already assigned)`, {
+            err: "already assigned",
+          }),
+          skip("tracker.claim"), // read 81
+          show("tracker.claim", (e) => `tracker.claim ${e.issue} → won`),
         ],
       }),
     result: "this worker lost the claim race on 80 and moved to 81 — exactly one claim succeeds per issue",
@@ -344,12 +390,16 @@ const SCENARIOS: Scenario[] = [
     given: ["issue 18 'Derive one branch identity' claimed by harness A at t=0 and harness B at t=+6h"],
     body: () => {
       const issue = iss("18", "Derive one branch identity", "P0", 4);
-      const a = branchName(issue);
-      const b = branchName(issue);
-      return [
-        row(sym("→"), `harness A resolves the branch name at t=0 → ${a}`),
-        row(sym("→"), `harness B resolves the branch name at t=+6h → ${b}`),
-      ];
+      const runFor = (label: string, now: number, atText: string) =>
+        runBeats({
+          issues: [issue],
+          now,
+          beats: [
+            skip("git.worktree"),
+            show("git.worktree", (e) => `harness ${label} resolves the branch name at ${atText} → ${e.branch}`),
+          ],
+        });
+      return merge(runFor("A", 0, "t=0"), runFor("B", 6 * 60 * MIN, "t=+6h"));
     },
     result: "both harnesses derive issue-18-derive-one-branch-identity — identity depends only on issue id and title, never on timing",
   },
@@ -362,15 +412,11 @@ const SCENARIOS: Scenario[] = [
     given: ["issue 24 has no existing work branch"],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [iss("24", "Sync from the default branch", "P1", 1)],
         beats: [
-          ...H(9), // preflight..journal.append
-          show(() => "git.sync → default branch updated; no existing branch for 24"),
-          show((e) => `git.worktree ${e.branch} — isolated worktree created`),
+          skip("git.sync"),
+          show("git.sync", () => "git.sync → default branch updated; no existing branch for 24"),
+          show("git.worktree", (e) => `git.worktree ${e.branch} — isolated worktree created`),
         ],
       }),
     result: "no prior branch existed, so the runtime synced the default branch first and created a fresh isolated worktree",
@@ -384,15 +430,11 @@ const SCENARIOS: Scenario[] = [
     given: ["Superpowers and Matt TDD are both available"],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [iss("25", "Implement the queue reader", "P1", 1)],
         beats: [
-          show(() => "host.preflight → Superpowers present; tdd=superpowers selected"),
-          ...H(10), // snapshot..git.worktree
-          show((e) => `agent.implement ${e.issue} (tdd=${e.tdd})`),
+          show("host.preflight", () => "host.preflight → Superpowers present; tdd=superpowers selected"),
+          skip("agent.implement"),
+          show("agent.implement", (e) => `agent.implement ${e.issue} (tdd=${e.tdd})`),
         ],
       }),
     result: "implementation starts on Superpowers TDD",
@@ -404,15 +446,12 @@ const SCENARIOS: Scenario[] = [
     given: ["Superpowers is unavailable; Matt TDD is available"],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
         caps: CAPS_NO_SUPERPOWERS,
         issues: [iss("25", "Implement the queue reader", "P1", 1)],
         beats: [
-          show(() => "host.preflight → Superpowers absent, Matt TDD available; tdd=matt selected, Preflight still passes"),
-          ...H(10),
-          show((e) => `agent.implement ${e.issue} (tdd=${e.tdd})`),
+          show("host.preflight", () => "host.preflight → Superpowers absent, Matt TDD available; tdd=matt selected, Preflight still passes"),
+          skip("agent.implement"),
+          show("agent.implement", (e) => `agent.implement ${e.issue} (tdd=${e.tdd})`),
         ],
       }),
     result: "Preflight does not fail; implementation falls back to Matt TDD",
@@ -426,18 +465,14 @@ const SCENARIOS: Scenario[] = [
     given: ["issue 26 implementation is complete; all four gates run (tests, typecheck, standards, spec)"],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [iss("26", "Add the landing gate check", "P1", 1)],
         beats: [
-          ...H(12), // preflight..agent.implement (done)
-          show((e) => `agent.check ${e.kind} → pass`),
-          show((e) => `agent.check ${e.kind} → pass`),
-          show((e) => `agent.check ${e.kind} → FAIL`, { data: { pass: false } }),
-          show((e) => `agent.check ${e.kind} → pass`),
-          show((e) => `git.push ${e.branch} — parked, not merged`),
+          skip("agent.check"), // preflight..agent.implement (done)
+          show("agent.check", (e) => `agent.check ${e.kind} → pass`),
+          show("agent.check", (e) => `agent.check ${e.kind} → pass`),
+          show("agent.check", (e) => `agent.check ${e.kind} → FAIL`, { data: { pass: false } }),
+          show("agent.check", (e) => `agent.check ${e.kind} → pass`),
+          show("git.push", (e) => `git.push ${e.branch} — parked, not merged`),
         ],
       }),
     result: "review.standards failed the landing gate; the runtime parks the branch instead of merging or completing the issue",
@@ -449,19 +484,19 @@ const SCENARIOS: Scenario[] = [
     title: "Apply Project merge policy — automatic merge permitted",
     tag: "correct",
     given: ["all landing checks pass", "policy: rebase"],
-    body: () =>
-      runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
+    body: () => {
+      const issue = iss("27", "Apply the merge policy", "P1", 1);
+      return runBeats({
         settings: { ...SETTINGS, mergePolicy: "rebase" },
-        caps: CAPS_FULL,
-        issues: [iss("27", "Apply the merge policy", "P1", 1)],
+        issues: [issue],
         beats: [
-          ...H(12),
-          ...H(4), // agent.check x4, all pass
-          show((e) => `git.merge ${e.branch} (${e.method})`),
+          skip("tracker.claim"),
+          note("tracker.claim", (e) => `claimed ${e.issue}, branch ${branchName(issue)}; all four gates pass`),
+          skip("git.merge"),
+          show("git.merge", (e) => `git.merge ${e.branch} (${e.method})`),
         ],
-      }),
+      });
+    },
     result: "policy 'rebase' permits automatic merge, so the runtime merges with rebase — the configured method, not a hardcoded default",
   },
   {
@@ -469,19 +504,19 @@ const SCENARIOS: Scenario[] = [
     title: "Apply Project merge policy — human approval required",
     tag: "correct",
     given: ["all landing checks pass", "policy: human"],
-    body: () =>
-      runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
+    body: () => {
+      const issue = iss("28", "Require human approval", "P1", 1);
+      return runBeats({
         settings: { ...SETTINGS, mergePolicy: "human" },
-        caps: CAPS_FULL,
-        issues: [iss("28", "Require human approval", "P1", 1)],
+        issues: [issue],
         beats: [
-          ...H(12),
-          ...H(4),
-          show((e) => `host.approval ${e.issue} ${e.branch} — human approval requested`),
+          skip("tracker.claim"),
+          note("tracker.claim", (e) => `claimed ${e.issue}, branch ${branchName(issue)}; all four gates pass`),
+          skip("host.approval"),
+          show("host.approval", (e) => `host.approval ${e.issue} ${e.branch} — human approval requested`),
         ],
-      }),
+      });
+    },
     result: "policy requires human approval, so the runtime requests it and has not merged",
   },
 
@@ -497,32 +532,22 @@ const SCENARIOS: Scenario[] = [
     body: () => {
       const issue = iss("42", "Derive one branch identity", "P1", 5, "m1");
       return runBeats({
-        mode: "interactive",
         scope: { milestone: "m1" },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [issue],
         beats: [
-          note(() => "preflight ok (tdd=superpowers)"),
-          hide(), // snapshot
-          hide(), // lease.acquire
-          hide(), // tracker.candidates
-          hide(), // tracker.read
-          note((e) => `claimed ${e.issue}, branch ${branchName(issue)}`), // tracker.claim
-          hide(), // tracker.state started
-          hide(), // tracker.comment (branch ...)
-          hide(), // journal.append
-          hide(), // git.sync
-          hide(), // git.worktree
-          note((e, res) => `agent.implement → question "${(res as { data: any }).data.question}"`, {
+          note("host.preflight", () => "preflight ok (tdd=superpowers)"),
+          skip("tracker.claim"), // snapshot, lease.acquire, candidates, read
+          note("tracker.claim", (e) => `claimed ${e.issue}, branch ${branchName(issue)}`),
+          skip("agent.implement"), // state started, comment, journal, git.sync, git.worktree
+          note("agent.implement", (_e, res) => `agent.implement → question "${(res as { data: any }).data.question}"`, {
             data: { result: "question", question: "which tracker owns the lease?" },
           }),
-          show((e) => `host.ask (deadline ${mins(e.deadlineAt, 0)}m)`),
+          show("host.ask", (e) => `host.ask (deadline ${mins(e.deadlineAt, 0)}m)`),
           evt({ k: "tick", now: SETTINGS.answerWindowMs }, "+15m", "deadline passed with no answer"),
-          show((e) => `git.push ${e.branch}`),
-          show((e) => `tracker.comment "${e.text}"`),
-          show((e) => `tracker.unclaim ${e.issue}`),
-          show((e) => `tracker.state ${e.state}`),
+          show("git.push", (e) => `git.push ${e.branch}`),
+          show("tracker.comment", (e) => `tracker.comment "${e.text}"`),
+          show("tracker.unclaim", (e) => `tracker.unclaim ${e.issue}`),
+          show("tracker.state", (e) => `tracker.state ${e.state}`),
         ],
       });
     },
@@ -540,10 +565,6 @@ const SCENARIOS: Scenario[] = [
     ],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [],
         snapshot: {
           journalLast: null,
@@ -551,13 +572,13 @@ const SCENARIOS: Scenario[] = [
           tracker: { issue: "55", state: "started", assignee: "me" },
         },
         beats: [
-          hide(), // host.preflight
-          show(() => "host.snapshot → branch pushed, tracker still 'started'; no journal entry marks the Park"),
-          show(() => "reconcile: can't distinguish a stalled Park from ordinary in-progress work → resumes it → lease.acquire"),
-          show((e) => `agent.implement ${e.issue} → question "should this land before the payments migration?" (re-asked)`, {
+          skip("host.snapshot"), // host.preflight
+          show("host.snapshot", () => "host.snapshot → branch pushed, tracker still 'started'; no journal entry marks the Park"),
+          show("lease.acquire", () => "reconcile: can't distinguish a stalled Park from ordinary in-progress work → resumes it → lease.acquire"),
+          show("agent.implement", (e) => `agent.implement ${e.issue} → question "should this land before the payments migration?" (re-asked)`, {
             data: { result: "question", question: "should this land before the payments migration?" },
           }),
-          show((e) => `host.ask (deadline ${mins(e.deadlineAt, 0)}m)`),
+          show("host.ask", (e) => `host.ask (deadline ${mins(e.deadlineAt, 0)}m)`),
         ],
       }),
     result: "run resumes issue 55 as in-progress and re-asks the same question instead of completing or reversing the interrupted Park",
@@ -576,10 +597,6 @@ const SCENARIOS: Scenario[] = [
     ],
     body: () =>
       runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [],
         snapshot: {
           journalLast: null,
@@ -587,10 +604,10 @@ const SCENARIOS: Scenario[] = [
           tracker: { issue: "70", state: "started", assignee: "me" },
         },
         beats: [
-          hide(), // host.preflight
-          show(() => "host.snapshot → no journal; git and tracker agree on issue 70 in progress"),
-          show(() => "reconcile: reconstructs 70 from git + tracker alone → lease.acquire"),
-          show((e) => `agent.implement ${e.issue} (resumed, tdd=${e.tdd}) — same issue, not new work`),
+          skip("host.snapshot"), // host.preflight
+          show("host.snapshot", () => "host.snapshot → no journal; git and tracker agree on issue 70 in progress"),
+          show("lease.acquire", () => "reconcile: reconstructs 70 from git + tracker alone → lease.acquire"),
+          show("agent.implement", (e) => `agent.implement ${e.issue} (resumed, tdd=${e.tdd}) — same issue, not new work`),
         ],
       }),
     result: "the run reconstructs issue 70 entirely from git and the tracker — no journal required — and resumes it instead of selecting new work",
@@ -609,42 +626,32 @@ const SCENARIOS: Scenario[] = [
       const issue = iss("48", "Add pagination to the queue reader", "P1", 3);
       const branch = branchName(issue);
       const run1 = runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [issue],
         beats: [
-          ...H(5), // preflight, snapshot, lease.acquire, candidates, read
-          note((e) => `claimed ${e.issue}, branch ${branch}`), // tracker.claim
-          ...H(5), // state, comment, journal, git.sync, git.worktree
-          note(() => 'agent.implement → question "does the audit log need a schema bump first?"', {
+          skip("tracker.claim"), // preflight, snapshot, lease.acquire, candidates, read
+          note("tracker.claim", (e) => `claimed ${e.issue}, branch ${branch}`),
+          skip("agent.implement"), // state, comment, journal, git.sync, git.worktree
+          note("agent.implement", () => 'agent.implement → question "does the audit log need a schema bump first?"', {
             data: { result: "question", question: "does the audit log need a schema bump first?" },
           }),
-          hide(), // host.ask
+          skip(), // host.ask — no answer arrives
           evt({ k: "tick", now: SETTINGS.answerWindowMs }, "+15m", "deadline passed with no answer"),
-          hide(), // git.push
-          hide(), // tracker.comment
-          hide(), // tracker.unclaim
-          note(() => "parked 48: branch pushed, claim released, agent-ready dropped"), // tracker.state
+          skip("tracker.state"), // git.push, tracker.comment, tracker.unclaim
+          note("tracker.state", () => "parked 48: branch pushed, claim released, agent-ready dropped"),
         ],
       });
-      const ready = row(word("ready"), "maintainer re-readies issue 48 — agent-ready restored, tracker claim cleared");
+      const ready = manual([row(word("ready"), "maintainer re-readies issue 48 — agent-ready restored, tracker claim cleared")]);
       const run2 = runBeats({
-        mode: "interactive",
-        scope: { milestone: null },
-        settings: SETTINGS,
-        caps: CAPS_FULL,
         issues: [{ ...issue, agentReady: true, assignee: null }],
         branches: [branch],
         snapshot: { journalLast: null, branch: { name: branch, issue: "48", pushed: true }, tracker: null },
         beats: [
-          ...H(9), // preflight..journal.append
-          show(() => `git.sync → ${branch} already exists; resuming it instead of a fresh worktree`),
-          show((e) => `agent.implement ${e.issue} (resumed, tdd=${e.tdd})`),
+          skip("git.sync"), // preflight..journal.append
+          show("git.sync", () => `git.sync → ${branch} already exists; resuming it instead of a fresh worktree`),
+          show("agent.implement", (e) => `agent.implement ${e.issue} (resumed, tdd=${e.tdd})`),
         ],
       });
-      return [...run1, ready, ...run2];
+      return merge(run1, ready, run2);
     },
     result:
       "issue 48 re-enters selection after being re-readied, and git.sync finds its pushed branch already exists — the run resumes it instead of creating a new worktree",
@@ -674,27 +681,31 @@ function divergeBlock(id: string, text: string): string {
   return lines.map((l, i) => (i === 0 ? prefix + l : indent + l)).join("\n");
 }
 
-function printScenario(s: Scenario): string {
+function printScenario(s: Scenario): { text: string; mismatches: number } {
   const out: string[] = [];
   const tagStr = `[${s.tag}]`;
   const header = `${s.id} — ${s.title}`;
   const coloredTag = s.tag === "correct" ? Y(tagStr) : D(tagStr);
   out.push(B(header.padEnd(HEADER_WIDTH - tagStr.length)) + coloredTag);
   for (const g of s.given) out.push(row(word("given"), D(g)));
-  out.push(...s.body());
+  const { lines, mismatches } = s.body();
+  out.push(...lines);
   out.push(row(word("result"), s.result));
   if (s.diverges) out.push(divergeBlock(s.id, s.diverges));
-  return out.join("\n");
+  return { text: out.join("\n"), mismatches };
 }
 
 function main() {
   const filter = process.argv[2];
-  const list = filter ? SCENARIOS.filter((s) => s.id === filter || s.id.startsWith(filter)) : SCENARIOS;
-  console.log(list.map(printScenario).join("\n\n"));
+  const list = filter ? SCENARIOS.filter((s) => s.id.startsWith(filter)) : SCENARIOS;
+  const printed = list.map(printScenario);
+  console.log(printed.map((p) => p.text).join("\n\n"));
   console.log("");
   const diverged = list.filter((s) => s.diverges).map((s) => s.id);
+  const mismatches = printed.reduce((n, p) => n + p.mismatches, 0);
   console.log(`${list.length} scenario(s) ran.`);
   console.log(diverged.length ? `diverges from baseline: ${diverged.join(", ")}` : "diverges from baseline: (none)");
+  console.log(mismatches ? `narration mismatches: ${mismatches} — see [!!] markers above` : "narration mismatches: none");
 }
 
 main();
