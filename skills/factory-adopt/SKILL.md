@@ -329,9 +329,11 @@ a default:
 - **Merge policy.** Ask the maintainer directly. Nothing about a repo
   reveals whether the loop may merge its own work, so this is always a
   fresh question. Write the answer as `merge.policy`.
-- **Attack surface.** Ask the maintainer directly, the same way — a silent
-  "no" here means the OWASP sweep issues in Phase 2 never get proposed.
-  Write the answer as `attackSurface`.
+- **Attack surface.** Ask the maintainer directly, the same way. Write the
+  answer as `attackSurface` — this is the recorded decision Phase 2's
+  security-sweep check follows: a `false` answer means the OWASP sweep
+  issues below never get proposed. See "Security sweeps, a per-milestone
+  check" below for exactly how.
 
 Write `stampVersion` as the current stamp version. Write only these four
 fields — `stampVersion` and the three decisions above. Every other setting
@@ -408,7 +410,11 @@ sweep-specific rules.
   `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" section: propose
   the attack-surface test's outcome to the maintainer, and check the
   Project's `CONTEXT.md` for the decline marker,
-  `**Security sweeps: declined by the maintainer.**` If the Project passes
+  `**Security sweeps: declined by the maintainer.**` Where `.factory/config.json`
+  exists, its `attackSurface` value is the attack-surface answer, not a
+  fresh test: `false` means propose nothing, and a run may only ratchet
+  sweeps on with an override, never off. Run the attack-surface test itself
+  only on a repo with no `config.json` yet. If the Project passes
   the test and no decline is recorded, then for each milestone containing
   attack-surface issues but no security-sweep issue — open **or**
   completed; a landed sweep satisfies its milestone — propose one in the
