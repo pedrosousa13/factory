@@ -581,4 +581,4 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Domain docs | `CONTEXT.md` + `docs/adr/`, created lazily |
 | Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/`, Pause note at `.scratch/pause-note.md` |
 | Git | Branch per issue → PR → merge on green; no direct commits to the default branch |
-| Config | `.factory/config.json`, committed; `stampVersion` current means stamped for v2 — see "## Prerequisites" |
+| Config | `.factory/config.json`, committed; `stampVersion` current means stamped for v2 — see "## Prerequisites: a stamped Project repo" |
