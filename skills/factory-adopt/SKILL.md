@@ -315,6 +315,41 @@ existing file rather than copying a rendered template whole, so it's the
 likeliest place for a placeholder to survive. If the grep finds anything,
 stop and fix it before reporting Phase 1 complete.
 
+### Write `.factory/config.json`
+
+Once the pieces above are in place, write `.factory/config.json` — the
+Project's settings file, per `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+"Prerequisites" section. Three decisions go into it, and none of them takes
+a default:
+
+- **Tracker.** Already settled in "Choose the tracker" above — detected
+  first and confirmed with the maintainer, never asked cold when the repo
+  reveals it. Write it as `tracker.kind` (`"github"` or `"linear"`), plus
+  `tracker.repo` when the tracker is GitHub.
+- **Merge policy.** Ask the maintainer directly. Nothing about a repo
+  reveals whether the loop may merge its own work, so this is always a
+  fresh question. Write the answer as `merge.policy`.
+- **Attack surface.** Ask the maintainer directly, the same way — a silent
+  "no" here means the OWASP sweep issues in Phase 2 never get proposed.
+  Write the answer as `attackSurface`.
+
+Write `stampVersion` as the current stamp version. Write only these four
+fields — `stampVersion` and the three decisions above. Every other setting
+either derives from the environment or takes a default, and neither belongs
+in a freshly written file.
+
+`.factory/config.json` is committed — it is the Project's settings, not
+scratch state. Add `.factory/run.lock` and `.factory/journal.json` to
+`.gitignore` the same way the `.scratch/` line above is added: append them
+if missing, leave the rest of the file alone, and do nothing if they are
+already ignored. Both are the runtime's own working files. Neither is ever
+committed.
+
+**Idempotency.** If `.factory/config.json` already exists and parses with a
+current `stampVersion`, this step only confirms its contents with the
+maintainer. It does not re-ask any of the three decisions already on
+record, and it does not rewrite the file.
+
 ## Phase 2 — re-triage sweep
 
 Walk every **open** issue on the Project's issue tracker through the triage
