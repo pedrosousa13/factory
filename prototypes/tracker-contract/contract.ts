@@ -129,13 +129,13 @@ function ticketFacts(raw: unknown, path: string): Checked<TicketFacts> {
   };
 }
 
-export function check<A extends Ask>(
-  ask: A,
+export function check(
+  ask: Ask,
   raw: unknown,
-): { ok: true; answer: Answer[A["k"]] } | { ok: false; why: string } {
+): { ok: true; answer: Answer[Ask["k"]] } | { ok: false; why: string } {
   if (!isObj(raw)) return bad("raw: not an object");
   const result = raw.result;
-  const ok = <R>(answer: R) => ({ ok: true as const, answer: answer as Answer[A["k"]] });
+  const ok = (answer: Answer[Ask["k"]]) => ({ ok: true as const, answer });
 
   switch (ask.k) {
     case "tracker.reachable":
