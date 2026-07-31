@@ -16,7 +16,7 @@ export const TICKETS_DIR = join(TRACKER_DIR, "tickets");
 
 // ──────────────────────────────────────────────────────────────── ticket data
 
-type Ticket = {
+export type Ticket = {
   id: string;
   title: string;
   state: string;
@@ -89,11 +89,15 @@ ${t.body}
 
 // ──────────────────────────────────────────────────────────────────── commands
 
-export function up(): void {
+// extraTickets: additional tickets a caller wants written alongside the
+// committed default three (e.g. a bin's own setup ticket). The committed
+// default is unchanged; extras are appended, not substituted.
+export function up(extraTickets: Ticket[] = []): void {
   if (existsSync(TRACKER_DIR)) rmSync(TRACKER_DIR, { recursive: true });
   mkdirSync(TICKETS_DIR, { recursive: true });
-  for (const t of TICKETS) writeFileSync(join(TICKETS_DIR, `${t.id}.md`), renderTicket(t));
-  console.log(`up: wrote ${TICKETS.length} tickets to ${TICKETS_DIR}`);
+  const all = [...TICKETS, ...extraTickets];
+  for (const t of all) writeFileSync(join(TICKETS_DIR, `${t.id}.md`), renderTicket(t));
+  console.log(`up: wrote ${all.length} tickets to ${TICKETS_DIR}`);
 }
 
 export function down(): void {
