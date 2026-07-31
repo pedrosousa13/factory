@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "bun:test";
 import { CLEAR_BRIEF, IMPLEMENT_SHAPE, implementPrompt, mkCodeRepo, rmCodeRepo, VAGUE_BRIEF } from "../conformance/coderepo";
@@ -46,4 +46,14 @@ test("implementPrompt works for the vague brief too", () => {
   expect(prompt).toContain(VAGUE_BRIEF);
   expect(prompt).toContain(IMPLEMENT_SHAPE);
   expect(prompt).toContain("Reply with ONLY that JSON");
+});
+
+// ───── IMPLEMENT_SHAPE byte-identity
+
+test("IMPLEMENT_SHAPE is byte-identical to agentwork.ts's ImplementResult declaration", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/agentwork.ts"), "utf8");
+  const match = source.match(/export type ImplementResult =\n(?:.*\n)*?.*?;\n/);
+  if (!match) throw new Error("could not find the ImplementResult declaration in agentwork.ts");
+
+  expect(IMPLEMENT_SHAPE).toBe(match[0].trimEnd());
 });

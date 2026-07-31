@@ -62,7 +62,7 @@ export function rmCodeRepo(root: string): void {
 // their own copy (slice-2 lesson: duplication voids L2 evidence).
 
 /** The ImplementResult type text — kept byte-identical to src/agentwork.ts's ImplementResult. */
-export const IMPLEMENT_SHAPE = `type ImplementResult =
+export const IMPLEMENT_SHAPE = `export type ImplementResult =
   | { result: "done" }
   | { result: "question"; question: string }
   | { result: "failed"; reason: string };`;
