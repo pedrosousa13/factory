@@ -28,15 +28,14 @@ test("branchName is deterministic: same id and title always produce the same res
 });
 
 test("branchName collapses runs of non-alphanumeric characters into a single hyphen", () => {
-  expect(branchName("42", "Fix!!  the -- thing...")).toBe("42-fix-the-thing");
+  expect(branchName("42", "Fix!!  the -- thing...")).toBe("42/fix-the-thing");
 });
 
 test("branchName caps the slug at 40 characters", () => {
   const longTitle = "a".repeat(100);
   const result = branchName("7", longTitle);
-  const [id, ...rest] = result.split("-");
+  const [id, slug] = result.split("/");
   expect(id).toBe("7");
-  const slug = rest.join("-");
   expect(slug.length).toBeLessThanOrEqual(40);
 });
 
@@ -54,7 +53,13 @@ test("branchName always prefixes the id, even when the title yields no usable sl
 });
 
 test("branchName prefixes the id ahead of the slug for a normal title", () => {
-  expect(branchName("101", "Add login button")).toBe("101-add-login-button");
+  expect(branchName("101", "Add login button")).toBe("101/add-login-button");
+});
+
+test("branchName uses a slash between id and slug, not a hyphen", () => {
+  const result = branchName("41", "Queue claim pick");
+  expect(result).toBe("41/queue-claim-pick");
+  expect(result.startsWith("41/")).toBe(true);
 });
 
 // ───── applyInvariants

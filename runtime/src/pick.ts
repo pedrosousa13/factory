@@ -12,10 +12,10 @@ import { queueOrder } from "./tracker";
 const SLUG_MAX = 40;
 
 // Derived deterministically from the issue title (PRD §3: v1 branch naming
-// was non-deterministic and is a recorded defect). Lowercase, non-alnum runs
-// collapse to a single hyphen, leading/trailing hyphens trimmed, slug capped
-// at 40 chars. The id prefix is always present, even when the title yields
-// no usable slug.
+// was non-deterministic and is a recorded defect). Scheme: `<id>/<slug>`.
+// Lowercase, non-alnum runs collapse to a single hyphen, leading/trailing
+// hyphens trimmed, slug capped at 40 chars. The id prefix is always present,
+// even when the title yields no usable slug.
 export function branchName(id: string, title: string): string {
   const slug = title
     .toLowerCase()
@@ -23,7 +23,7 @@ export function branchName(id: string, title: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, SLUG_MAX)
     .replace(/-+$/g, "");
-  return slug.length > 0 ? `${id}-${slug}` : id;
+  return slug.length > 0 ? `${id}/${slug}` : id;
 }
 
 // ───── mechanical invariants
