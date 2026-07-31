@@ -186,7 +186,7 @@ export function parseConfig(raw: string): ParseResult {
   // The always-ask key is `merge.policy`, not `merge` itself (`merge.method` is a
   // separate, not-yet-defaulted setting per PRD §3) — so a wholly absent `merge`
   // is reported as a missing `merge.policy`, deliberately asymmetric with the
-  // `tracker: required` case below where the whole object is the always-ask unit.
+  // `tracker: required` case above where the whole object is the always-ask unit.
   let merge: FactoryConfig["merge"] | undefined;
   if (!("merge" in data)) {
     errors.push("merge.policy: required");
