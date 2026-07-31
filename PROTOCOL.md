@@ -81,6 +81,16 @@ fix — never a bare "preflight failed." Shape:
 - **Agent docs**: `AGENTS.md` pointing at `docs/agents/`; domain docs
   (`CONTEXT.md`, `docs/adr/`) created lazily per `docs/agents/domain.md`.
 - **Git**: a GitHub remote (SSH), `gh` authenticated, `.scratch/` gitignored.
+- **Config**: `.factory/config.json`, present, parsing, and carrying the
+  current `stampVersion` — see the stamp check below.
+
+**The stamp check.** `.factory/config.json` existing, parsing, and carrying
+a `stampVersion` at the plugin's current stamp version — `STAMP_VERSION` in
+`${CLAUDE_PLUGIN_ROOT}/runtime/src/version.ts`, the single source of truth
+for this value — means the repo is stamped for v2. The check below —
+`docs/agents/issue-tracker.md` present with a `Factory loop operations`
+section — is the legacy v1 detection: it finds a stamp predating
+`config.json`.
 
 If `docs/agents/issue-tracker.md` is missing, or exists but carries no
 `Factory loop operations` section, the repo is not stamped for the loop: tell
@@ -573,3 +583,4 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Domain docs | `CONTEXT.md` + `docs/adr/`, created lazily |
 | Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/`, Pause note at `.scratch/pause-note.md` |
 | Git | Branch per issue → PR → merge on green; no direct commits to the default branch |
+| Config | `.factory/config.json`, committed; `stampVersion` current means stamped for v2 — see "## Prerequisites: a stamped Project repo" |

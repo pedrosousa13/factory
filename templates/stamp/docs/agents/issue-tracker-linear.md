@@ -1,5 +1,7 @@
 # Issue tracker: Linear
 
+<!-- factory:tracker kind=linear -->
+
 Issues and PRDs for this repo live in Linear: project **{{PROJECT_NAME}}** on
 the **{{TEAM_NAME}}** team (key `{{TEAM_KEY}}`).
 {{LINEAR_PROJECT_URL}}

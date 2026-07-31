@@ -246,7 +246,11 @@ than the basename is deliberate: preserve it. If a file already exists:
   conventions added since its stamp — a missing "Wayfinding operations"
   section in `issue-tracker.md`, a missing "Security sweeps" section in
   `triage-labels.md` — without re-litigating a file the maintainer already
-  accepted.
+  accepted. The same retrofit covers the one-line tracker marker
+  (`<!-- factory:tracker kind=... -->`, immediately after the H1 in
+  `issue-tracker.md`) when it is the only thing missing: propose inserting
+  it at that same position, maintainer-approved, rather than falling
+  through to the whole-file diff below over one absent line.
 - and its content differs — do not overwrite it. Surface the diff to the
   maintainer and let them decide whether to adopt the template version, keep
   theirs, or merge by hand.
@@ -315,6 +319,44 @@ existing file rather than copying a rendered template whole, so it's the
 likeliest place for a placeholder to survive. If the grep finds anything,
 stop and fix it before reporting Phase 1 complete.
 
+### Write `.factory/config.json`
+
+Once the pieces above are in place, write `.factory/config.json` — the
+Project's settings file, per `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+"Prerequisites" section. Three decisions go into it, and none of them takes
+a default:
+
+- **Tracker.** Already settled in "Choose the tracker" above — detected
+  first and confirmed with the maintainer, never asked cold when the repo
+  reveals it. Write it as `tracker.kind` (`"github"` or `"linear"`), plus
+  `tracker.repo` when the tracker is GitHub.
+- **Merge policy.** Ask the maintainer directly. Nothing about a repo
+  reveals whether the loop may merge its own work, so this is always a
+  fresh question. Write the answer as `merge.policy`.
+- **Attack surface.** Ask the maintainer directly, the same way. Write the
+  answer as `attackSurface` — this is the recorded decision Phase 2's
+  security-sweep check follows: a `false` answer means the OWASP sweep
+  issues below never get proposed. See "Security sweeps, a per-milestone
+  check" below for exactly how.
+
+Write `stampVersion` as the current stamp version, `STAMP_VERSION` in
+`${CLAUDE_PLUGIN_ROOT}/runtime/src/version.ts` — the single source of truth
+for this value. Write only these four fields — `stampVersion` and the three
+decisions above. Every other setting either derives from the environment or
+takes a default, and neither belongs in a freshly written file.
+
+`.factory/config.json` is committed — it is the Project's settings, not
+scratch state. Add `.factory/run.lock` and `.factory/journal.json` to
+`.gitignore` the same way the `.scratch/` line above is added: append them
+if missing, leave the rest of the file alone, and do nothing if they are
+already ignored. Both are the runtime's own working files. Neither is ever
+committed.
+
+**Idempotency.** If `.factory/config.json` already exists and parses with a
+current `stampVersion`, this step only confirms its contents with the
+maintainer. It does not re-ask any of the three decisions already on
+record, and it does not rewrite the file.
+
 ## Phase 2 — re-triage sweep
 
 Walk every **open** issue on the Project's issue tracker through the triage
@@ -373,7 +415,11 @@ sweep-specific rules.
   `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" section: propose
   the attack-surface test's outcome to the maintainer, and check the
   Project's `CONTEXT.md` for the decline marker,
-  `**Security sweeps: declined by the maintainer.**` If the Project passes
+  `**Security sweeps: declined by the maintainer.**` Where `.factory/config.json`
+  exists, its `attackSurface` value is the attack-surface answer, not a
+  fresh test: `false` means propose nothing, and a run may only ratchet
+  sweeps on with an override, never off. Run the attack-surface test itself
+  only on a repo with no `config.json` yet. If the Project passes
   the test and no decline is recorded, then for each milestone containing
   attack-surface issues but no security-sweep issue — open **or**
   completed; a landed sweep satisfies its milestone — propose one in the
