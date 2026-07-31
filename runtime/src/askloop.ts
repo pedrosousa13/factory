@@ -18,8 +18,9 @@ import { check, type Ask, type Answer } from "./tracker";
 
 // ──────────────────────────────────────────────────────────────────── types
 
-/** How a prompt actually gets answered. The module spawns nothing itself. */
-export type Runner = (prompt: string) => { raw: string; ms: number; exit: number };
+/** How a prompt actually gets answered. The module spawns nothing itself.
+ * Only `raw` is read here; a HarnessRun satisfies this structurally. */
+export type Runner = (prompt: string) => { raw: string };
 
 export type AskStatus = "valid-first-try" | "valid-after-reask" | "failed";
 

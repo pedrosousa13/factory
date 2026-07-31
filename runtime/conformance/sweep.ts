@@ -27,29 +27,26 @@ import type { Answer, TicketFacts } from "../src/tracker";
 import { askWithRetry, buildPrompt, type AskStatus, type Runner } from "../src/askloop";
 import { runHarness, type HarnessName } from "../src/harness";
 import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
-import { down, TICKETS_DIR, up, type Ticket } from "./fixture";
+import {
+  CANDIDATES_SHAPE,
+  CANDIDATES_QUESTION,
+  CLAIM_SHAPE,
+  claimQuestion,
+  down,
+  EXTRA_TICKETS,
+  READ_SHAPE,
+  readFixtureField,
+  readQuestion,
+  SET_STATE_SHAPE,
+  startedQuestion,
+  TICKETS_DIR,
+  UNCLAIM_SHAPE,
+  unclaimQuestion,
+  up,
+} from "./fixture";
 
 const DIR = import.meta.dir;
 const PHRASEBOOK_PATH = join(DIR, "phrasebook.md");
-
-// ───── the fourth fixture ticket (same shape as bin/pick.ts's own setup):
-// blocked by an invisible id (no file for T-9) so the needsRead / fail-safe
-// path runs live — a read on T-9 answers "missing", and per the fail-safe
-// rule an unresolved blocker keeps the ticket blocked.
-const EXTRA_TICKETS: Ticket[] = [
-  {
-    id: "T-4",
-    title: "Blocked-by-invisible-ticket fixture",
-    state: "unstarted",
-    urgency: "P0",
-    createdAt: "2026-07-15T10:00:00Z",
-    milestone: null,
-    ready: true,
-    claimedBy: null,
-    blockedBy: ["T-9"],
-    body: "Fixture ticket: blocked by an invisible id (T-9, no file) — forces the needsRead / fail-safe path live.",
-  },
-];
 
 // ───────────────────────────────────────────────────────────────── prompt
 
@@ -58,44 +55,6 @@ const REACHABLE_SHAPE = `type ReachableAnswer = { result: "ok" } | { result: "un
 const VERIFY_SHAPE = `type VerifyAnswer =
   | { result: "ok"; state: "unstarted" | "started" | "parked" | "done" | "canceled"; claimedBy: string | null }
   | { result: "missing" };`;
-
-const TICKET_FACTS_SHAPE = `type TicketFacts = {
-  id: string;
-  title: string;
-  urgency: "P0" | "P1" | "P2" | "P3" | "none";
-  createdAt: string; // ISO 8601
-  milestone: string | null;
-  ready: boolean;
-  state: "unstarted" | "started" | "parked" | "done" | "canceled";
-  claimedBy: string | null;
-  blockedBy: string[]; // ids of still-open tickets blocking this one
-};`;
-
-const CANDIDATES_SHAPE = `${TICKET_FACTS_SHAPE}
-type CandidatesAnswer = { result: "ok"; tickets: TicketFacts[] };`;
-
-const READ_SHAPE = `${TICKET_FACTS_SHAPE}
-type ReadAnswer =
-  | { result: "ok"; ticket: TicketFacts; body: string; comments: string[] }
-  | { result: "missing" };`;
-
-const CLAIM_SHAPE = `type ClaimAnswer = { result: "claimed" } | { result: "taken"; by: string };`;
-
-const SET_STATE_SHAPE = `type SetStateAnswer = { result: "ok" };`;
-
-const UNCLAIM_SHAPE = `type UnclaimAnswer = { result: "ok" };`;
-
-// ───────────────────────────────────────────────────────────────── fixture reads
-
-// "Verify file" per the brief: read the fixture's own frontmatter directly
-// off disk, rather than trusting another harness ask — the ground truth for
-// what an act actually did.
-function readFixtureField(id: string, field: "claimedBy" | "state"): string | null {
-  const text = readFileSync(join(TICKETS_DIR, `${id}.md`), "utf8");
-  const match = text.match(new RegExp(`^${field}: (.*)$`, "m"));
-  if (!match) throw new Error(`fixture file for ${id} has no ${field} field`);
-  return match[1] === "null" ? null : match[1];
-}
 
 // ───────────────────────────────────────────────────────────────── per-harness
 
@@ -164,9 +123,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   );
 
   // ── candidates
-  const candidatesQuestion =
-    "List every ticket in this project's tracker that is ready, unstarted, and unclaimed, with full facts for each. There is no milestone scope in play right now — list tickets from every milestone.";
-  const candidatesPrompt = buildPrompt(candidatesQuestion, phrasebook, CANDIDATES_SHAPE);
+  const candidatesPrompt = buildPrompt(CANDIDATES_QUESTION, phrasebook, CANDIDATES_SHAPE);
   const candidatesStart = performance.now();
   const candidatesLog = askWithRetry(runner, { k: "tracker.candidates", milestone: null }, candidatesPrompt);
   const candidatesMs = Math.round(performance.now() - candidatesStart);
@@ -182,8 +139,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   );
 
   // ── read T-1 (body present)
-  const readT1Question = "Give me the full facts, body, and comments for ticket T-1 in this project's tracker.";
-  const readT1Prompt = buildPrompt(readT1Question, phrasebook, READ_SHAPE);
+  const readT1Prompt = buildPrompt(readQuestion("T-1"), phrasebook, READ_SHAPE);
   const readT1Start = performance.now();
   const readT1Log = askWithRetry(runner, { k: "tracker.read", issue: "T-1" }, readT1Prompt);
   const readT1Ms = Math.round(performance.now() - readT1Start);
@@ -194,8 +150,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   );
 
   // ── read T-9 (the invisible blocker — expected missing)
-  const readT9Question = "Give me the full facts, body, and comments for ticket T-9 in this project's tracker.";
-  const readT9Prompt = buildPrompt(readT9Question, phrasebook, READ_SHAPE);
+  const readT9Prompt = buildPrompt(readQuestion("T-9"), phrasebook, READ_SHAPE);
   const readT9Start = performance.now();
   const readT9Log = askWithRetry(runner, { k: "tracker.read", issue: "T-9" }, readT9Prompt);
   const readT9Ms = Math.round(performance.now() - readT9Start);
@@ -220,8 +175,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
 
   // ── claim T-1 for actor parity-<harness>, verified against the fixture file
   const actor = `parity-${harness}`;
-  const claimQuestion = `Claim ticket T-1 in this project's tracker for actor "${actor}".`;
-  const claimPrompt = buildPrompt(claimQuestion, phrasebook, CLAIM_SHAPE);
+  const claimPrompt = buildPrompt(claimQuestion("T-1", actor), phrasebook, CLAIM_SHAPE);
   const claimStart = performance.now();
   const claimLog = askWithRetry(runner, { k: "tracker.claim", issue: "T-1", actor }, claimPrompt);
   const claimMs = Math.round(performance.now() - claimStart);
@@ -233,8 +187,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   );
 
   // ── setState started, verified against the fixture file
-  const startedQuestion = `Set ticket T-1's state to "started" in this project's tracker.`;
-  const startedPrompt = buildPrompt(startedQuestion, phrasebook, SET_STATE_SHAPE);
+  const startedPrompt = buildPrompt(startedQuestion("T-1"), phrasebook, SET_STATE_SHAPE);
   const startedStart = performance.now();
   const startedLog = askWithRetry(runner, { k: "tracker.setState", issue: "T-1", state: "started" }, startedPrompt);
   const startedMs = Math.round(performance.now() - startedStart);
@@ -246,8 +199,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   );
 
   // ── unclaim, verified against the fixture file
-  const unclaimQuestion = `Release the claim on ticket T-1 in this project's tracker.`;
-  const unclaimPrompt = buildPrompt(unclaimQuestion, phrasebook, UNCLAIM_SHAPE);
+  const unclaimPrompt = buildPrompt(unclaimQuestion("T-1"), phrasebook, UNCLAIM_SHAPE);
   const unclaimStart = performance.now();
   const unclaimLog = askWithRetry(runner, { k: "tracker.unclaim", issue: "T-1" }, unclaimPrompt);
   const unclaimMs = Math.round(performance.now() - unclaimStart);

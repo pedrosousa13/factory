@@ -103,7 +103,7 @@ if (import.meta.main) {
     const run = runHarness(name, 'Reply with exactly the JSON {"ok":true} and nothing else.', import.meta.dir);
     console.log(JSON.stringify(run));
   } else if (name !== undefined) {
-    console.error("usage: bun harnesses.ts claude|codex|pi");
+    console.error("usage: bun harness.ts claude|codex|pi");
     process.exit(1);
   }
 }

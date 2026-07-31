@@ -2,6 +2,10 @@
 // effective settings. No fs, no process, no I/O — callers pass in the raw
 // string and any detected environment facts.
 
+import { LOCK_PATH, JOURNAL_PATH } from "./paths";
+
+export { LOCK_PATH, JOURNAL_PATH };
+
 // ───── config shape
 
 export type TrackerKind = "github" | "linear" | "local";
@@ -58,10 +62,6 @@ export interface EffectiveSettings {
   lockPath: string;
   journalPath: string;
 }
-
-// Fixed, gitignored, not configurable (PRD §3).
-export const LOCK_PATH = ".factory/run.lock";
-export const JOURNAL_PATH = ".factory/journal.json";
 
 const MAX_WORKERS_DEFAULT = 1;
 // v1 used 15 minutes; kept as a provisional default until the answer-window

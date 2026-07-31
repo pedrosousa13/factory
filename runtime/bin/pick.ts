@@ -14,74 +14,30 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { down, TICKETS_DIR, up, type Ticket } from "../conformance/fixture";
+import {
+  CANDIDATES_SHAPE,
+  CANDIDATES_QUESTION,
+  CLAIM_SHAPE,
+  claimQuestion,
+  down,
+  EXTRA_TICKETS,
+  READ_SHAPE,
+  readFixtureField,
+  readQuestion,
+  SET_STATE_SHAPE,
+  startedQuestion,
+  TICKETS_DIR,
+  UNCLAIM_SHAPE,
+  unclaimQuestion,
+  up,
+} from "../conformance/fixture";
 import { detectActor } from "../src/edges";
 import { runHarness, type HarnessName } from "../src/harness";
 import { askWithRetry, buildPrompt, type AskStatus, type Runner } from "../src/askloop";
 import { applyInvariants, branchName, foldReads, pick, resolveBlocking, type ReadResult } from "../src/pick";
-import type { TicketFacts } from "../src/tracker";
 
 const DIR = import.meta.dir;
 const PHRASEBOOK_PATH = join(DIR, "../conformance/phrasebook.md");
-
-// ───── the fourth fixture ticket (this bin's own setup, per task-4 brief):
-// blocked by an invisible id (no file for T-9) so the needsRead / fail-safe
-// path runs live — a read on T-9 answers "missing", and per the fail-safe
-// rule an unresolved blocker keeps the ticket blocked.
-const EXTRA_TICKETS: Ticket[] = [
-  {
-    id: "T-4",
-    title: "Blocked-by-invisible-ticket fixture",
-    state: "unstarted",
-    urgency: "P0",
-    createdAt: "2026-07-15T10:00:00Z",
-    milestone: null,
-    ready: true,
-    claimedBy: null,
-    blockedBy: ["T-9"],
-    body: "Fixture ticket: blocked by an invisible id (T-9, no file) — forces the needsRead / fail-safe path live.",
-  },
-];
-
-// ───────────────────────────────────────────────────────────────── prompt shapes
-
-const TICKET_FACTS_SHAPE = `type TicketFacts = {
-  id: string;
-  title: string;
-  urgency: "P0" | "P1" | "P2" | "P3" | "none";
-  createdAt: string; // ISO 8601
-  milestone: string | null;
-  ready: boolean;
-  state: "unstarted" | "started" | "parked" | "done" | "canceled";
-  claimedBy: string | null;
-  blockedBy: string[]; // ids of still-open tickets blocking this one
-};`;
-
-const CANDIDATES_SHAPE = `${TICKET_FACTS_SHAPE}
-type CandidatesAnswer = { result: "ok"; tickets: TicketFacts[] };`;
-
-const READ_SHAPE = `${TICKET_FACTS_SHAPE}
-type ReadAnswer =
-  | { result: "ok"; ticket: TicketFacts; body: string; comments: string[] }
-  | { result: "missing" };`;
-
-const CLAIM_SHAPE = `type ClaimAnswer = { result: "claimed" } | { result: "taken"; by: string };`;
-
-const SET_STATE_SHAPE = `type SetStateAnswer = { result: "ok" };`;
-
-const UNCLAIM_SHAPE = `type UnclaimAnswer = { result: "ok" };`;
-
-// ───────────────────────────────────────────────────────────────── fixture reads
-
-// "Verify file" per the brief: read the fixture's own frontmatter directly
-// off disk, rather than trusting another harness ask — the ground truth for
-// what an act actually did.
-function readFixtureField(id: string, field: "claimedBy" | "state"): string | null {
-  const text = readFileSync(join(TICKETS_DIR, `${id}.md`), "utf8");
-  const match = text.match(new RegExp(`^${field}: (.*)$`, "m"));
-  if (!match) throw new Error(`fixture file for ${id} has no ${field} field`);
-  return match[1] === "null" ? null : match[1];
-}
 
 // Direct fixture patch (fs, not a tracker ask) — see the reset-hygiene note
 // where this is called.
@@ -150,9 +106,7 @@ function main(): void {
   steps.push(step("detectActor", actorResult.source, true, actor));
 
   // ── candidates
-  const candidatesQuestion =
-    "List every ticket in this project's tracker that is ready, unstarted, and unclaimed, with full facts for each. There is no milestone scope in play right now — list tickets from every milestone.";
-  const candidatesPrompt = buildPrompt(candidatesQuestion, phrasebook, CANDIDATES_SHAPE);
+  const candidatesPrompt = buildPrompt(CANDIDATES_QUESTION, phrasebook, CANDIDATES_SHAPE);
   const candidatesOutcome = askWithRetry(runner, { k: "tracker.candidates", milestone: null }, candidatesPrompt);
   if (candidatesOutcome.status === "failed") {
     steps.push(step("tracker.candidates", "failed", false, candidatesOutcome.whys[1]));
@@ -171,8 +125,7 @@ function main(): void {
   // ── resolve each needsRead id with a tracker.read ask
   const reads: ReadResult[] = [];
   for (const id of needsRead) {
-    const readQuestion = `Give me the full facts, body, and comments for ticket ${id} in this project's tracker.`;
-    const readPrompt = buildPrompt(readQuestion, phrasebook, READ_SHAPE);
+    const readPrompt = buildPrompt(readQuestion(id), phrasebook, READ_SHAPE);
     const readOutcome = askWithRetry(runner, { k: "tracker.read", issue: id }, readPrompt);
     if (readOutcome.status === "failed") {
       steps.push(step(`tracker.read ${id}`, "failed", false, readOutcome.whys[1]));
@@ -206,8 +159,7 @@ function main(): void {
   steps.push(step("branchName", "printed", true, branch));
 
   // ── claim
-  const claimQuestion = `Claim ticket ${picked.id} in this project's tracker for actor "${actor}".`;
-  const claimPrompt = buildPrompt(claimQuestion, phrasebook, CLAIM_SHAPE);
+  const claimPrompt = buildPrompt(claimQuestion(picked.id, actor), phrasebook, CLAIM_SHAPE);
   const claimOutcome = askWithRetry(runner, { k: "tracker.claim", issue: picked.id, actor }, claimPrompt);
   if (claimOutcome.status === "failed") {
     steps.push(step("tracker.claim", "failed", false, claimOutcome.whys[1]));
@@ -231,8 +183,7 @@ function main(): void {
   if (!claimVerified) fail();
 
   // ── setState started
-  const startedQuestion = `Set ticket ${picked.id}'s state to "started" in this project's tracker.`;
-  const startedPrompt = buildPrompt(startedQuestion, phrasebook, SET_STATE_SHAPE);
+  const startedPrompt = buildPrompt(startedQuestion(picked.id), phrasebook, SET_STATE_SHAPE);
   const startedOutcome = askWithRetry(
     runner,
     { k: "tracker.setState", issue: picked.id, state: "started" },
@@ -254,8 +205,7 @@ function main(): void {
   // a ticket's initial state, not a setState destination — so the unclaim is
   // a real ask against the contract, and the state rewind is a direct fixture
   // patch (fs), not a further ask.
-  const unclaimQuestion = `Release the claim on ticket ${picked.id} in this project's tracker.`;
-  const unclaimPrompt = buildPrompt(unclaimQuestion, phrasebook, UNCLAIM_SHAPE);
+  const unclaimPrompt = buildPrompt(unclaimQuestion(picked.id), phrasebook, UNCLAIM_SHAPE);
   const unclaimOutcome = askWithRetry(runner, { k: "tracker.unclaim", issue: picked.id }, unclaimPrompt);
   if (unclaimOutcome.status === "failed") {
     steps.push(step("tracker.unclaim", "failed", false, unclaimOutcome.whys[1]));

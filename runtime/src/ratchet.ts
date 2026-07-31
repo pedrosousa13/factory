@@ -3,10 +3,7 @@
 // ratchet toward safety only"). No fs, no process, no I/O.
 
 import type { FactoryConfig, MergePolicy } from "./config";
-
-// ───── config file named in refusals
-
-const CONFIG_PATH = ".factory/config.json";
+import { CONFIG_PATH } from "./paths";
 
 // ───── override shape
 
@@ -52,9 +49,9 @@ export function applyOverrides(config: FactoryConfig, overrides: RunOverrides): 
       overrides.merge !== config.merge.policy
     ) {
       refusals.push(
-        `--merge=${overrides.merge} is lateral to the committed "${config.merge.policy}" ` +
-          `merge policy; run overrides ratchet toward safety only, and a lateral change ` +
-          `neither tightens nor loosens, so it is not allowed; edit and commit ${CONFIG_PATH} instead`,
+        `--merge=${overrides.merge} is lateral to the committed "${config.merge.policy}" merge policy; ` +
+          `a lateral change neither tightens nor loosens, so it is refused; ` +
+          `edit and commit ${CONFIG_PATH} instead`,
       );
     } else {
       mergePolicy = overrides.merge;

@@ -38,7 +38,7 @@ test("extractJson: unbalanced braces return null", () => {
 // ───── askWithRetry
 
 test("askWithRetry: valid on the first try", () => {
-  const runner: Runner = () => ({ raw: '{"result":"ok"}', ms: 1, exit: 0 });
+  const runner: Runner = () => ({ raw: '{"result":"ok"}' });
   const result = askWithRetry(runner, ask, prompt);
   expect(result.status).toBe("valid-first-try");
   if (result.status === "failed") throw new Error("unexpected failed status");
@@ -49,8 +49,8 @@ test("askWithRetry: garbled first reply then a valid re-ask; the re-ask prompt c
   const seenPrompts: string[] = [];
   const runner: Runner = (p) => {
     seenPrompts.push(p);
-    if (seenPrompts.length === 1) return { raw: "not json at all", ms: 1, exit: 0 };
-    return { raw: '{"result":"ok"}', ms: 1, exit: 0 };
+    if (seenPrompts.length === 1) return { raw: "not json at all" };
+    return { raw: '{"result":"ok"}' };
   };
   const result = askWithRetry(runner, ask, prompt);
   expect(result.status).toBe("valid-after-reask");
@@ -64,7 +64,7 @@ test("askWithRetry: garbled twice returns failed, carrying both whys", () => {
   let call = 0;
   const runner: Runner = () => {
     call++;
-    return { raw: call === 1 ? "still not json" : '{"result":"nonsense"}', ms: 1, exit: 0 };
+    return { raw: call === 1 ? "still not json" : '{"result":"nonsense"}' };
   };
   const result = askWithRetry(runner, ask, prompt);
   expect(result.status).toBe("failed");
@@ -75,7 +75,7 @@ test("askWithRetry: garbled twice returns failed, carrying both whys", () => {
 });
 
 test("askWithRetry: no JSON in either reply fails with both whys reporting extraction failure", () => {
-  const runner: Runner = () => ({ raw: "nope, no json", ms: 1, exit: 0 });
+  const runner: Runner = () => ({ raw: "nope, no json" });
   const result = askWithRetry(runner, ask, prompt);
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("unexpected non-failed status");

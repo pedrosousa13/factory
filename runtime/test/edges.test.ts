@@ -114,13 +114,11 @@ function writeAdapterDoc(repoRoot: string): void {
 }
 
 describe("gatherPreflightFacts", () => {
-  test("missing config.json: config reports an honest not-found error, no crash", () => {
+  test("missing config.json: reports the missing-file variant, no crash", () => {
     const dir = scratchRepo();
     try {
       const facts = gatherPreflightFacts(dir, { trackerReachable: "not-asked" });
-      expect(facts.config.ok).toBe(false);
-      if (facts.config.ok) return;
-      expect(facts.config.errors.some((e) => e.includes(".factory/config.json"))).toBe(true);
+      expect(facts.config).toBe("missing-file");
       expect(facts.adapterMarker).toBe("missing-file");
       expect(facts.stampVersion).toEqual({ repo: null, plugin: STAMP_VERSION });
     } finally {
@@ -135,6 +133,7 @@ describe("gatherPreflightFacts", () => {
       writeAdapterDoc(dir);
       const facts = gatherPreflightFacts(dir, { trackerReachable: { result: "ok" } });
 
+      if (facts.config === "missing-file") throw new Error("expected a parsed config, not missing-file");
       expect(facts.config.ok).toBe(true);
       expect(facts.adapterMarker).toEqual({ kind: "github" });
       expect(facts.trackerReachable).toEqual({ result: "ok" });

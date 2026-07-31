@@ -4,8 +4,8 @@
 // until one tracker.read proves otherwise"; PRD §4 "the runtime re-checks
 // only mechanical invariants"). No fs, no process, no I/O.
 
-import type { TicketFacts, IssueState } from "./tracker";
-import { queueOrder } from "./tracker";
+import type { TicketFacts, IssueState, OpenState } from "./tracker";
+import { OPEN_STATES, queueOrder } from "./tracker";
 
 // ───── branch naming
 
@@ -62,8 +62,6 @@ export function applyInvariants(
 
 // ───── blocker resolution (fail-safe rule)
 
-const OPEN_STATES: IssueState[] = ["unstarted", "started", "parked"];
-
 // A blocker id visible in allCandidates blocks only while its known state is
 // still open. A blocker id NOT visible in allCandidates counts as blocking
 // until a tracker.read proves otherwise — its id lands in needsRead. Getting
@@ -84,7 +82,7 @@ export function resolveBlocking(
       if (blocker === undefined) {
         needsRead.add(blockerId);
         blocked = true;
-      } else if (OPEN_STATES.includes(blocker.state)) {
+      } else if (OPEN_STATES.includes(blocker.state as OpenState)) {
         blocked = true;
       }
     }
@@ -112,7 +110,7 @@ export function foldReads(
   for (const ticket of pending) {
     const blocked = ticket.blockedBy.some((blockerId) => {
       const state = readState.get(blockerId);
-      return state === undefined || state === "unstarted" || state === "started" || state === "parked";
+      return state === undefined || OPEN_STATES.includes(state as OpenState);
     });
     if (blocked) {
       stillBlocked.push(ticket);

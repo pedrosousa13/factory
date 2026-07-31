@@ -9,18 +9,17 @@ import { execFileSync } from "node:child_process";
 import { parseConfig, type ParseResult } from "./config";
 import { readMarker } from "./marker";
 import { STAMP_VERSION } from "./version";
+import { CONFIG_PATH } from "./paths";
 import type { AdapterMarker, PreflightFacts, PushCheck, StampVersion, TrackerReachable } from "./preflight";
 
-export const CONFIG_PATH = ".factory/config.json";
+export { CONFIG_PATH };
 export const ADAPTER_DOC_PATH = "docs/agents/issue-tracker.md";
 
 // ───── config
 
-function gatherConfig(repoRoot: string): ParseResult {
+function gatherConfig(repoRoot: string): "missing-file" | ParseResult {
   const path = join(repoRoot, CONFIG_PATH);
-  if (!existsSync(path)) {
-    return { ok: false, errors: [`${CONFIG_PATH}: not found — this repo is not stamped for the loop`] };
-  }
+  if (!existsSync(path)) return "missing-file";
   return parseConfig(readFileSync(path, "utf8"));
 }
 
@@ -53,8 +52,8 @@ function gatherPushCheck(repoRoot: string): PushCheck {
 
 // ───── stamp version
 
-function gatherStampVersion(config: ParseResult): StampVersion {
-  return { repo: config.ok ? config.config.stampVersion : null, plugin: STAMP_VERSION };
+function gatherStampVersion(config: "missing-file" | ParseResult): StampVersion {
+  return { repo: config !== "missing-file" && config.ok ? config.config.stampVersion : null, plugin: STAMP_VERSION };
 }
 
 // ───── gatherPreflightFacts
@@ -96,7 +95,9 @@ function gitConfigValue(repoRoot: string, key: string): string | null {
   }
 }
 
-/** git config user.email, falling back to user.name; an error variant if neither is set. */
+/** git config user.email, falling back to user.name; an error variant if neither is set.
+ * Known limitation (maintainer-accepted): git identity may differ from the
+ * tracker's own login; the tracker phrasebook bridges that gap per adapter. */
 export function detectActor(repoRoot: string): ActorResult {
   const email = gitConfigValue(repoRoot, "user.email");
   if (email) return { actor: email, source: "git-user.email" };
