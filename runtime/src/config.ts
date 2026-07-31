@@ -318,12 +318,21 @@ export function effective(config: FactoryConfig, detected: Detected): EffectiveS
     journalPath: JOURNAL_PATH,
   };
 
-  // No PRD default exists yet for these (TBD at later slices); represent
-  // them only when the maintainer set them explicitly rather than inventing
-  // a placeholder value.
+  // mergeMethod always resolves: an explicit config value wins; absent with
+  // an auto policy (squash/merge/rebase) defaults the method to that policy
+  // (an auto policy IS a method preference); absent with policy "human"
+  // defaults to "squash" (mirrors agentwork.ts's mergeDecision).
   if (config.merge.method !== undefined) {
     settings.mergeMethod = { value: config.merge.method, source: "config" };
+  } else if (config.merge.policy === "human") {
+    settings.mergeMethod = { value: "squash", source: "default" };
+  } else {
+    settings.mergeMethod = { value: config.merge.policy, source: "default" };
   }
+
+  // contextBudget: reserved key, off by default — no PRD default exists yet
+  // (TBD at a later slice), so the row is omitted rather than inventing a
+  // placeholder value. Parse support stays; no enforcement lives here.
   if (config.contextBudget !== undefined) {
     settings.contextBudget = { value: config.contextBudget, source: "config" };
   }

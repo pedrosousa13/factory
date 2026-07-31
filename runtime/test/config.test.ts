@@ -503,11 +503,83 @@ test("effective() tags absent optional values as default or omits them", () => {
 
   expect(settings.maxWorkers).toEqual({ value: 1, source: "default" });
   expect(settings.answerWindowMinutes).toEqual({ value: 15, source: "default" });
-  // No PRD placeholder exists yet for these — omitted rather than invented.
-  expect(settings.mergeMethod).toBeUndefined();
+  // mergeMethod always resolves now (default here: absent + auto policy
+  // "squash" → method "squash"). contextBudget has no PRD default yet —
+  // omitted rather than invented.
+  expect(settings.mergeMethod).toEqual({ value: "squash", source: "default" });
   expect(settings.contextBudget).toBeUndefined();
   expect(settings.notifierCommand).toBeUndefined();
   expect(settings.trackerTokenVar).toBeUndefined();
+});
+
+// ───── effective(): mergeMethod default matrix
+
+test("effective() defaults mergeMethod to the policy value for an auto policy (merge)", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "merge" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+
+  expect(settings.mergeMethod).toEqual({ value: "merge", source: "default" });
+});
+
+test("effective() defaults mergeMethod to the policy value for an auto policy (rebase)", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "rebase" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+
+  expect(settings.mergeMethod).toEqual({ value: "rebase", source: "default" });
+});
+
+test("effective() defaults mergeMethod to squash when policy is human and method is absent", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "human" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+
+  expect(settings.mergeMethod).toEqual({ value: "squash", source: "default" });
+});
+
+test("effective() keeps the explicit config method even when it differs from the policy", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "human", method: "rebase" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+
+  expect(settings.mergeMethod).toEqual({ value: "rebase", source: "config" });
 });
 
 test("effective() tags detected facts as detected", () => {
