@@ -17,7 +17,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { check, type Ask, type Answer } from "../src/tracker";
+import type { Answer } from "../src/tracker";
+import { askWithRetry, buildPrompt, type AskStatus, type Runner } from "../src/askloop";
 import { runHarness, type HarnessName } from "./harnesses";
 import { down, TICKETS_DIR, up } from "./fixture";
 
@@ -31,74 +32,6 @@ const REACHABLE_SHAPE = `type ReachableAnswer = { result: "ok" } | { result: "un
 const VERIFY_SHAPE = `type VerifyAnswer =
   | { result: "ok"; state: "unstarted" | "started" | "parked" | "done" | "canceled"; claimedBy: string | null }
   | { result: "missing" };`;
-
-function buildPrompt(question: string, phrasebook: string, shape: string): string {
-  return [question, "", phrasebook, "", shape, "", "Reply with ONLY that JSON, no prose."].join("\n");
-}
-
-// ─────────────────────────────────────────────────────────── extract + validate
-
-/** Strip a wrapping code fence if present, then take the first balanced {...} value. */
-function extractJson(raw: string): unknown {
-  let text = raw.trim();
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) text = fenced[1].trim();
-  const start = text.indexOf("{");
-  if (start === -1) throw new Error("no { found in response");
-  let depth = 0;
-  let end = -1;
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        end = i;
-        break;
-      }
-    }
-  }
-  if (end === -1) throw new Error("no matching } found in response");
-  return JSON.parse(text.slice(start, end + 1));
-}
-
-function validate(ask: Ask, raw: string): { ok: true; answer: Answer[Ask["k"]] } | { ok: false; why: string } {
-  let parsed: unknown;
-  try {
-    parsed = extractJson(raw);
-  } catch (e) {
-    return { ok: false, why: `could not extract JSON: ${(e as Error).message}` };
-  }
-  return check(ask, parsed);
-}
-
-// ──────────────────────────────────────────────────────────────── ask + reask
-
-type AskStatus = "valid-first-try" | "valid-after-reask" | "failed";
-type AskLog<K extends Ask["k"]> = { status: AskStatus; answer?: Answer[K]; why?: string; ms: number };
-
-/** runHarness() throws on a malformed CLI envelope — treat that the same as an invalid reply. */
-function runHarnessSafe(harness: HarnessName, prompt: string): { raw: string; ms: number } | { error: string; ms: number } {
-  const start = performance.now();
-  try {
-    const run = runHarness(harness, prompt, DIR);
-    return { raw: run.raw, ms: run.ms };
-  } catch (e) {
-    return { error: (e as Error).message, ms: Math.round(performance.now() - start) };
-  }
-}
-
-function askWithRetry<K extends Ask["k"]>(harness: HarnessName, ask: Ask & { k: K }, prompt: string): AskLog<K> {
-  const r1 = runHarnessSafe(harness, prompt);
-  const v1 = "raw" in r1 ? validate(ask, r1.raw) : ({ ok: false, why: `harness threw: ${r1.error}` } as const);
-  if (v1.ok) return { status: "valid-first-try", answer: v1.answer as Answer[K], ms: r1.ms };
-
-  const reaskPrompt = `${prompt}\n\nYour previous reply was invalid: ${v1.why}\nReply again with ONLY the corrected JSON, no prose.`;
-  const r2 = runHarnessSafe(harness, reaskPrompt);
-  const v2 = "raw" in r2 ? validate(ask, r2.raw) : ({ ok: false, why: `harness threw: ${r2.error}` } as const);
-  const ms = r1.ms + r2.ms;
-  if (v2.ok) return { status: "valid-after-reask", answer: v2.answer as Answer[K], ms };
-  return { status: "failed", why: v2.why, ms };
-}
 
 // ───────────────────────────────────────────────────────────────── per-harness
 
@@ -120,25 +53,32 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     throw new Error(`fixture reset did not produce ${join(TICKETS_DIR, "T-1.md")}`);
   }
 
+  const runner: Runner = (prompt) => runHarness(harness, prompt, DIR);
+
   const reachableQuestion = "Can this project's tracker be reached right now?";
   const reachablePrompt = buildPrompt(reachableQuestion, phrasebook, REACHABLE_SHAPE);
-  const reachableLog = askWithRetry(harness, { k: "tracker.reachable" }, reachablePrompt);
-  const reachableOk = reachableLog.status !== "failed" && reachableLog.answer?.result === "ok";
+  const reachableStart = performance.now();
+  const reachableLog = askWithRetry(runner, { k: "tracker.reachable" }, reachablePrompt);
+  const reachableMs = Math.round(performance.now() - reachableStart);
+  const reachableOk = reachableLog.status !== "failed" && reachableLog.answer.result === "ok";
   console.log(
-    `  reachable: ${reachableLog.status}${reachableLog.why ? ` — ${reachableLog.why}` : ""} (expected ok: ${reachableOk ? "yes" : "no"})`,
+    `  reachable: ${reachableLog.status}${reachableLog.status === "failed" ? ` — ${reachableLog.whys[1]}` : ""} (expected ok: ${reachableOk ? "yes" : "no"})`,
   );
 
   const verifyQuestion = "What is the current state of ticket T-1 in this project's tracker?";
   const verifyPrompt = buildPrompt(verifyQuestion, phrasebook, VERIFY_SHAPE);
-  const verifyLog = askWithRetry(harness, { k: "tracker.verify", issue: "T-1" }, verifyPrompt);
-  const verifyAnswer = verifyLog.answer as Answer["tracker.verify"] | undefined;
+  const verifyStart = performance.now();
+  const verifyLog = askWithRetry(runner, { k: "tracker.verify", issue: "T-1" }, verifyPrompt);
+  const verifyMs = Math.round(performance.now() - verifyStart);
+  const verifyAnswer: Answer["tracker.verify"] | undefined =
+    verifyLog.status !== "failed" ? verifyLog.answer : undefined;
   const verifyOk =
     verifyLog.status !== "failed" &&
     verifyAnswer?.result === "ok" &&
     verifyAnswer.state === "unstarted" &&
     verifyAnswer.claimedBy === null;
   console.log(
-    `  verify T-1: ${verifyLog.status}${verifyLog.why ? ` — ${verifyLog.why}` : ""} (expected ok/unstarted/null: ${verifyOk ? "yes" : "no"})`,
+    `  verify T-1: ${verifyLog.status}${verifyLog.status === "failed" ? ` — ${verifyLog.whys[1]}` : ""} (expected ok/unstarted/null: ${verifyOk ? "yes" : "no"})`,
   );
 
   const reasks =
@@ -151,7 +91,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     verify: verifyLog.status,
     verifyOk,
     reasks,
-    totalMs: reachableLog.ms + verifyLog.ms,
+    totalMs: reachableMs + verifyMs,
     pass: reachableOk && verifyOk,
   };
 }
