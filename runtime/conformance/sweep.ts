@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Answer } from "../src/tracker";
 import { askWithRetry, buildPrompt, type AskStatus, type Runner } from "../src/askloop";
-import { runHarness, type HarnessName } from "./harnesses";
+import { runHarness, type HarnessName } from "../src/harness";
 import { down, TICKETS_DIR, up } from "./fixture";
 
 const DIR = import.meta.dir;
