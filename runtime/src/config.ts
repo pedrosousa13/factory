@@ -87,11 +87,11 @@ function isOneOf<T extends string>(
 }
 
 function enumError(path: string, value: unknown, allowed: readonly string[]): string {
-  return `${path}: '${String(value)}' is not ${allowed.join("|")}`;
+  return `${path}: ${JSON.stringify(value)} is not ${allowed.join("|")}`;
 }
 
 function typeError(path: string, value: unknown, expected: string): string {
-  return `${path}: '${String(value)}' is not a ${expected}`;
+  return `${path}: ${JSON.stringify(value)} is not a ${expected}`;
 }
 
 function checkUnknownKeys(
@@ -183,6 +183,10 @@ export function parseConfig(raw: string): ParseResult {
   }
 
   // merge
+  // The always-ask key is `merge.policy`, not `merge` itself (`merge.method` is a
+  // separate, not-yet-defaulted setting per PRD §3) — so a wholly absent `merge`
+  // is reported as a missing `merge.policy`, deliberately asymmetric with the
+  // `tracker: required` case below where the whole object is the always-ask unit.
   let merge: FactoryConfig["merge"] | undefined;
   if (!("merge" in data)) {
     errors.push("merge.policy: required");

@@ -198,7 +198,7 @@ test("collects unrelated errors together: unknown key, bad enum, missing key", (
   expect(result.ok).toBe(false);
   if (!result.ok) {
     expect(result.errors).toContain("bogus: unknown key");
-    expect(result.errors).toContain("merge.policy: 'sqash' is not squash|merge|rebase|human");
+    expect(result.errors).toContain(`merge.policy: "sqash" is not squash|merge|rebase|human`);
     expect(result.errors.length).toBe(2);
   }
 });
@@ -253,7 +253,7 @@ test("bad tracker.kind is path-named", () => {
 
   expect(result.ok).toBe(false);
   if (!result.ok) {
-    expect(result.errors).toContain("tracker.kind: 'jira' is not github|linear|local");
+    expect(result.errors).toContain(`tracker.kind: "jira" is not github|linear|local`);
   }
 });
 
@@ -269,7 +269,7 @@ test("bad merge.policy is path-named with the exact message shape", () => {
 
   expect(result.ok).toBe(false);
   if (!result.ok) {
-    expect(result.errors).toContain("merge.policy: 'sqash' is not squash|merge|rebase|human");
+    expect(result.errors).toContain(`merge.policy: "sqash" is not squash|merge|rebase|human`);
   }
 });
 
@@ -285,7 +285,7 @@ test("bad merge.method is path-named", () => {
 
   expect(result.ok).toBe(false);
   if (!result.ok) {
-    expect(result.errors).toContain("merge.method: 'octopus' is not squash|merge|rebase");
+    expect(result.errors).toContain(`merge.method: "octopus" is not squash|merge|rebase`);
   }
 });
 
@@ -307,6 +307,143 @@ test("a JSON array at the top level is rejected", () => {
   expect(result.ok).toBe(false);
   if (!result.ok) {
     expect(result.errors).toContain("config: must be a JSON object");
+  }
+});
+
+// ───── parseConfig: type-mismatch branches
+
+function baseValid(): Record<string, unknown> {
+  return {
+    stampVersion: "2.0.0",
+    tracker: { kind: "github", repo: "owner/name" },
+    merge: { policy: "human" },
+    attackSurface: true,
+  };
+}
+
+test("non-string stampVersion is rejected with JSON.stringify quoting", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), stampVersion: 2 }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("stampVersion: 2 is not a string");
+  }
+});
+
+test("non-string tracker.repo is rejected", () => {
+  const result = parseConfig(
+    JSON.stringify({ ...baseValid(), tracker: { kind: "github", repo: 123 } }),
+  );
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("tracker.repo: 123 is not a string");
+  }
+});
+
+test("non-string notifierCommand is rejected", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), notifierCommand: 42 }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("notifierCommand: 42 is not a string");
+  }
+});
+
+test("non-string trackerTokenVar is rejected", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), trackerTokenVar: false }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("trackerTokenVar: false is not a string");
+  }
+});
+
+test("non-boolean attackSurface is rejected", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), attackSurface: "yes" }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain('attackSurface: "yes" is not a boolean');
+  }
+});
+
+test("non-number maxWorkers is rejected", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), maxWorkers: "3" }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain('maxWorkers: "3" is not a number');
+  }
+});
+
+test("non-number answerWindowMinutes is rejected", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), answerWindowMinutes: "15" }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain('answerWindowMinutes: "15" is not a number');
+  }
+});
+
+test("non-number contextBudget is rejected", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), contextBudget: null }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("contextBudget: null is not a number");
+  }
+});
+
+test("a null tracker is rejected as not-an-object", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), tracker: null }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("tracker: must be an object");
+  }
+});
+
+test("an array tracker is rejected as not-an-object", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), tracker: ["github"] }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("tracker: must be an object");
+  }
+});
+
+test("a null merge is rejected as not-an-object", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), merge: null }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("merge: must be an object");
+  }
+});
+
+test("an array merge is rejected as not-an-object", () => {
+  const result = parseConfig(JSON.stringify({ ...baseValid(), merge: ["human"] }));
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain("merge: must be an object");
+  }
+});
+
+test("an enum value given as an array is quoted with JSON.stringify, not mistaken for a valid string", () => {
+  const result = parseConfig(
+    JSON.stringify({ ...baseValid(), merge: { policy: ["squash"] } }),
+  );
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.errors).toContain(
+      'merge.policy: ["squash"] is not squash|merge|rebase|human',
+    );
+    // Guards against the String(value) bug where String(["squash"]) === "squash",
+    // which would render as the misleading `'squash' is not squash|merge|...`.
+    expect(result.errors).not.toContain("merge.policy: 'squash' is not squash|merge|rebase|human");
   }
 });
 
