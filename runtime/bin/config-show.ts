@@ -9,8 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { effective, parseConfig } from "../src/config";
 import type { Effective, EffectiveSettings } from "../src/config";
-
-const CONFIG_PATH = ".factory/config.json";
+import { CONFIG_PATH } from "../src/paths";
 
 // ───── git facts
 

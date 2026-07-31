@@ -27,7 +27,7 @@ export interface StampVersion {
 }
 
 export interface PreflightFacts {
-  config: ParseResult;
+  config: "missing-file" | ParseResult;
   adapterMarker: AdapterMarker;
   trackerReachable: TrackerReachable;
   pushCheck: PushCheck;
@@ -75,8 +75,16 @@ const UNSTAMPED = "0.0.0";
 export function preflight(facts: PreflightFacts): PreflightResult {
   const failures: Failure[] = [];
 
-  // config: one failure per parse/validation error.
-  if (!facts.config.ok) {
+  // config: missing entirely gets its own dedicated failure, like
+  // adapterMarker's "missing-file" below — field-level parse/validation
+  // errors keep the generic per-error wrapper.
+  if (facts.config === "missing-file") {
+    failures.push({
+      what: ".factory/config.json is missing — repo is not stamped for v2",
+      why: "the runtime reads .factory/config.json to resolve the tracker, merge policy, and attack-surface settings before any work starts",
+      fix: "run the Factory adopt skill to create .factory/config.json",
+    });
+  } else if (!facts.config.ok) {
     for (const err of facts.config.errors) {
       failures.push({
         what: err,
@@ -105,9 +113,10 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // three-source contradiction: config.json's tracker.kind must agree with
   // the adapter doc's marker.
   const adapterKind = typeof facts.adapterMarker === "object" ? facts.adapterMarker.kind : null;
-  const trackerMismatch = facts.config.ok && adapterKind !== null && adapterKind !== facts.config.config.tracker.kind;
-  if (trackerMismatch && facts.config.ok) {
-    const configKind = facts.config.config.tracker.kind;
+  const parsedConfig = facts.config !== "missing-file" && facts.config.ok ? facts.config.config : null;
+  const trackerMismatch = parsedConfig !== null && adapterKind !== null && adapterKind !== parsedConfig.tracker.kind;
+  if (trackerMismatch && parsedConfig !== null) {
+    const configKind = parsedConfig.tracker.kind;
     failures.push({
       what: `config.json declares tracker "${configKind}" but the adapter doc marker declares "${adapterKind}"`,
       why: "the three preflight sources (config, adapter marker, live tracker) must agree on which tracker the loop uses; a mismatch means the run cannot trust any of them",
@@ -123,6 +132,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // skip confirming the tracker is reachable.
   if (facts.trackerReachable === "not-asked") {
     const excused =
+      facts.config === "missing-file" ||
       !facts.config.ok ||
       facts.adapterMarker === "missing-file" ||
       facts.adapterMarker === "missing-marker" ||

@@ -1,14 +1,20 @@
 /**
- * L2 conformance sweep — reachable + verify.
+ * L2 conformance sweep — reachable, verify, and slice 2's asks.
  *
  * For each harness (claude, codex, pi): reset the local markdown tracker
- * fixture, then ask two of Factory's tracker asks against it —
- * `tracker.reachable` and `tracker.verify` on T-1 — using one shared prompt
- * template (question + phrasebook + answer shape + "reply with ONLY that
- * JSON"), no per-harness prompt tweaks. Answers are validated with `check()`
- * from runtime/src/tracker.ts; one re-ask on a malformed or thrown reply.
+ * fixture (the committed default three plus a fourth ticket, T-4, blocked by
+ * an invisible id T-9 — see EXTRA_TICKETS below), then ask Factory's tracker
+ * asks against it — reachable, verify T-1, candidates, read T-1, read T-9
+ * (the invisible blocker), claim T-1, setState started, unclaim — using one
+ * shared prompt template (question + phrasebook + answer shape + "reply with
+ * ONLY that JSON"), no per-harness prompt tweaks. Answers are validated with
+ * `check()` from runtime/src/tracker.ts; one re-ask on a malformed or thrown
+ * reply. The invisible-blocker fail-safe (T-4 stays blocked once its blocker
+ * T-9 reads back missing) is asserted with the pure pick functions from
+ * runtime/src/pick.ts, not a further harness call. Claim/setState/unclaim are
+ * verified against the fixture's own file, not trusted from the ask reply.
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
- * fails either ask.
+ * fails any check.
  *
  * bun sweep.ts
  *
@@ -17,9 +23,27 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { check, type Ask, type Answer } from "../src/tracker";
-import { runHarness, type HarnessName } from "./harnesses";
-import { down, TICKETS_DIR, up } from "./fixture";
+import type { Answer, TicketFacts } from "../src/tracker";
+import { askWithRetry, buildPrompt, type AskStatus, type Runner } from "../src/askloop";
+import { runHarness, type HarnessName } from "../src/harness";
+import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
+import {
+  CANDIDATES_SHAPE,
+  CANDIDATES_QUESTION,
+  CLAIM_SHAPE,
+  claimQuestion,
+  down,
+  EXTRA_TICKETS,
+  READ_SHAPE,
+  readFixtureField,
+  readQuestion,
+  SET_STATE_SHAPE,
+  startedQuestion,
+  TICKETS_DIR,
+  UNCLAIM_SHAPE,
+  unclaimQuestion,
+  up,
+} from "./fixture";
 
 const DIR = import.meta.dir;
 const PHRASEBOOK_PATH = join(DIR, "phrasebook.md");
@@ -32,74 +56,6 @@ const VERIFY_SHAPE = `type VerifyAnswer =
   | { result: "ok"; state: "unstarted" | "started" | "parked" | "done" | "canceled"; claimedBy: string | null }
   | { result: "missing" };`;
 
-function buildPrompt(question: string, phrasebook: string, shape: string): string {
-  return [question, "", phrasebook, "", shape, "", "Reply with ONLY that JSON, no prose."].join("\n");
-}
-
-// ─────────────────────────────────────────────────────────── extract + validate
-
-/** Strip a wrapping code fence if present, then take the first balanced {...} value. */
-function extractJson(raw: string): unknown {
-  let text = raw.trim();
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) text = fenced[1].trim();
-  const start = text.indexOf("{");
-  if (start === -1) throw new Error("no { found in response");
-  let depth = 0;
-  let end = -1;
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        end = i;
-        break;
-      }
-    }
-  }
-  if (end === -1) throw new Error("no matching } found in response");
-  return JSON.parse(text.slice(start, end + 1));
-}
-
-function validate(ask: Ask, raw: string): { ok: true; answer: Answer[Ask["k"]] } | { ok: false; why: string } {
-  let parsed: unknown;
-  try {
-    parsed = extractJson(raw);
-  } catch (e) {
-    return { ok: false, why: `could not extract JSON: ${(e as Error).message}` };
-  }
-  return check(ask, parsed);
-}
-
-// ──────────────────────────────────────────────────────────────── ask + reask
-
-type AskStatus = "valid-first-try" | "valid-after-reask" | "failed";
-type AskLog<K extends Ask["k"]> = { status: AskStatus; answer?: Answer[K]; why?: string; ms: number };
-
-/** runHarness() throws on a malformed CLI envelope — treat that the same as an invalid reply. */
-function runHarnessSafe(harness: HarnessName, prompt: string): { raw: string; ms: number } | { error: string; ms: number } {
-  const start = performance.now();
-  try {
-    const run = runHarness(harness, prompt, DIR);
-    return { raw: run.raw, ms: run.ms };
-  } catch (e) {
-    return { error: (e as Error).message, ms: Math.round(performance.now() - start) };
-  }
-}
-
-function askWithRetry<K extends Ask["k"]>(harness: HarnessName, ask: Ask & { k: K }, prompt: string): AskLog<K> {
-  const r1 = runHarnessSafe(harness, prompt);
-  const v1 = "raw" in r1 ? validate(ask, r1.raw) : ({ ok: false, why: `harness threw: ${r1.error}` } as const);
-  if (v1.ok) return { status: "valid-first-try", answer: v1.answer as Answer[K], ms: r1.ms };
-
-  const reaskPrompt = `${prompt}\n\nYour previous reply was invalid: ${v1.why}\nReply again with ONLY the corrected JSON, no prose.`;
-  const r2 = runHarnessSafe(harness, reaskPrompt);
-  const v2 = "raw" in r2 ? validate(ask, r2.raw) : ({ ok: false, why: `harness threw: ${r2.error}` } as const);
-  const ms = r1.ms + r2.ms;
-  if (v2.ok) return { status: "valid-after-reask", answer: v2.answer as Answer[K], ms };
-  return { status: "failed", why: v2.why, ms };
-}
-
 // ───────────────────────────────────────────────────────────────── per-harness
 
 type HarnessRecord = {
@@ -108,6 +64,22 @@ type HarnessRecord = {
   reachableOk: boolean; // answer.result === "ok"
   verify: AskStatus;
   verifyOk: boolean; // answer.result === "ok" && state === "unstarted" && claimedBy === null
+  candidates: AskStatus;
+  candidatesOk: boolean; // exactly {T-1,T-2,T-3,T-4} came back
+  readT1: AskStatus;
+  readT1Ok: boolean; // answer.result === "ok" && body is non-empty
+  readT9: AskStatus;
+  readT9Ok: boolean; // answer.result === "missing" (T-9 has no file)
+  failSafeOk: boolean; // pure check: T-9 was needsRead and T-4 stays blocked after it reads missing
+  claim: AskStatus;
+  claimOk: boolean; // answer.result === "claimed"
+  claimFileOk: boolean; // T-1.md claimedBy === actor
+  setState: AskStatus;
+  setStateOk: boolean; // answer.result === "ok"
+  setStateFileOk: boolean; // T-1.md state === "started"
+  unclaim: AskStatus;
+  unclaimOk: boolean; // answer.result === "ok"
+  unclaimFileOk: boolean; // T-1.md claimedBy === null
   reasks: number;
   totalMs: number;
   pass: boolean;
@@ -115,34 +87,146 @@ type HarnessRecord = {
 
 function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   console.log(`\n=== ${harness} ===`);
-  up();
+  up(EXTRA_TICKETS);
   if (!existsSync(join(TICKETS_DIR, "T-1.md"))) {
     throw new Error(`fixture reset did not produce ${join(TICKETS_DIR, "T-1.md")}`);
   }
 
+  const runner: Runner = (prompt) => runHarness(harness, prompt, DIR);
+
+  // ── reachable
   const reachableQuestion = "Can this project's tracker be reached right now?";
   const reachablePrompt = buildPrompt(reachableQuestion, phrasebook, REACHABLE_SHAPE);
-  const reachableLog = askWithRetry(harness, { k: "tracker.reachable" }, reachablePrompt);
-  const reachableOk = reachableLog.status !== "failed" && reachableLog.answer?.result === "ok";
+  const reachableStart = performance.now();
+  const reachableLog = askWithRetry(runner, { k: "tracker.reachable" }, reachablePrompt);
+  const reachableMs = Math.round(performance.now() - reachableStart);
+  const reachableOk = reachableLog.status !== "failed" && reachableLog.answer.result === "ok";
   console.log(
-    `  reachable: ${reachableLog.status}${reachableLog.why ? ` — ${reachableLog.why}` : ""} (expected ok: ${reachableOk ? "yes" : "no"})`,
+    `  reachable: ${reachableLog.status}${reachableLog.status === "failed" ? ` — ${reachableLog.whys[1]}` : ""} (expected ok: ${reachableOk ? "yes" : "no"})`,
   );
 
+  // ── verify T-1
   const verifyQuestion = "What is the current state of ticket T-1 in this project's tracker?";
   const verifyPrompt = buildPrompt(verifyQuestion, phrasebook, VERIFY_SHAPE);
-  const verifyLog = askWithRetry(harness, { k: "tracker.verify", issue: "T-1" }, verifyPrompt);
-  const verifyAnswer = verifyLog.answer as Answer["tracker.verify"] | undefined;
+  const verifyStart = performance.now();
+  const verifyLog = askWithRetry(runner, { k: "tracker.verify", issue: "T-1" }, verifyPrompt);
+  const verifyMs = Math.round(performance.now() - verifyStart);
+  const verifyAnswer: Answer["tracker.verify"] | undefined =
+    verifyLog.status !== "failed" ? verifyLog.answer : undefined;
   const verifyOk =
     verifyLog.status !== "failed" &&
     verifyAnswer?.result === "ok" &&
     verifyAnswer.state === "unstarted" &&
     verifyAnswer.claimedBy === null;
   console.log(
-    `  verify T-1: ${verifyLog.status}${verifyLog.why ? ` — ${verifyLog.why}` : ""} (expected ok/unstarted/null: ${verifyOk ? "yes" : "no"})`,
+    `  verify T-1: ${verifyLog.status}${verifyLog.status === "failed" ? ` — ${verifyLog.whys[1]}` : ""} (expected ok/unstarted/null: ${verifyOk ? "yes" : "no"})`,
   );
 
-  const reasks =
-    (reachableLog.status === "valid-after-reask" ? 1 : 0) + (verifyLog.status === "valid-after-reask" ? 1 : 0);
+  // ── candidates
+  const candidatesPrompt = buildPrompt(CANDIDATES_QUESTION, phrasebook, CANDIDATES_SHAPE);
+  const candidatesStart = performance.now();
+  const candidatesLog = askWithRetry(runner, { k: "tracker.candidates", milestone: null }, candidatesPrompt);
+  const candidatesMs = Math.round(performance.now() - candidatesStart);
+  const candidates: TicketFacts[] = candidatesLog.status !== "failed" ? candidatesLog.answer.tickets : [];
+  const candidateIds = candidates.map((t) => t.id).sort();
+  const expectedIds = ["T-1", "T-2", "T-3", "T-4"];
+  const candidatesOk =
+    candidatesLog.status !== "failed" &&
+    candidateIds.length === expectedIds.length &&
+    expectedIds.every((id) => candidateIds.includes(id));
+  console.log(
+    `  candidates: ${candidatesLog.status}${candidatesLog.status === "failed" ? ` — ${candidatesLog.whys[1]}` : ""} (expected T-1..T-4, 4 tickets: ${candidatesOk ? "yes" : "no"}; got ${candidateIds.join(",") || "none"})`,
+  );
+
+  // ── read T-1 (body present)
+  const readT1Prompt = buildPrompt(readQuestion("T-1"), phrasebook, READ_SHAPE);
+  const readT1Start = performance.now();
+  const readT1Log = askWithRetry(runner, { k: "tracker.read", issue: "T-1" }, readT1Prompt);
+  const readT1Ms = Math.round(performance.now() - readT1Start);
+  const readT1Ok =
+    readT1Log.status !== "failed" && readT1Log.answer.result === "ok" && readT1Log.answer.body.trim().length > 0;
+  console.log(
+    `  read T-1: ${readT1Log.status}${readT1Log.status === "failed" ? ` — ${readT1Log.whys[1]}` : ""} (expected ok + body: ${readT1Ok ? "yes" : "no"})`,
+  );
+
+  // ── read T-9 (the invisible blocker — expected missing)
+  const readT9Prompt = buildPrompt(readQuestion("T-9"), phrasebook, READ_SHAPE);
+  const readT9Start = performance.now();
+  const readT9Log = askWithRetry(runner, { k: "tracker.read", issue: "T-9" }, readT9Prompt);
+  const readT9Ms = Math.round(performance.now() - readT9Start);
+  const readT9Ok = readT9Log.status !== "failed" && readT9Log.answer.result === "missing";
+  console.log(
+    `  read T-9: ${readT9Log.status}${readT9Log.status === "failed" ? ` — ${readT9Log.whys[1]}` : ""} (expected missing: ${readT9Ok ? "yes" : "no"})`,
+  );
+
+  // ── fail-safe: T-9 (invisible blocker) reads missing, so T-4 stays blocked
+  // (pure check via src/pick.ts — no further harness call beyond the T-9 read above)
+  const { eligible } = applyInvariants({ candidates, milestone: null });
+  const { unblocked: mechanicallyUnblocked, needsRead } = resolveBlocking(eligible, candidates);
+  const stillBlocked = eligible.filter((t) => !mechanicallyUnblocked.some((u) => u.id === t.id));
+  const reads: ReadResult[] =
+    readT9Log.status !== "failed" && readT9Log.answer.result === "ok"
+      ? [{ id: "T-9", state: readT9Log.answer.ticket.state }]
+      : [];
+  const { unblocked: foldedUnblocked } = foldReads(stillBlocked, reads);
+  const finalUnblocked = [...mechanicallyUnblocked, ...foldedUnblocked];
+  const failSafeOk = needsRead.includes("T-9") && !finalUnblocked.some((t) => t.id === "T-4");
+  console.log(`  fail-safe: T-4 stays blocked: ${failSafeOk ? "yes" : "no"}`);
+
+  // ── claim T-1 for actor parity-<harness>, verified against the fixture file
+  const actor = `parity-${harness}`;
+  const claimPrompt = buildPrompt(claimQuestion("T-1", actor), phrasebook, CLAIM_SHAPE);
+  const claimStart = performance.now();
+  const claimLog = askWithRetry(runner, { k: "tracker.claim", issue: "T-1", actor }, claimPrompt);
+  const claimMs = Math.round(performance.now() - claimStart);
+  const claimOk = claimLog.status !== "failed" && claimLog.answer.result === "claimed";
+  const claimedByFile = readFixtureField("T-1", "claimedBy");
+  const claimFileOk = claimedByFile === actor;
+  console.log(
+    `  claim T-1: ${claimLog.status}${claimLog.status === "failed" ? ` — ${claimLog.whys[1]}` : ""} (expected claimed: ${claimOk ? "yes" : "no"}; file claimedBy=${claimedByFile})`,
+  );
+
+  // ── setState started, verified against the fixture file
+  const startedPrompt = buildPrompt(startedQuestion("T-1"), phrasebook, SET_STATE_SHAPE);
+  const startedStart = performance.now();
+  const startedLog = askWithRetry(runner, { k: "tracker.setState", issue: "T-1", state: "started" }, startedPrompt);
+  const startedMs = Math.round(performance.now() - startedStart);
+  const setStateOk = startedLog.status !== "failed" && startedLog.answer.result === "ok";
+  const stateFile = readFixtureField("T-1", "state");
+  const setStateFileOk = stateFile === "started";
+  console.log(
+    `  setState started: ${startedLog.status}${startedLog.status === "failed" ? ` — ${startedLog.whys[1]}` : ""} (expected ok: ${setStateOk ? "yes" : "no"}; file state=${stateFile})`,
+  );
+
+  // ── unclaim, verified against the fixture file
+  const unclaimPrompt = buildPrompt(unclaimQuestion("T-1"), phrasebook, UNCLAIM_SHAPE);
+  const unclaimStart = performance.now();
+  const unclaimLog = askWithRetry(runner, { k: "tracker.unclaim", issue: "T-1" }, unclaimPrompt);
+  const unclaimMs = Math.round(performance.now() - unclaimStart);
+  const unclaimOk = unclaimLog.status !== "failed" && unclaimLog.answer.result === "ok";
+  const claimedByAfterFile = readFixtureField("T-1", "claimedBy");
+  const unclaimFileOk = claimedByAfterFile === null;
+  console.log(
+    `  unclaim T-1: ${unclaimLog.status}${unclaimLog.status === "failed" ? ` — ${unclaimLog.whys[1]}` : ""} (expected ok: ${unclaimOk ? "yes" : "no"}; file claimedBy=${claimedByAfterFile})`,
+  );
+
+  const asks = [reachableLog, verifyLog, candidatesLog, readT1Log, readT9Log, claimLog, startedLog, unclaimLog];
+  const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
+  const totalMs = reachableMs + verifyMs + candidatesMs + readT1Ms + readT9Ms + claimMs + startedMs + unclaimMs;
+
+  const pass =
+    reachableOk &&
+    verifyOk &&
+    candidatesOk &&
+    readT1Ok &&
+    readT9Ok &&
+    failSafeOk &&
+    claimOk &&
+    claimFileOk &&
+    setStateOk &&
+    setStateFileOk &&
+    unclaimOk &&
+    unclaimFileOk;
 
   return {
     harness,
@@ -150,22 +234,81 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     reachableOk,
     verify: verifyLog.status,
     verifyOk,
+    candidates: candidatesLog.status,
+    candidatesOk,
+    readT1: readT1Log.status,
+    readT1Ok,
+    readT9: readT9Log.status,
+    readT9Ok,
+    failSafeOk,
+    claim: claimLog.status,
+    claimOk,
+    claimFileOk,
+    setState: startedLog.status,
+    setStateOk,
+    setStateFileOk,
+    unclaim: unclaimLog.status,
+    unclaimOk,
+    unclaimFileOk,
     reasks,
-    totalMs: reachableLog.ms + verifyLog.ms,
-    pass: reachableOk && verifyOk,
+    totalMs,
+    pass,
   };
 }
 
 // ────────────────────────────────────────────────────────────────── report
 
 function printTable(records: HarnessRecord[]): void {
-  const cols = ["harness", "reachable", "ok?", "verify T-1", "ok?", "re-asks", "total s", "pass"];
+  const cols = [
+    "harness",
+    "reachable",
+    "ok?",
+    "verify T-1",
+    "ok?",
+    "candidates",
+    "ok?",
+    "read T-1",
+    "ok?",
+    "read T-9",
+    "ok?",
+    "fail-safe T-4",
+    "ok?",
+    "claim",
+    "ok?",
+    "file?",
+    "setState",
+    "ok?",
+    "file?",
+    "unclaim",
+    "ok?",
+    "file?",
+    "re-asks",
+    "total s",
+    "pass",
+  ];
   const rows = records.map((r) => [
     r.harness,
     r.reachable,
     r.reachableOk ? "yes" : "no",
     r.verify,
     r.verifyOk ? "yes" : "no",
+    r.candidates,
+    r.candidatesOk ? "yes" : "no",
+    r.readT1,
+    r.readT1Ok ? "yes" : "no",
+    r.readT9,
+    r.readT9Ok ? "yes" : "no",
+    "checked",
+    r.failSafeOk ? "yes" : "no",
+    r.claim,
+    r.claimOk ? "yes" : "no",
+    r.claimFileOk ? "yes" : "no",
+    r.setState,
+    r.setStateOk ? "yes" : "no",
+    r.setStateFileOk ? "yes" : "no",
+    r.unclaim,
+    r.unclaimOk ? "yes" : "no",
+    r.unclaimFileOk ? "yes" : "no",
     String(r.reasks),
     (r.totalMs / 1000).toFixed(1),
     r.pass ? "PASS" : "FAIL",

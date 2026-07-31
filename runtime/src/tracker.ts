@@ -8,8 +8,6 @@
  * The vocabulary Factory uses to ask a coding agent about the Project's issue
  * tracker, and the shape-checking of its answers. Pure: no I/O here — see
  * phrasebook.md for how the tracker says each neutral concept.
- *
- * THROWAWAY: no tests, no error handling beyond what keeps it runnable.
  */
 
 // ───────────────────────────────────────────────────────────── domain values
@@ -82,7 +80,7 @@ export type Answer = {
 
 const URGENCIES: Urgency[] = ["P0", "P1", "P2", "P3", "none"];
 const STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
-const OPEN_STATES: OpenState[] = ["unstarted", "started", "parked"];
+export const OPEN_STATES: OpenState[] = ["unstarted", "started", "parked"];
 
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null;

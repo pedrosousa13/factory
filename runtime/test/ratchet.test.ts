@@ -113,6 +113,43 @@ test("merge=rebase over a human policy is refused", () => {
   }
 });
 
+test("merge=rebase over a committed squash policy is refused (lateral)", () => {
+  const result = applyOverrides(baseConfig({ merge: { policy: "squash" } }), {
+    merge: "rebase",
+  });
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.refusals.length).toBe(1);
+    expect(result.refusals[0]).toContain(".factory/config.json");
+  }
+});
+
+test("merge=squash over a committed merge policy is refused (lateral)", () => {
+  const result = applyOverrides(baseConfig({ merge: { policy: "merge" } }), {
+    merge: "squash",
+  });
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.refusals.length).toBe(1);
+    expect(result.refusals[0]).toContain(".factory/config.json");
+  }
+});
+
+// ───── merge: equal-to-policy override allowed (no-op)
+
+test("merge=squash over an already-squash policy is allowed (no-op)", () => {
+  const result = applyOverrides(baseConfig({ merge: { policy: "squash" } }), {
+    merge: "squash",
+  });
+
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.merged.mergePolicy).toBe("squash");
+  }
+});
+
 // ───── sweeps: loosening refused
 
 test("sweeps=false over a set attack surface is refused", () => {

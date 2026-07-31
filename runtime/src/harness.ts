@@ -1,14 +1,12 @@
 /**
- * Parity slice — harness adapters.
+ * Harness adapters — promoted from the parity slice's conformance prototype.
  *
  * Spawns each CLI headless with a prompt, waits for it, and returns the
  * agent's final message text untouched — only the CLI's own envelope is
  * unwrapped (claude's JSON result field, codex's/pi's JSONL final message).
  * Content inside that text (JSON or otherwise) is the host loop's problem.
  *
- * bun harnesses.ts claude|codex|pi   — smoke test
- *
- * THROWAWAY: no tests, no error handling beyond what keeps it runnable.
+ * bun harness.ts claude|codex|pi   — smoke test
  */
 
 // ──────────────────────────────────────────────────────────────────── types
@@ -105,7 +103,7 @@ if (import.meta.main) {
     const run = runHarness(name, 'Reply with exactly the JSON {"ok":true} and nothing else.', import.meta.dir);
     console.log(JSON.stringify(run));
   } else if (name !== undefined) {
-    console.error("usage: bun harnesses.ts claude|codex|pi");
+    console.error("usage: bun harness.ts claude|codex|pi");
     process.exit(1);
   }
 }

@@ -54,6 +54,18 @@ test("'not-asked' is excused when config is invalid — that failure already exp
   expect(result.failures[0].what).toMatch(/attackSurface/);
 });
 
+test("'not-asked' is excused when config.json is missing entirely", () => {
+  const facts = greenFacts();
+  facts.config = "missing-file";
+  facts.trackerReachable = "not-asked";
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/not stamped for v2/);
+});
+
 test("'not-asked' is excused when the adapter doc is missing entirely", () => {
   const facts = greenFacts();
   facts.adapterMarker = "missing-file";
@@ -106,6 +118,18 @@ test("invalid config produces one failure per parse error", () => {
     expect(failure.why.length).toBeGreaterThan(0);
     expect(failure.fix.length).toBeGreaterThan(0);
   }
+});
+
+test("missing config file: dedicated failure, distinct from per-field parse errors", () => {
+  const facts = greenFacts();
+  facts.config = "missing-file";
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].what).toMatch(/not stamped for v2/);
+  expect(result.failures[0].fix).toBe("run the Factory adopt skill to create .factory/config.json");
 });
 
 test("missing adapter file: not stamped for the loop", () => {

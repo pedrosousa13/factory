@@ -3,10 +3,7 @@
 // ratchet toward safety only"). No fs, no process, no I/O.
 
 import type { FactoryConfig, MergePolicy } from "./config";
-
-// ───── config file named in refusals
-
-const CONFIG_PATH = ".factory/config.json";
+import { CONFIG_PATH } from "./paths";
 
 // ───── override shape
 
@@ -36,12 +33,24 @@ export function applyOverrides(config: FactoryConfig, overrides: RunOverrides): 
   const refusals: string[] = [];
 
   // merge: tightening (any policy -> human) is always allowed; loosening
-  // (human -> any non-human policy) is refused.
+  // (human -> any non-human policy) is refused; a lateral swap between two
+  // different auto policies (e.g. squash -> rebase) neither tightens nor
+  // loosens, so it is refused too.
   let mergePolicy = config.merge.policy;
   if (overrides.merge !== undefined) {
     if (config.merge.policy === "human" && overrides.merge !== "human") {
       refusals.push(
         `--merge=${overrides.merge} loosens the committed "human" merge policy; ` +
+          `edit and commit ${CONFIG_PATH} instead`,
+      );
+    } else if (
+      config.merge.policy !== "human" &&
+      overrides.merge !== "human" &&
+      overrides.merge !== config.merge.policy
+    ) {
+      refusals.push(
+        `--merge=${overrides.merge} is lateral to the committed "${config.merge.policy}" merge policy; ` +
+          `a lateral change neither tightens nor loosens, so it is refused; ` +
           `edit and commit ${CONFIG_PATH} instead`,
       );
     } else {
