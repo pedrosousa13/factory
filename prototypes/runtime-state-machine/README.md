@@ -26,7 +26,7 @@ step(state: RunState, event: Event): { state: RunState; effects: Effect[] }
 host executes each `Effect` and feeds the outcome back as an `ok` or `err`
 event. Time enters only as `tick` events.
 
-Three seams sit behind that one interface:
+Four seams sit behind that one interface:
 
 | Seam | Effects | Adapter varies by |
 | --- | --- | --- |
@@ -66,10 +66,26 @@ tracker, git, agent, and host, so failures can be armed by hand.
 | `k` / `K` | crash and restart, keeping / wiping the journal |
 | `m` `s` `p` `h` | merge policy, Superpowers, milestone scope, headless |
 
+### Park lifecycle
+
+Park pushes the branch, comments the actual park reason, releases the
+tracker claim (`tracker.unclaim`), and marks the issue `parked` — in that
+order, so reconcile can tell a crash mid-Park from a Park that finished. The
+TUI's `[A]` key stands in for a maintainer re-readying a parked issue: it
+flips `agentReady` back on and clears the fake tracker's `parked` marker, so
+the next selection pass re-picks the issue and `git.sync` resumes the pushed
+branch instead of creating a fresh worktree.
+
 ## Baseline scenarios it exercises
 
-From `docs/research/factory-v2-baseline.md`: S06, S07, S09, S10, S11, S12,
-S13, S14, S15, S16, S17, S18, S19, S20.
+From `docs/research/factory-v2-baseline.md`: S06, S07, S09, S11, S12,
+S13, S14, S15, S16, S17, S18, S19*, S20.
+
+S10 is not fully exercised: the empty-queue report states that no unblocked
+work remains, but its text carries no progress or open-issue counts. \* S19
+asks for idempotent completion of an interrupted Park; what's implemented
+converges but re-asks the maintainer's question on resume instead
+(Finding 6).
 
 ## Findings
 
@@ -84,5 +100,29 @@ S13, S14, S15, S16, S17, S18, S19, S20.
 3. **Effect ids come from a counter in the state, not from the host.** Two
    harnesses replaying the same event log produce the same ids, which is what
    makes S25 parity a data equality test.
-4. **A parked issue keeps its assignee, so it never returns to the queue.**
-   Whether Park releases the claim is an open Project policy question.
+4. **Park releases the claim and drops agent-ready** (`tracker.unclaim`); the
+   maintainer re-readies the issue, and any worker that re-picks it gets
+   routed by `git.sync`'s branch list to resume the pushed branch instead of
+   creating a new worktree. Reconcile needs `tracker.state` (started vs.
+   parked), not claim presence, to tell a parked-at-rest branch from a
+   half-applied transition.
+5. **Effect results are undeclared, closed only by convention.** `ok.data` is
+   `unknown`; the reducer casts eight result shapes (`Caps`, `Snapshot`,
+   `{branches: string[]}`, `{pass: boolean}`, `{granted: boolean}`,
+   `ImplementResult`, …) with nothing checking that a harness's adapter
+   actually returns them. `tracker.unclaim`'s effect on agent-ready,
+   `git.sync`'s `{branches}` contract, and `host.ask` obliging a later
+   `answer` event all live only in the fake world (`tui.ts`), not in
+   `machine.ts`. A harness-neutral v2 needs declared per-effect result types.
+6. **The journal earned its place only for Park intent.** `journalLast` is
+   never read by reconcile — git and the tracker sufficed for every arm
+   except telling a mid-Park crash apart from an at-rest Park. S19 as
+   literally stated (complete or reverse a half-applied transition) is not
+   implemented: a run that crashes after the push but before the tracker
+   Park write resumes and re-parks, which converges but re-asks the
+   maintainer's question rather than completing idempotently.
+7. **The merge method is hardcoded to squash after human approval.**
+   `land()` honors `Settings.mergePolicy` for an automatic merge, but the
+   `host.approval` ok handler always calls `git.merge` with
+   `method: "squash"` regardless of policy. `mergePolicy` conflates "may the
+   runtime merge" with "how" — v2 should model the two separately.

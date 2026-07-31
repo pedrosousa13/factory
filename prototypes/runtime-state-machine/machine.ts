@@ -24,6 +24,7 @@ export type Mode = "interactive" | "headless";
 export type Priority = "P0" | "P1" | "P2" | "P3";
 export type Tdd = "superpowers" | "matt";
 export type MergeMethod = "squash" | "merge" | "rebase";
+export type GateKind = "tests" | "typecheck" | "review.standards" | "review.spec";
 
 export type Caps = {
   superpowers: boolean;
@@ -70,8 +71,10 @@ export type Effect = { id: EffectId } & (
   | { k: "host.snapshot" }
   | { k: "host.report"; text: string }
   | { k: "host.offerPlanning" }
+  // ok obliges a later `answer` event carrying the reply text; err/deadline Parks.
   | { k: "host.ask"; issue: string; question: string; deadlineAt: number }
   | { k: "host.approval"; issue: string; branch: string }
+  // ok: run may proceed; err: another actor holds the run lease.
   | { k: "lease.acquire"; actor: string }
   | { k: "lease.release" }
   | { k: "tracker.candidates"; scope: Scope }
@@ -79,7 +82,9 @@ export type Effect = { id: EffectId } & (
   | { k: "tracker.claim"; issue: string; actor: string }
   | { k: "tracker.comment"; issue: string; text: string }
   | { k: "tracker.state"; issue: string; state: "started" | "parked" | "done" }
+  // drops assignee and agent-ready; the issue re-enters the pool for anyone.
   | { k: "tracker.unclaim"; issue: string }
+  // ok.data: { branches: string[] } — existing branch names, used to detect a pushed resume target.
   | { k: "git.sync" }
   | { k: "git.worktree"; issue: string; branch: string }
   | { k: "git.push"; branch: string }
@@ -88,7 +93,7 @@ export type Effect = { id: EffectId } & (
   | {
       k: "agent.check";
       issue: string;
-      kind: "tests" | "typecheck" | "review.standards" | "review.spec";
+      kind: GateKind;
     }
   | { k: "journal.append"; entry: JournalEntry }
 );
@@ -127,7 +132,8 @@ export type Work = {
   tdd: Tdd;
   question: string | null;
   deadlineAt: number | null;
-  gates: { kind: string; pass: boolean | null }[];
+  parkReason: string | null;
+  gates: { kind: GateKind; pass: boolean | null }[];
   resumed: boolean;
 };
 
@@ -218,8 +224,8 @@ function pickTdd(caps: Caps): Tdd | null {
   return null;
 }
 
-function gatesFor(caps: Caps): { kind: string; pass: boolean | null }[] {
-  const g: { kind: string; pass: boolean | null }[] = [];
+function gatesFor(caps: Caps): { kind: GateKind; pass: boolean | null }[] {
+  const g: { kind: GateKind; pass: boolean | null }[] = [];
   if (caps.tests) g.push({ kind: "tests", pass: null });
   if (caps.typecheck) g.push({ kind: "typecheck", pass: null });
   g.push({ kind: "review.standards", pass: null });
@@ -251,13 +257,18 @@ function say(s: RunState, line: string): RunState {
 }
 
 function end(s: RunState, reason: string): Out {
-  const done: RunState = say({ ...s, phase: { k: "ended", reason } }, `end: ${reason}`);
+  const done: RunState = say(
+    { ...s, phase: { k: "ended", reason }, inflight: {} },
+    `end: ${reason}`,
+  );
   return s.lease === "held"
     ? emit({ ...done, lease: "none" }, { k: "lease.release" })
     : { state: done, effects: [] };
 }
 
 export function step(prev: RunState, ev: Event): Out {
+  // An ended run is terminal: nothing it emits or receives can resurrect it.
+  if (prev.phase.k === "ended") return { state: prev, effects: [] };
   switch (ev.k) {
     case "run.start": {
       const s: RunState = {
@@ -285,10 +296,12 @@ export function step(prev: RunState, ev: Event): Out {
       const w = prev.work;
       if (!w || w.step !== "question") return { state: prev, effects: [] };
       const next: Work = { ...w, step: "implementing", question: null, deadlineAt: null };
-      return emit(say({ ...prev, work: next }, `answer received; resume ${w.issue.id}`), {
-        k: "journal.append",
-        entry: { at: prev.now, note: `answered ${w.issue.id}` },
-      });
+      return emit(
+        say({ ...prev, work: next }, `answer received; resume ${w.issue.id}`),
+        { k: "tracker.comment", issue: w.issue.id, text: ev.text },
+        { k: "journal.append", entry: { at: prev.now, note: `answered ${w.issue.id}` } },
+        { k: "agent.implement", issue: w.issue.id, branch: w.branch, tdd: w.tdd },
+      );
     }
 
     case "err":
@@ -331,8 +344,16 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
 
     case "lease.acquire": {
       const held = say({ ...s, lease: "held" }, "lease held");
-      // A resumed run already has its work; only a fresh one selects.
-      if (held.phase.k === "working") return { state: held, effects: [] };
+      // A resumed run already has its work; only a fresh one selects. The
+      // resume effect fires here, not before the lease is granted (S12).
+      if (held.phase.k === "working") {
+        const w = held.work!;
+        if (w.step === "implementing") {
+          return emit(held, { k: "agent.implement", issue: w.issue.id, branch: w.branch, tdd: w.tdd });
+        }
+        if (w.step === "branching") return emit(held, { k: "git.sync" });
+        return { state: held, effects: [] };
+      }
       return emit(held, { k: "tracker.candidates", scope: s.scope });
     }
 
@@ -352,13 +373,13 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
           tdd: pickTdd(s.caps!)!,
           question: null,
           deadlineAt: null,
+          parkReason: null,
           gates: [],
           resumed: true,
         };
         return emit(
           say({ ...s, phase: { k: "working" }, work }, `resuming ${fresh.id} at the branch step`),
           { k: "lease.acquire", actor: s.settings.actor },
-          { k: "git.sync" },
         );
       }
       if (s.phase.k !== "selecting") return { state: s, effects: [] };
@@ -383,6 +404,7 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
         tdd: pickTdd(s.caps!)!,
         question: null,
         deadlineAt: null,
+        parkReason: null,
         gates: [],
         resumed: false,
       };
@@ -438,7 +460,7 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
         return emit(s2, ...gates.map((g) => ({
           k: "agent.check" as const,
           issue: w.issue.id,
-          kind: g.kind as "tests",
+          kind: g.kind,
         })));
       }
       if (r.result === "question") {
@@ -495,7 +517,7 @@ function onOk(prev: RunState, id: EffectId, data: unknown): Out {
       const w = s.work!;
       return emit(
         s,
-        { k: "tracker.comment", issue: w.issue.id, text: w.question ?? "parked" },
+        { k: "tracker.comment", issue: w.issue.id, text: w.parkReason ?? "parked" },
         { k: "tracker.unclaim", issue: w.issue.id },
         { k: "tracker.state", issue: w.issue.id, state: "parked" },
       );
@@ -549,6 +571,7 @@ function reconcile(s: RunState, snap: Snapshot): Out {
       tdd: pickTdd(s.caps!)!,
       question: null,
       deadlineAt: null,
+      parkReason: null,
       gates: [],
       resumed: true,
     };
@@ -556,11 +579,7 @@ function reconcile(s: RunState, snap: Snapshot): Out {
       { ...s, phase: { k: "working" }, work },
       `resuming ${t.issue}${snap.journalLast ? "" : " (no journal — from git + tracker)"}`,
     );
-    return emit(
-      s2,
-      { k: "lease.acquire", actor: s.settings.actor },
-      { k: "agent.implement", issue: issue.id, branch: b.name, tdd: work.tdd },
-    );
+    return emit(s2, { k: "lease.acquire", actor: s.settings.actor });
   }
 
   // The mirror half-transition: claimed on the tracker, but no branch yet.
@@ -581,16 +600,6 @@ function reconcile(s: RunState, snap: Snapshot): Out {
     });
   }
 
-  // A half-applied Park: branch exists, unpushed, and the tracker never
-  // recorded it — crash between worktree and push. Repair by completing it.
-  if (b && !t && !b.pushed) {
-    return emit(
-      say(s, `orphan branch ${b.name}; completing the park`),
-      { k: "tracker.unclaim", issue: b.issue },
-      { k: "tracker.state", issue: b.issue, state: "parked" },
-    );
-  }
-
   return emit(say(s, "nothing to reconcile"), { k: "lease.acquire", actor: s.settings.actor });
 }
 
@@ -608,11 +617,11 @@ function emptyQueue(s: RunState): Out {
   const where = s.scope.milestone ? `milestone ${s.scope.milestone}` : "the queue";
   const text = `no unblocked agent-ready work in ${where}`;
   if (s.mode === "headless") return emit(say(s, text), { k: "host.report", text });
-  return emit(say(s, text), { k: "host.report", text }, { k: "host.offerPlanning" });
+  return emit(say(s, text), { k: "host.offerPlanning" });
 }
 
 function park(s: RunState, w: Work, why: string): Out {
-  const next: Work = { ...w, step: "parking" };
+  const next: Work = { ...w, step: "parking", parkReason: why };
   return emit(say({ ...s, work: next }, `parking ${w.issue.id}: ${why}`), {
     k: "git.push",
     branch: w.branch,

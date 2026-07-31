@@ -10,7 +10,6 @@
 import {
   initial,
   step,
-  branchName,
   type Caps,
   type Effect,
   type Event,
@@ -153,6 +152,7 @@ function dispatch(ev: Event) {
 }
 
 function startRun() {
+  const now = state.now;
   queue = [];
   state = initial();
   dispatch({
@@ -160,7 +160,7 @@ function startRun() {
     mode,
     scope: { milestone },
     settings: { actor: "me", mergePolicy: policy, answerWindowMs: 15 * MIN },
-    now: state.now || 0,
+    now,
   });
 }
 
@@ -274,7 +274,12 @@ function handleKey(key: string) {
       break;
     case "A": {
       const parked = parkedIssue(world);
-      if (parked) parked.agentReady = true;
+      if (parked) {
+        parked.agentReady = true;
+        if (world.tracker && world.tracker.issue === parked.id && world.tracker.state === "parked") {
+          world.tracker = null;
+        }
+      }
       break;
     }
     case "Q":
@@ -318,5 +323,3 @@ function handleKey(key: string) {
       process.exit(0);
   }
 }
-
-void branchName;
