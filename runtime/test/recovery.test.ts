@@ -42,6 +42,7 @@ function input(overrides: Partial<RecoveryInput>): RecoveryInput {
     originBranches: [BRANCH],
     actor: ACTOR,
     journal: null,
+    unclaimed: [],
     parkCommented: [],
     ...overrides,
   };
@@ -204,9 +205,12 @@ test("multiple claimed tickets each get an independent decision in the same call
 
   const decisions = reconcileClaims({
     claimed: [resumable, releasable, foreign],
+    unclaimed: [],
     originBranches: [resumableBranch],
     actor: ACTOR,
     journal: null,
+    unclaimed: [],
+    parkCommented: [],
   });
 
   expect(decisions).toEqual([
@@ -246,4 +250,77 @@ test("a second ticket held by the same actor resumes plainly, not as a Park", ()
   );
 
   expect(decisions[1]).toEqual({ k: "resume", ticket: "44", branch: otherBranch });
+});
+
+// ───── S19's second half: a Park that crashed AFTER release-claim (step 3)
+// leaves a ticket that appears in no `claimed` list at all — nothing above
+// this point can ever produce a decision for it, which is exactly how it
+// gets permanently stranded (unclaimed, still ready, still "started").
+
+test("unclaimed + ready + started owes exactly swap-label and set-unstarted", () => {
+  const stranded = ticket({ claimedBy: null, ready: true, state: "started" });
+
+  const decisions = reconcileClaims(
+    input({ claimed: [], unclaimed: [stranded], originBranches: [BRANCH], parkCommented: ["43"] }),
+  );
+
+  expect(decisions).toEqual([
+    { k: "resume-park", ticket: "43", branch: BRANCH, remaining: ["swap-label", "set-unstarted"] },
+  ]);
+});
+
+test("a crash after swap-label but before set-unstarted owes only set-unstarted", () => {
+  const stranded = ticket({ claimedBy: null, ready: false, state: "started" });
+
+  const decisions = reconcileClaims(
+    input({ claimed: [], unclaimed: [stranded], originBranches: [BRANCH], parkCommented: ["43"] }),
+  );
+
+  expect(decisions).toEqual([{ k: "resume-park", ticket: "43", branch: BRANCH, remaining: ["set-unstarted"] }]);
+});
+
+test("unclaimed, not ready, and unstarted (a Park that finished cleanly) owes nothing and is not dragged back into recovery", () => {
+  const finished = ticket({ claimedBy: null, ready: false, state: "unstarted" });
+
+  const decisions = reconcileClaims(
+    input({ claimed: [], unclaimed: [finished], originBranches: [BRANCH], parkCommented: ["43"] }),
+  );
+
+  expect(decisions).toEqual([]);
+});
+
+test("an ordinary unclaimed, ready, unstarted ticket sitting in the Queue is untouched", () => {
+  const queued = ticket({ claimedBy: null, ready: true, state: "unstarted" });
+
+  const decisions = reconcileClaims(input({ claimed: [], unclaimed: [queued], originBranches: [BRANCH] }));
+
+  expect(decisions).toEqual([]);
+});
+
+test("recovering the stranded case twice on the same input is idempotent", () => {
+  const stranded = ticket({ claimedBy: null, ready: true, state: "started" });
+  const args = input({ claimed: [], unclaimed: [stranded], originBranches: [BRANCH], parkCommented: ["43"] });
+
+  expect(reconcileClaims(args)).toEqual(reconcileClaims(args));
+});
+
+test("a claimed ticket and a stranded ticket in the same call each get their own decision", () => {
+  const claimedTicket = ticket({ id: "1", title: "Resumable one", claimedBy: ACTOR });
+  const claimedBranch = branchName("1", "Resumable one");
+  const stranded = ticket({ id: "2", title: "Stranded two", claimedBy: null, ready: true, state: "started" });
+  const strandedBranch = branchName("2", "Stranded two");
+
+  const decisions = reconcileClaims(
+    input({
+      claimed: [claimedTicket],
+      unclaimed: [stranded],
+      originBranches: [claimedBranch, strandedBranch],
+      parkCommented: ["2"],
+    }),
+  );
+
+  expect(decisions).toEqual([
+    { k: "resume", ticket: "1", branch: claimedBranch },
+    { k: "resume-park", ticket: "2", branch: strandedBranch, remaining: ["swap-label", "set-unstarted"] },
+  ]);
 });

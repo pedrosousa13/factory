@@ -342,6 +342,7 @@ function main(): void {
         if (recoverySnapshotAfterPush) {
           const resumeInput: RecoveryInput = {
             claimed: recoverySnapshotAfterPush.claimed,
+            unclaimed: [],
             originBranches: recoverySnapshotAfterPush.originBranches,
             actor,
             journal: null,
@@ -388,6 +389,7 @@ function main(): void {
           if (recoverySnapshotAfterComment) {
             const afterCommentInput: RecoveryInput = {
               claimed: recoverySnapshotAfterComment.claimed,
+              unclaimed: [],
               originBranches: recoverySnapshotAfterComment.originBranches,
               actor,
               journal: parkedJournal,

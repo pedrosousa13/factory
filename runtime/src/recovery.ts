@@ -20,6 +20,14 @@ export type RecoveryDecision =
 
 export type RecoveryInput = {
   claimed: TicketFacts[]; // every currently-claimed ticket the tracker reports, any actor
+  // Unclaimed tickets to check for a Park that crashed AFTER release-claim
+  // (parkPlan's step 3) but before the two tracker writes that follow it. A
+  // ticket in that window never appears in `claimed` — the claim is already
+  // gone — so without this list nothing here ever produces a decision for it
+  // and it is stranded forever (S19). Required, not optional: looking only at
+  // claimed tickets is precisely the omission that stranded them, and an
+  // optional field lets the next caller make it again by saying nothing.
+  unclaimed: TicketFacts[];
   originBranches: string[]; // branch names that exist on origin right now
   actor: string; // the current run's identity
   journal: JournalRecord | null; // this run's own last-written hint, or null if none was usable
@@ -59,7 +67,7 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
   const onOrigin = new Set(input.originBranches);
   const onTracker = new Set(input.parkCommented);
 
-  return input.claimed.map((ticket): RecoveryDecision => {
+  const claimedDecisions = input.claimed.map((ticket): RecoveryDecision => {
     if (ticket.claimedBy !== input.actor) return { k: "skip", ticket: ticket.id };
 
     const branch = branchName(ticket.id, ticket.title);
@@ -95,4 +103,36 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
     });
     return { k: "resume-park", ticket: ticket.id, branch, remaining };
   });
+
+  // S19's second half: release-claim is parkPlan's step 3, so a ticket that
+  // is unclaimed and still NOT "unstarted" can only be sitting mid-Park —
+  // nothing else in the protocol drops the claim while leaving the ticket
+  // "started". A finished Park's last step sets state to "unstarted", and an
+  // ordinary ticket nobody has touched starts there too, so state=unstarted
+  // is exactly the signal that there is nothing left to do; no journal is
+  // needed to tell this apart from an in-progress ticket, because being
+  // unclaimed and non-unstarted is not a state any other flow produces.
+  //
+  // The claim is gone, so "reverse to a plain resume" (the claimed path's
+  // fallback when no journaled reason survives) has nothing to resume under
+  // — there is no actor to hand the work back to. That fallback does not
+  // apply here: by park.ts's prefix invariant, release-claim (step 3) cannot
+  // have run before post-comment (step 2), so the durable comment is always
+  // already posted by the time a ticket can be unclaimed-and-started. This
+  // path only ever completes the remaining Park writes, never reverses one.
+  const strandedDecisions = (input.unclaimed ?? [])
+    .filter((ticket) => ticket.claimedBy === null && ticket.state !== "unstarted")
+    .map((ticket): RecoveryDecision => {
+      const branch = branchName(ticket.id, ticket.title);
+      const remaining = remainingPark({
+        branchPushed: onOrigin.has(branch),
+        commentPosted: onTracker.has(ticket.id),
+        claimReleased: true,
+        labelSwapped: !ticket.ready,
+        stateUnstarted: ticket.state === "unstarted",
+      });
+      return { k: "resume-park", ticket: ticket.id, branch, remaining };
+    });
+
+  return [...claimedDecisions, ...strandedDecisions];
 }
