@@ -143,3 +143,49 @@ test("inserting the missing marker puts it immediately after the H1", () => {
   if (got.k !== "missing-sections") throw new Error("expected missing-sections");
   expect(applyMissing(current, got.missing)).toBe(TEMPLATE);
 });
+
+// ───── the marker is the only sub-section retrofit (SKILL.md:244, :249-253)
+
+test("a line the maintainer deleted from a section they still have is an other-difference", () => {
+  // Not an omission an older stamp left behind — a deletion they chose, so they
+  // keep the choice to adopt, keep theirs, or merge by hand.
+  const current = TEMPLATE.replace("Conventions body.\n\n", "");
+  expect(diffDoc(current, TEMPLATE).k).toBe("other-difference");
+});
+
+test("a whole paragraph deleted from a shared section is still an other-difference", () => {
+  const withProse = TEMPLATE.replace(
+    "Conventions body.",
+    "Conventions body.\n\nA second paragraph.\n\nA third paragraph.",
+  );
+  const current = withProse.replace("A second paragraph.\n\n", "");
+  expect(diffDoc(current, withProse).k).toBe("other-difference");
+});
+
+test("a section the document lacks entirely is an insert", () => {
+  const current = TEMPLATE.replace(/## Wayfinding operations\n\nWayfinding body\.\n\n/, "");
+  const got = diffDoc(current, TEMPLATE);
+  if (got.k !== "missing-sections") throw new Error("expected missing-sections");
+  expect(got.missing.map((s) => s.k)).toEqual(["insert"]);
+});
+
+test("a section present but lacking the marker is a replace, not an insert", () => {
+  // The document already carries this heading — calling it missing would tell
+  // the maintainer a falsehood, and splicing it in would emit the H1 twice.
+  const current = TEMPLATE.replace("<!-- factory:tracker kind=github -->\n\n", "");
+  const got = diffDoc(current, TEMPLATE);
+  if (got.k !== "missing-sections") throw new Error("expected missing-sections");
+  expect(got.missing.map((s) => s.k)).toEqual(["replace"]);
+});
+
+// ───── applyMissing does not crash on a partial list
+
+test("applying only some of the missing sections returns a document instead of throwing", () => {
+  let current = TEMPLATE.replace(/## Wayfinding operations\n\nWayfinding body\.\n\n/, "");
+  current = current.replace(/## Reachability\n\nReachability body\.\n/, "");
+  const got = diffDoc(current, TEMPLATE);
+  if (got.k !== "missing-sections") throw new Error("expected missing-sections");
+  const applied = applyMissing(current, [got.missing[1]]);
+  expect(applied).toContain("## Reachability");
+  expect(applied).not.toContain("## Wayfinding operations");
+});

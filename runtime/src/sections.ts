@@ -2,7 +2,7 @@
 // already-stamped document against the rendered template it came from, so
 // migration can retrofit conventions added since the stamp without
 // re-litigating a file the maintainer already accepted. Three outcomes —
-// identical, lacking whole chunks the template carries, or differing in a way
+// identical, lacking whole sections the template carries, or differing in a way
 // only the maintainer can judge. No fs, no process, no clock: callers pass in
 // the two texts they already have.
 //
@@ -24,8 +24,18 @@ export type Section = {
   body: string;
 };
 
-/** A template section plus the index it occupies in the template's section order. */
-export type PositionedSection = Section & { index: number };
+/**
+ * A template section, the index it occupies in the template's section order, and
+ * what applying it does to the current document. The two are different offers to
+ * the maintainer, so a consumer must not print them with one wording:
+ *
+ * - `insert` — the document lacks this section entirely; applying adds it.
+ * - `replace` — the document has this section but lacks the tracker marker
+ *   inside it (SKILL.md:249-253); applying swaps the template's version in for
+ *   the one already there. A consumer that splices sections itself must drop the
+ *   section being replaced, or it emits the heading twice.
+ */
+export type PositionedSection = Section & { index: number; k: "insert" | "replace" };
 
 export type DocDiff =
   | { k: "matches" }
@@ -95,9 +105,9 @@ function closesFence(line: string, fence: string): boolean {
  *
  * `missing-sections` is the narrow case SKILL.md:235-253 describes: the current
  * document's headings are a subsequence of the template's, and every shared
- * section either matches or lacks whole lines the template carries — the
- * signature of a repo stamped by an older Factory. Anything else is an
- * `other-difference`: show it, never overwrite.
+ * section either matches or lacks nothing but the tracker marker — the signature
+ * of a repo stamped by an older Factory. Anything else is an `other-difference`:
+ * show it, never overwrite.
  */
 export function diffDoc(current: string, rendered: string): DocDiff {
   const cur = parseSections(current);
@@ -112,27 +122,24 @@ export function diffDoc(current: string, rendered: string): DocDiff {
   }
   const mapped = lined.mapped;
 
-  // Template indices whose current counterpart is there but incomplete — the
-  // absent tracker marker inside an otherwise-untouched H1 section is this
-  // case, and it takes the same path as a wholly absent section.
-  const incomplete = new Set<number>();
+  // Template indices whose current counterpart is there but lacks the tracker
+  // marker — the one sub-section retrofit SKILL.md:249-253 licenses by name.
+  const markerless = new Set<number>();
   for (let i = 0; i < cur.length; i++) {
     const want = tpl[mapped[i]];
     if (sameBody(cur[i].body, want.body)) continue;
-    if (lacksLines(cur[i].body, want.body)) {
-      incomplete.add(mapped[i]);
+    if (lacksOnlyMarker(cur[i].body, want.body)) {
+      markerless.add(mapped[i]);
       continue;
     }
-    return {
-      k: "other-difference",
-      detail: `${label(want)} differs from the template beyond whole missing lines`,
-    };
+    return { k: "other-difference", detail: `${label(want)} differs from the template` };
   }
 
   const present = new Set(mapped);
   const missing: PositionedSection[] = [];
   for (let t = 0; t < tpl.length; t++) {
-    if (!present.has(t) || incomplete.has(t)) missing.push({ ...tpl[t], index: t });
+    if (!present.has(t)) missing.push({ ...tpl[t], index: t, k: "insert" });
+    else if (markerless.has(t)) missing.push({ ...tpl[t], index: t, k: "replace" });
   }
   if (missing.length === 0) return { k: "matches" };
   return { k: "missing-sections", missing };
@@ -168,22 +175,47 @@ function sameBody(a: string, b: string): boolean {
   return a.trimEnd() === b.trimEnd();
 }
 
+// The one-line marker the stamp writes immediately after the H1 of a tracker
+// adapter doc. Same shape marker.ts reads, anchored to a whole line: only a
+// line that is nothing but the marker can be retrofitted this way.
+const TRACKER_MARKER_LINE = /^<!--\s*factory:tracker\s+kind=[\w-]+\s*-->$/;
+
 /**
- * True when the body lacks whole lines the template's body carries and changes
- * nothing else — the within-a-section form of "missing sections". Blank lines
- * are ignored: inserting a block brings its blank separators with it.
+ * True when the only thing the body lacks is the tracker marker.
+ *
+ * This is deliberately narrow. SKILL.md:235 scopes the middle case to "lacking
+ * whole sections the template carries" and SKILL.md:244 sends "any difference
+ * beyond cleanly missing sections" to the general case. SKILL.md:249-253 carves
+ * out exactly one sub-section exception, by name and by size — the tracker
+ * marker, "rather than falling through to the whole-file diff below over one
+ * absent line". A maintainer who deleted a label row, a bullet, or a paragraph
+ * from a section they still have is not missing that section: calling it missing
+ * would mislabel their edit as an omission and offer only add-or-not, when
+ * SKILL.md:254-256 grants them adopt, keep theirs, or merge by hand.
  */
-function lacksLines(body: string, want: string): boolean {
-  const have = contentLines(body);
-  const need = contentLines(want);
-  if (have.length >= need.length) return false;
-  let n = 0;
-  for (const line of have) {
-    while (n < need.length && need[n] !== line) n++;
-    if (n >= need.length) return false;
-    n++;
+function lacksOnlyMarker(body: string, want: string): boolean {
+  const absent = absentLines(contentLines(body), contentLines(want));
+  if (absent === null || absent.length === 0) return false;
+  return absent.every((line) => TRACKER_MARKER_LINE.test(line.trim()));
+}
+
+/**
+ * The template lines the body does not carry, in template order, or null when
+ * the body is not a subsequence of the template's — that is, when it carries a
+ * line of its own rather than merely lacking some. Blank lines are ignored:
+ * inserting a line brings its blank separators with it.
+ */
+function absentLines(have: string[], need: string[]): string[] | null {
+  const absent: string[] = [];
+  let h = 0;
+  for (const line of need) {
+    if (h < have.length && have[h] === line) {
+      h++;
+      continue;
+    }
+    absent.push(line);
   }
-  return true;
+  return h === have.length ? absent : null;
 }
 
 function contentLines(text: string): string[] {
@@ -201,6 +233,12 @@ function contentLines(text: string): string[] {
  * everywhere else. Rebuilding rather than splicing is what makes the result
  * byte-identical to the rendered template, so a second `diffDoc` returns
  * `matches` and the run converges (SKILL.md:236-241).
+ *
+ * Precondition: `missing` is the whole list `diffDoc` returned for this same
+ * document, since the indices are positions in the finished document and only
+ * line up as a set. Applying a subset still returns a document — the remaining
+ * sections land as near their template positions as the shorter document allows
+ * — but it is not byte-identical to the template, so it will not converge.
  */
 export function applyMissing(current: string, missing: PositionedSection[]): string {
   const cur = parseSections(current);
@@ -210,12 +248,15 @@ export function applyMissing(current: string, missing: PositionedSection[]): str
   let m = 0;
 
   while (c < cur.length || m < inserts.length) {
-    if (m < inserts.length && inserts[m].index <= out.length) {
+    // Take the template's section when its position falls due, and when the
+    // current document has run out of sections to place before it.
+    const due = m < inserts.length && (inserts[m].index <= out.length || c >= cur.length);
+    if (due) {
       const next = inserts[m++];
       out.push({ heading: next.heading, level: next.level, body: next.body });
-      // A section the template completes rather than adds carries the same
-      // heading as the one it replaces — drop that one instead of duplicating it.
-      if (c < cur.length && cur[c].heading === next.heading) c++;
+      // A replacement stands in for the section already there — step over it,
+      // or the heading comes out twice.
+      if (next.k === "replace" && c < cur.length) c++;
       continue;
     }
     out.push(cur[c++]);
