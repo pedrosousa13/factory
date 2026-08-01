@@ -1,4 +1,6 @@
 import { test, expect } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { preflight, compareStamp } from "../src/preflight";
 import type { PreflightFacts } from "../src/preflight";
 import type { FactoryConfig } from "../src/config";
@@ -301,9 +303,11 @@ test("a legacy v1 repo's three failures: config and marker name factory-adopt, t
   expect(migrateFixes[0].fix).toMatch(/legacy v1/);
 });
 
-test("no fix names an entry point the plugin does not ship — no 'migration step' to run", () => {
-  // Nothing applies a migration yet (PROTOCOL.md "## Migration", issue #50),
-  // so no failure may tell a maintainer to run one.
+test("every Factory entry point a fix names is one the plugin ships", () => {
+  // A fix is only actionable if the thing it tells the maintainer to run
+  // exists. This used to assert that no fix said "migration step", because
+  // nothing applied a migration yet; /factory-migrate ships now, so the
+  // durable claim is the one about entry points, checked against disk.
   const cases: (() => PreflightFacts)[] = [
     () => {
       const f = greenFacts();
@@ -333,13 +337,21 @@ test("no fix names an entry point the plugin does not ship — no 'migration ste
     },
   ];
 
+  const named = new Set<string>();
   for (const build of cases) {
     const result = preflight(build());
     expect(result.ok).toBe(false);
     if (result.ok) return;
     for (const failure of result.failures) {
-      expect(failure.fix).not.toMatch(/migration step/i);
+      for (const match of failure.fix.matchAll(/\/(factory(?:-[a-z]+)*)\b/g)) named.add(match[1]);
     }
+  }
+
+  // The cases above must actually name some — an empty set would pass the
+  // loop below while proving nothing.
+  expect(named.size).toBeGreaterThan(0);
+  for (const skill of named) {
+    expect(existsSync(join(import.meta.dir, "../../skills", skill, "SKILL.md"))).toBe(true);
   }
 });
 
