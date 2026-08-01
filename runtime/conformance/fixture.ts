@@ -28,6 +28,7 @@ export type Ticket = {
   claimedBy: string | null;
   blockedBy: string[];
   body: string;
+  labels: string[];
 };
 
 const TICKETS: Ticket[] = [
@@ -42,6 +43,7 @@ const TICKETS: Ticket[] = [
     claimedBy: null,
     blockedBy: [],
     body: "Fixture ticket: the older of the two P1s — the expected deterministic pick.",
+    labels: [],
   },
   {
     id: "T-2",
@@ -54,6 +56,7 @@ const TICKETS: Ticket[] = [
     claimedBy: null,
     blockedBy: [],
     body: "Fixture ticket: the newer of the two P1s.",
+    labels: [],
   },
   {
     id: "T-3",
@@ -66,6 +69,7 @@ const TICKETS: Ticket[] = [
     claimedBy: null,
     blockedBy: ["T-1"],
     body: "Fixture ticket: highest urgency, but blocked by T-1.",
+    labels: [],
   },
 ];
 
@@ -82,6 +86,7 @@ milestone: ${t.milestone ?? "null"}
 ready: ${t.ready}
 claimedBy: ${t.claimedBy ?? "null"}
 blockedBy: [${t.blockedBy.join(", ")}]
+labels: [${t.labels.join(", ")}]
 ---
 
 ${t.body}
@@ -141,6 +146,67 @@ export const EXTRA_TICKETS: Ticket[] = [
     claimedBy: null,
     blockedBy: ["T-9"],
     body: "Fixture ticket: blocked by an invisible id (T-9, no file) — forces the needsRead / fail-safe path live.",
+    labels: [],
+  },
+  // Slice 5: two planning-artifact tickets, so a live tracker.openIssues
+  // ask and applyInvariants' planning-namespace exclusion (PRD §4) have real
+  // rows to prove against, not only unit-test input. T-6 is deliberately
+  // `ready: true` — the exclusion has to hold even for a planning artifact
+  // that otherwise looks pickable, or the fixture never tests the hard case.
+  {
+    id: "T-6",
+    title: "Wayfinder map planning artifact fixture",
+    state: "unstarted",
+    urgency: "P2",
+    createdAt: "2026-07-28T10:00:00Z",
+    milestone: null,
+    ready: true,
+    claimedBy: null,
+    blockedBy: [],
+    body: "Fixture ticket: a wayfinder:map planning artifact, deliberately ready — applyInvariants must exclude it from the Queue regardless.",
+    labels: ["wayfinder:map"],
+  },
+  {
+    id: "T-7",
+    title: "Planning PRD artifact fixture",
+    state: "unstarted",
+    urgency: "P2",
+    createdAt: "2026-07-29T10:00:00Z",
+    milestone: null,
+    ready: false,
+    claimedBy: null,
+    blockedBy: [],
+    body: "Fixture ticket: a planning:prd planning artifact.",
+    labels: ["planning:prd"],
+  },
+  // Slice 5: needs-info and ready-for-human tickets, milestone "M1", so the
+  // empty-Queue breakdown (PROTOCOL.md:213-217) and a milestone-scoped
+  // tracker.milestoneCounts ask both have something real to count.
+  {
+    id: "T-8",
+    title: "Needs-info fixture",
+    state: "unstarted",
+    urgency: "P2",
+    createdAt: "2026-07-30T10:00:00Z",
+    milestone: "M1",
+    ready: false,
+    claimedBy: null,
+    blockedBy: [],
+    body: "Fixture ticket: carries the needs-info label so the empty-Queue breakdown has something to count.",
+    labels: ["needs-info"],
+  },
+  {
+    id: "T-10",
+    title: "Ready-for-human fixture",
+    state: "started",
+    urgency: "P2",
+    createdAt: "2026-07-31T10:00:00Z",
+    milestone: "M1",
+    ready: false,
+    claimedBy: null,
+    blockedBy: [],
+    body: "Fixture ticket: carries the ready-for-human label so the empty-Queue breakdown has something to count.",
+    labels: ["ready-for-human"],
   },
 ];
 
@@ -161,6 +227,7 @@ export const CONTENTION_TICKETS: Ticket[] = [
     claimedBy: CONTENTION_ACTOR,
     blockedBy: [],
     body: "Fixture ticket: pre-claimed by a different actor, so a claim attempt must come back taken, not claimed.",
+    labels: [],
   },
 ];
 
@@ -176,6 +243,7 @@ export const TICKET_FACTS_SHAPE = `type TicketFacts = {
   state: "unstarted" | "started" | "parked" | "done" | "canceled";
   claimedBy: string | null;
   blockedBy: string[]; // ids of still-open tickets blocking this one
+  labels: string[]; // every label the ticket carries, including any planning-namespace label
 };`;
 
 export const CANDIDATES_SHAPE = `${TICKET_FACTS_SHAPE}
@@ -196,10 +264,29 @@ export const COMMENT_SHAPE = `type CommentAnswer = { result: "ok" };`;
 
 export const SET_READY_SHAPE = `type SetReadyAnswer = { result: "ok" };`;
 
+// Byte-identical to tracker.ts's `export type OpenIssuesAnswer` declaration —
+// see runtime/test/fixture.test.ts's regression test. Deliberately NOT
+// prefixed with TICKET_FACTS_SHAPE (unlike CANDIDATES_SHAPE/READ_SHAPE above):
+// a caller building a prompt composes `${TICKET_FACTS_SHAPE}\n${OPEN_ISSUES_SHAPE}`
+// itself, so this constant alone can stay byte-identical to the source line.
+export const OPEN_ISSUES_SHAPE = `export type OpenIssuesAnswer = { result: "ok"; tickets: TicketFacts[] };`;
+
+// Slice 5: milestone state counts (tracker.milestoneCounts), spelled out
+// concretely rather than naming IssueState, matching VERIFY_SHAPE's style in
+// sweep.ts.
+export const MILESTONE_COUNTS_SHAPE = `type MilestoneCountsAnswer = { result: "ok"; counts: { unstarted: number; started: number; parked: number; done: number; canceled: number } };`;
+
 // ───────────────────────────────────────────────────────────── ask questions
 
 export const CANDIDATES_QUESTION =
   "List every ticket in this project's tracker that is ready, unstarted, and unclaimed, with full facts for each. There is no milestone scope in play right now — list tickets from every milestone.";
+
+export const OPEN_ISSUES_QUESTION =
+  "List every still-open ticket in this project's tracker, whatever its labels and whether or not it is ready — with full facts for each, including every label it carries. There is no milestone scope in play right now — list tickets from every milestone.";
+
+export function milestoneCountsQuestion(milestone: string): string {
+  return `Count every ticket in this project's tracker whose milestone is "${milestone}", broken down by state: how many are unstarted, started, parked, done, and canceled.`;
+}
 
 export function readQuestion(id: string): string {
   return `Give me the full facts, body, and comments for ticket ${id} in this project's tracker.`;
@@ -305,6 +392,8 @@ export function readFixtureTicket(id: string): TicketFacts {
   };
   const blockedByRaw = field("blockedBy").trim().replace(/^\[/, "").replace(/\]$/, "").trim();
   const blockedBy = blockedByRaw.length > 0 ? blockedByRaw.split(",").map((s) => s.trim()) : [];
+  const labelsRaw = field("labels").trim().replace(/^\[/, "").replace(/\]$/, "").trim();
+  const labels = labelsRaw.length > 0 ? labelsRaw.split(",").map((s) => s.trim()) : [];
   const milestone = field("milestone");
   const claimedBy = field("claimedBy");
   return {
@@ -317,6 +406,7 @@ export function readFixtureTicket(id: string): TicketFacts {
     state: field("state") as IssueState,
     claimedBy: claimedBy === "null" ? null : claimedBy,
     blockedBy,
+    labels,
   };
 }
 
