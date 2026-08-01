@@ -200,11 +200,11 @@ function main(): void {
   steps.push(step("verify file: state=started", startedVerified ? "match" : "mismatch", startedVerified, `file says state=${startedFile}`));
   if (!startedVerified) fail();
 
-  // ── unclaim + reset to unstarted (fixture reset hygiene). tracker.setState's
-  // ask vocabulary only targets started|parked|done|canceled — "unstarted" is
-  // a ticket's initial state, not a setState destination — so the unclaim is
-  // a real ask against the contract, and the state rewind is a direct fixture
-  // patch (fs), not a further ask.
+  // ── unclaim + reset to unstarted (fixture reset hygiene). The unclaim is a
+  // real ask against the contract; the state rewind is a direct fixture patch
+  // (fs), not a further ask, because rewinding this host's own setup is not a
+  // capability under test here. (tracker.setState does accept "unstarted" now
+  // — slice 4 added it for Park — but using it here would prove nothing.)
   const unclaimPrompt = buildPrompt(unclaimQuestion(picked.id), phrasebook, UNCLAIM_SHAPE);
   const unclaimOutcome = askWithRetry(runner, { k: "tracker.unclaim", issue: picked.id }, unclaimPrompt);
   if (unclaimOutcome.status === "failed") {

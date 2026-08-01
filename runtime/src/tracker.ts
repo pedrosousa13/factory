@@ -37,8 +37,15 @@ export type Ask =
   | { k: "tracker.candidates"; milestone: string | null } // "list ready, unstarted, unclaimed tickets (in this milestone)"
   | { k: "tracker.read"; issue: string } // "give me the full facts + body + comments for one ticket"
   | { k: "tracker.claim"; issue: string; actor: string } // "claim this ticket for actor"
-  | { k: "tracker.setState"; issue: string; state: "started" | "parked" | "done" | "canceled" } // "move ticket to state"
+  // "unstarted" is here because Park needs it: PROTOCOL's Park step 3 sends a
+  // ticket back to an unstarted state, and pick.ts's Queue eligibility accepts
+  // nothing else, so without it Parked work could never be picked up again.
+  | { k: "tracker.setState"; issue: string; state: "unstarted" | "started" | "parked" | "done" | "canceled" } // "move ticket to state"
   | { k: "tracker.unclaim"; issue: string } // "release the claim; ticket re-enters the pool"
+  // Park's fourth step. Without it the label swap PROTOCOL requires could not
+  // be dispatched at all: no other ask touches the agent-ready label, so a
+  // Parked ticket would keep advertising itself as ready for a worker.
+  | { k: "tracker.setReady"; issue: string; ready: boolean } // "add or drop the agent-ready label"
   | { k: "tracker.comment"; issue: string; text: string } // "append this comment"
   | { k: "tracker.milestones" } // "list milestones in stable order"
   | { k: "tracker.milestoneCounts"; milestone: string } // "count open tickets in milestone, by state"
@@ -54,6 +61,7 @@ export type ReadAnswer =
 export type ClaimAnswer = { result: "claimed" } | { result: "taken"; by: string };
 export type SetStateAnswer = { result: "ok" };
 export type UnclaimAnswer = { result: "ok" };
+export type SetReadyAnswer = { result: "ok" };
 export type CommentAnswer = { result: "ok" };
 export type MilestonesAnswer = { result: "ok"; milestones: string[] };
 /** Open tickets only — done/canceled tickets don't get counted here. */
@@ -70,6 +78,7 @@ export type Answer = {
   "tracker.claim": ClaimAnswer;
   "tracker.setState": SetStateAnswer;
   "tracker.unclaim": UnclaimAnswer;
+  "tracker.setReady": SetReadyAnswer;
   "tracker.comment": CommentAnswer;
   "tracker.milestones": MilestonesAnswer;
   "tracker.milestoneCounts": MilestoneCountsAnswer;
@@ -184,6 +193,7 @@ export function check(
 
     case "tracker.setState":
     case "tracker.unclaim":
+    case "tracker.setReady":
     case "tracker.comment":
       if (result !== "ok") return bad(`result: ${JSON.stringify(result)} is not ok`);
       return ok({ result: "ok" });
