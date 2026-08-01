@@ -10,7 +10,7 @@ Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's
 current version — to the plugin's current `stampVersion`.
 
 **Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "## Migration" section in
-full before doing anything else** (`PROTOCOL.md:639-687`). It is the spec
+full before doing anything else** (`PROTOCOL.md:639-689`). It is the spec
 this skill executes; the sentences below point at it rather than restate
 it. `${CLAUDE_PLUGIN_ROOT}/runtime/src/stamp.ts`, `sections.ts`, and
 `migrate.ts` are that spec's executable form — this skill never runs them
@@ -35,7 +35,7 @@ Before writing anything, read two files and classify the repo:
   `## Factory loop operations` heading, matched exactly, on its own line?
 
 Classify per `PROTOCOL.md`'s stamp check (`PROTOCOL.md:87-98`) and its
-newer-stamp block (`PROTOCOL.md:686-687`):
+newer-stamp block (`PROTOCOL.md:688-689`):
 
 1. **`config.json` exists, parses, and its `stampVersion` matches the
    plugin's current version.** Nothing pending. Say so and stop — this
@@ -51,7 +51,7 @@ newer-stamp block (`PROTOCOL.md:686-687`):
    run `/factory-adopt` instead, and stop.
 5. **`config.json` exists, parses, and its `stampVersion` is newer than
    the plugin's current version.** The plugin never downgrades files
-   (`PROTOCOL.md:686-687`). Tell the maintainer to update the Factory
+   (`PROTOCOL.md:688-689`). Tell the maintainer to update the Factory
    plugin, write nothing, and stop — this is not a migration this skill
    can run.
 
