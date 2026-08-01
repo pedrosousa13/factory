@@ -7,6 +7,7 @@ import type { JournalRecord } from "../src/journal";
 import { waitDecision } from "../src/answerwait";
 import { reconcileClaims } from "../src/recovery";
 import type { TicketFacts } from "../src/tracker";
+import { branchName } from "../src/pick";
 
 // ───── scratch repo root helper (a plain temp dir — no git needed here)
 
@@ -187,21 +188,6 @@ describe("startClaim", () => {
 // downstream can tell a finished cycle's leftover journal from a live one
 // unless the journal is cleared at claim time. These pin that it is.
 
-function ticketFacts(id: string): TicketFacts {
-  return {
-    id,
-    title: id,
-    urgency: "P2",
-    createdAt: "2026-07-30T00:00:00Z",
-    milestone: null,
-    ready: false,
-    state: "unstarted", // a Park that finished cleanly, per recovery.test.ts
-    claimedBy: null,
-    blockedBy: [],
-    labels: [],
-  };
-}
-
 describe("the claim-time overwrite invariant", () => {
   test("a new claim erases the previous cycle's open question", () => {
     const dir = scratchDir();
@@ -224,23 +210,45 @@ describe("the claim-time overwrite invariant", () => {
     }
   });
 
+  // Claimed path, not the unclaimed/stranded path: recovery.ts only ever
+  // reads `journal` inside claimed.map's parkInterrupted check, and that
+  // check requires journal.step === PARK_STEP ("park"). bin/park.ts:163-169
+  // writes step: "ask" while a question is outstanding — PARK_STEP is
+  // written later (park.ts:447), once the Park itself starts — so a
+  // finished cycle's leftover "ask" journal must NOT read as an interrupted
+  // Park: it plainly resumes.
   test("a finished Park's leftover journal does not resurrect the Park in recovery", () => {
+    const actor = "factory-loop";
+    const title = "Ask, Park, and Recovery";
+    const branch = branchName("T-1", title);
+    const claimedTicket: TicketFacts = {
+      id: "T-1",
+      title,
+      urgency: "P2",
+      createdAt: "2026-07-30T00:00:00Z",
+      milestone: null,
+      ready: true,
+      state: "started",
+      claimedBy: actor,
+      blockedBy: [],
+      labels: [],
+    };
     const leftover: JournalRecord = {
       ticket: "T-1",
-      branch: "issue-1",
-      step: "ask",
+      branch,
+      step: "ask", // not PARK_STEP — the question step, per bin/park.ts:166
       openQuestion: { text: "which tracker?", askedAt: "2026-08-01T10:00:00Z" },
       workers: [],
     };
     const decisions = reconcileClaims({
-      claimed: [], // tracker: nobody holds T-1
-      unclaimed: [ticketFacts("T-1")],
-      originBranches: ["issue-1"],
-      actor: "factory-loop",
+      claimed: [claimedTicket],
+      unclaimed: [],
+      originBranches: [branch],
+      actor,
       journal: leftover,
       parkCommented: ["T-1"], // the Park's comment is on the tracker
     });
-    for (const d of decisions) expect(d.k).not.toBe("resume-park");
+    expect(decisions).toEqual([{ k: "resume", ticket: "T-1", branch }]);
   });
 });
 
