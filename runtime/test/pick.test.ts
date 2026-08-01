@@ -66,13 +66,16 @@ test("branchName uses a slash between id and slug, not a hyphen", () => {
 // ───── applyInvariants
 
 test("applyInvariants keeps a ticket that satisfies every invariant", () => {
-  const result = applyInvariants({ candidates: [ticket()], milestone: null });
+  const result = applyInvariants({ candidates: [ticket()], scope: { k: "everything" } });
   expect(result.eligible.length).toBe(1);
   expect(result.excluded.length).toBe(0);
 });
 
 test("applyInvariants excludes a not-ready ticket and says why", () => {
-  const result = applyInvariants({ candidates: [ticket({ ready: false })], milestone: null });
+  const result = applyInvariants({
+    candidates: [ticket({ ready: false })],
+    scope: { k: "everything" },
+  });
   expect(result.eligible.length).toBe(0);
   expect(result.excluded.length).toBe(1);
   expect(result.excluded[0].id).toBe("1");
@@ -80,7 +83,10 @@ test("applyInvariants excludes a not-ready ticket and says why", () => {
 });
 
 test("applyInvariants excludes a ticket that isn't unstarted and says why", () => {
-  const result = applyInvariants({ candidates: [ticket({ state: "started" })], milestone: null });
+  const result = applyInvariants({
+    candidates: [ticket({ state: "started" })],
+    scope: { k: "everything" },
+  });
   expect(result.excluded.length).toBe(1);
   expect(result.excluded[0].why).toMatch(/started/);
 });
@@ -88,7 +94,7 @@ test("applyInvariants excludes a ticket that isn't unstarted and says why", () =
 test("applyInvariants excludes an already-claimed ticket and says why", () => {
   const result = applyInvariants({
     candidates: [ticket({ claimedBy: "alice" })],
-    milestone: null,
+    scope: { k: "everything" },
   });
   expect(result.excluded.length).toBe(1);
   expect(result.excluded[0].why).toMatch(/alice/);
@@ -97,17 +103,17 @@ test("applyInvariants excludes an already-claimed ticket and says why", () => {
 test("applyInvariants excludes a ticket outside the milestone scope and says why", () => {
   const result = applyInvariants({
     candidates: [ticket({ milestone: "m1" })],
-    milestone: "m2",
+    scope: { k: "milestone", milestone: "m2" },
   });
   expect(result.excluded.length).toBe(1);
   expect(result.excluded[0].why).toMatch(/m1/);
   expect(result.excluded[0].why).toMatch(/m2/);
 });
 
-test("applyInvariants: null milestone scope means all milestones are in scope", () => {
+test("applyInvariants: everything scope means all milestones are in scope", () => {
   const result = applyInvariants({
     candidates: [ticket({ milestone: "m1" }), ticket({ id: "2", milestone: null })],
-    milestone: null,
+    scope: { k: "everything" },
   });
   expect(result.eligible.length).toBe(2);
   expect(result.excluded.length).toBe(0);
@@ -116,7 +122,7 @@ test("applyInvariants: null milestone scope means all milestones are in scope", 
 test("applyInvariants collects every failing reason for a ticket that fails multiple invariants", () => {
   const result = applyInvariants({
     candidates: [ticket({ ready: false, state: "started", claimedBy: "bob" })],
-    milestone: null,
+    scope: { k: "everything" },
   });
   expect(result.excluded.length).toBe(1);
   expect(result.excluded[0].why).toMatch(/not ready/);
@@ -127,10 +133,77 @@ test("applyInvariants collects every failing reason for a ticket that fails mult
 test("applyInvariants filters multiple candidates independently", () => {
   const result = applyInvariants({
     candidates: [ticket({ id: "1" }), ticket({ id: "2", ready: false })],
-    milestone: null,
+    scope: { k: "everything" },
   });
   expect(result.eligible.map((t) => t.id)).toEqual(["1"]);
   expect(result.excluded.map((e) => e.id)).toEqual(["2"]);
+});
+
+test("a planning artifact never enters the Queue, even carrying ready-for-agent", () => {
+  const got = applyInvariants({
+    candidates: [ticket({ id: "1", ready: true, labels: ["wayfinder:map"] })],
+    scope: { k: "everything" },
+  });
+  expect(got.eligible).toEqual([]);
+  expect(got.excluded[0].why).toContain("planning artifact");
+});
+
+test("a new artifact kind inherits the Queue exclusion by naming itself in the namespace", () => {
+  const got = applyInvariants({
+    candidates: [ticket({ id: "1", ready: true, labels: ["planning:spec"] })],
+    scope: { k: "everything" },
+  });
+  expect(got.eligible).toEqual([]);
+});
+
+test("milestone scope is fail-open: an issue with no milestone stays in scope", () => {
+  const got = applyInvariants({
+    candidates: [ticket({ id: "1", ready: true, milestone: null })],
+    scope: { k: "milestone", milestone: "m1" },
+  });
+  expect(got.eligible.map((t) => t.id)).toEqual(["1"]);
+});
+
+test("milestone scope excludes an issue belonging to a different milestone", () => {
+  const got = applyInvariants({
+    candidates: [ticket({ id: "1", ready: true, milestone: "m2" })],
+    scope: { k: "milestone", milestone: "m1" },
+  });
+  expect(got.eligible).toEqual([]);
+  expect(got.excluded[0].why).toContain("m1");
+});
+
+test("(No milestone) scope admits only issues carrying no milestone", () => {
+  const got = applyInvariants({
+    candidates: [
+      ticket({ id: "1", ready: true, milestone: null }),
+      ticket({ id: "2", ready: true, milestone: "m1" }),
+    ],
+    scope: { k: "no-milestone" },
+  });
+  expect(got.eligible.map((t) => t.id)).toEqual(["1"]);
+});
+
+test("everything scope admits issues from every milestone and issues with none", () => {
+  const got = applyInvariants({
+    candidates: [
+      ticket({ id: "1", ready: true, milestone: null }),
+      ticket({ id: "2", ready: true, milestone: "m1" }),
+      ticket({ id: "3", ready: true, milestone: "m2" }),
+    ],
+    scope: { k: "everything" },
+  });
+  expect(got.eligible.map((t) => t.id)).toEqual(["1", "2", "3"]);
+});
+
+test("a ticket failing scope and namespace reports both reasons, not the first", () => {
+  const got = applyInvariants({
+    candidates: [ticket({ id: "1", ready: false, labels: ["wayfinder:task"], milestone: "m2" })],
+    scope: { k: "milestone", milestone: "m1" },
+  });
+  expect(got.excluded[0].why).toContain("not ready");
+  expect(got.excluded[0].why).toContain("planning artifact");
+  expect(got.excluded[0].why).toContain("m1");
 });
 
 // ───── resolveBlocking
