@@ -104,14 +104,17 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
     return { k: "resume-park", ticket: ticket.id, branch, remaining };
   });
 
-  // S19's second half: release-claim is parkPlan's step 3, so a ticket that
-  // is unclaimed and still NOT "unstarted" can only be sitting mid-Park —
-  // nothing else in the protocol drops the claim while leaving the ticket
-  // "started". A finished Park's last step sets state to "unstarted", and an
-  // ordinary ticket nobody has touched starts there too, so state=unstarted
-  // is exactly the signal that there is nothing left to do; no journal is
-  // needed to tell this apart from an in-progress ticket, because being
-  // unclaimed and non-unstarted is not a state any other flow produces.
+  // S19's second half: release-claim is parkPlan's step 3, and it runs while
+  // the ticket is still "started" — step 5 is what moves it to "unstarted".
+  // So unclaimed AND started is the signature of a Park that died between
+  // those two, and no journal is needed to recognise it.
+  //
+  // The test is state === "started", not state !== "unstarted". Claim and
+  // state are orthogonal (phrasebook.md: "a claim and a state change are
+  // separate acts"), so a ticket can be unclaimed and "canceled", "done", or
+  // "parked" without a Park ever having run on it — a maintainer closing a
+  // ticket outright produces exactly that. Matching those would let recovery
+  // set a canceled ticket back to unstarted and push it into the Queue.
   //
   // The claim is gone, so "reverse to a plain resume" (the claimed path's
   // fallback when no journaled reason survives) has nothing to resume under
@@ -120,8 +123,8 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
   // have run before post-comment (step 2), so the durable comment is always
   // already posted by the time a ticket can be unclaimed-and-started. This
   // path only ever completes the remaining Park writes, never reverses one.
-  const strandedDecisions = (input.unclaimed ?? [])
-    .filter((ticket) => ticket.claimedBy === null && ticket.state !== "unstarted")
+  const strandedDecisions = input.unclaimed
+    .filter((ticket) => ticket.claimedBy === null && ticket.state === "started")
     .map((ticket): RecoveryDecision => {
       const branch = branchName(ticket.id, ticket.title);
       const remaining = remainingPark({
@@ -129,7 +132,9 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
         commentPosted: onTracker.has(ticket.id),
         claimReleased: true,
         labelSwapped: !ticket.ready,
-        stateUnstarted: ticket.state === "unstarted",
+        // The filter above admits only "started" tickets, so the state write
+        // is by definition still owed.
+        stateUnstarted: false,
       });
       return { k: "resume-park", ticket: ticket.id, branch, remaining };
     });

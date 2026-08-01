@@ -209,7 +209,6 @@ test("multiple claimed tickets each get an independent decision in the same call
     originBranches: [resumableBranch],
     actor: ACTOR,
     journal: null,
-    unclaimed: [],
     parkCommented: [],
   });
 
@@ -323,4 +322,24 @@ test("a claimed ticket and a stranded ticket in the same call each get their own
     { k: "resume", ticket: "1", branch: claimedBranch },
     { k: "resume-park", ticket: "2", branch: strandedBranch, remaining: ["swap-label", "set-unstarted"] },
   ]);
+});
+
+// Claim and state are separate acts (phrasebook.md), so an unclaimed ticket
+// can sit in a closed state without any Park ever having run on it. Matching
+// those would let recovery set a maintainer-closed ticket back to unstarted
+// and push it into the Queue.
+for (const state of ["canceled", "done", "parked"] as const) {
+  test(`an unclaimed ${state} ticket is left alone, not mistaken for a stranded Park`, () => {
+    const closed = ticket({ id: "9", title: "Closed by the maintainer", claimedBy: null, state });
+
+    const decisions = reconcileClaims(input({ claimed: [], unclaimed: [closed] }));
+
+    expect(decisions).toEqual([]);
+  });
+}
+
+test("an unclaimed unstarted ticket waiting in the Queue is left alone", () => {
+  const queued = ticket({ id: "9", title: "Waiting its turn", claimedBy: null, state: "unstarted" });
+
+  expect(reconcileClaims(input({ claimed: [], unclaimed: [queued] }))).toEqual([]);
 });

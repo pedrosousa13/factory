@@ -47,7 +47,7 @@ import { branchName } from "../src/pick";
 import { parkCommentText, parkPlan, PARK_STEP, type ParkReason } from "../src/park";
 import { reconcileClaims, type RecoveryInput } from "../src/recovery";
 import type { JournalRecord } from "../src/journal";
-import { readJournal, writeJournal } from "../src/journalfile";
+import { readJournal, startClaim, writeJournal } from "../src/journalfile";
 import { interactiveAnswer, waitDecision } from "../src/answerwait";
 import { ping } from "../src/ping";
 
@@ -242,6 +242,24 @@ function main(): void {
 
       const ticketBefore = readFixtureTicket(ticketId);
       const branch = branchName(ticketBefore.id, ticketBefore.title);
+
+      // The claim is where the journal gets reset. recovery.ts depends on it:
+      // a record left by an earlier cycle names the same ticket, actor, and
+      // branch as a live interrupted Park, so anything stale surviving into a
+      // new claim would be read as a Park in flight. startClaim takes no
+      // openQuestion, so the reset cannot carry one over.
+      startClaim(repo.root, ticketId, branch, "claim", [actor]);
+      const journalAtClaim = readJournal(repo.root);
+      const claimJournalOk =
+        journalAtClaim.ok && journalAtClaim.record.ticket === ticketId && journalAtClaim.record.openQuestion === null;
+      steps.push(
+        step(
+          "journal: reset at claim",
+          claimJournalOk ? "no open question carried over" : "stale or unreadable",
+          claimJournalOk,
+        ),
+      );
+
       let branchSetupOk = true;
       try {
         git(["checkout", "-b", branch], repo.root);
