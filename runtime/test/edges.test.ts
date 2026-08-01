@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectActor, gatherAvailableRoles, gatherPreflightFacts } from "../src/edges";
+import { detectActor, gatherAvailableRoles, gatherPreflightFacts, gatherStampFacts } from "../src/edges";
 import { STAMP_VERSION } from "../src/version";
 
 // ───── isolation from the host's own git identity
@@ -253,6 +253,54 @@ describe("gatherAvailableRoles", () => {
       expect(gatherAvailableRoles(home)).toContain("tdd");
     } finally {
       rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+// ───── gatherStampFacts
+
+function writeBrokenConfig(repoRoot: string): void {
+  mkdirSync(join(repoRoot, ".factory"), { recursive: true });
+  writeFileSync(join(repoRoot, ".factory", "config.json"), "{ not valid json");
+}
+
+describe("gatherStampFacts", () => {
+  test("a parsing config: configVersion comes from the config, adapterDoc is absent", () => {
+    const dir = scratchRepo();
+    try {
+      writeConfig(dir, "2.0.0");
+      expect(gatherStampFacts(dir)).toEqual({ configVersion: "2.0.0", adapterDoc: null });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("an unparseable config reads as configVersion: null, not a throw", () => {
+    const dir = scratchRepo();
+    try {
+      writeBrokenConfig(dir);
+      expect(gatherStampFacts(dir)).toEqual({ configVersion: null, adapterDoc: null });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("an adapter doc with no config: configVersion is null, adapterDoc is the full text", () => {
+    const dir = scratchRepo();
+    try {
+      writeAdapterDoc(dir);
+      expect(gatherStampFacts(dir)).toEqual({ configVersion: null, adapterDoc: ADAPTER_DOC_WITH_MARKER });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("neither config nor adapter doc: both facts are null", () => {
+    const dir = scratchRepo();
+    try {
+      expect(gatherStampFacts(dir)).toEqual({ configVersion: null, adapterDoc: null });
+    } finally {
+      rmSync(dir, { recursive: true });
     }
   });
 });

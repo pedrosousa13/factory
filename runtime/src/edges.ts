@@ -12,6 +12,7 @@ import { STAMP_VERSION } from "./version";
 import { CONFIG_PATH } from "./paths";
 import { ROLE_TABLE } from "./roles";
 import type { AdapterMarker, PreflightFacts, PushCheck, StampVersion, TrackerReachable } from "./preflight";
+import type { StampFacts } from "./stamp";
 
 export { CONFIG_PATH };
 export const ADAPTER_DOC_PATH = "docs/agents/issue-tracker.md";
@@ -26,10 +27,16 @@ function gatherConfig(repoRoot: string): "missing-file" | ParseResult {
 
 // ───── adapter marker
 
-function gatherAdapterMarker(repoRoot: string): AdapterMarker {
+// Shared with gatherStampFacts below, which needs the full text rather than
+// the parsed marker readMarker throws the rest of it away to produce.
+function readAdapterDoc(repoRoot: string): string | null {
   const path = join(repoRoot, ADAPTER_DOC_PATH);
-  if (!existsSync(path)) return "missing-file";
-  return readMarker(readFileSync(path, "utf8"));
+  return existsSync(path) ? readFileSync(path, "utf8") : null;
+}
+
+function gatherAdapterMarker(repoRoot: string): AdapterMarker {
+  const doc = readAdapterDoc(repoRoot);
+  return doc === null ? "missing-file" : readMarker(doc);
 }
 
 // ───── push check ("push, not transport": only that a non-interactive push
@@ -55,6 +62,20 @@ function gatherPushCheck(repoRoot: string): PushCheck {
 
 function gatherStampVersion(config: "missing-file" | ParseResult): StampVersion {
   return { repo: config !== "missing-file" && config.ok ? config.config.stampVersion : null, plugin: STAMP_VERSION };
+}
+
+// ───── stamp facts (stamp.ts's detectStamp input)
+
+// parseConfig (config.ts) never throws — JSON.parse errors and shape errors
+// both come back as `{ ok: false, errors }` — so no try/catch is needed here;
+// "missing-file", ok:false, and an ok:true config with no stampVersion field
+// all collapse to null, same rule as gatherStampVersion above.
+export function gatherStampFacts(repoRoot: string): StampFacts {
+  const config = gatherConfig(repoRoot);
+  return {
+    configVersion: config !== "missing-file" && config.ok ? config.config.stampVersion : null,
+    adapterDoc: readAdapterDoc(repoRoot),
+  };
 }
 
 // ───── planning-role implementations
