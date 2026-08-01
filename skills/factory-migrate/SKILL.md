@@ -10,7 +10,7 @@ Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's
 current version — to the plugin's current `stampVersion`.
 
 **Read `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "## Migration" section in
-full before doing anything else** (`PROTOCOL.md:635-683`). It is the spec
+full before doing anything else** (`PROTOCOL.md:639-687`). It is the spec
 this skill executes; the sentences below point at it rather than restate
 it. `${CLAUDE_PLUGIN_ROOT}/runtime/src/stamp.ts`, `sections.ts`, and
 `migrate.ts` are that spec's executable form — this skill never runs them
@@ -35,7 +35,7 @@ Before writing anything, read two files and classify the repo:
   `## Factory loop operations` heading, matched exactly, on its own line?
 
 Classify per `PROTOCOL.md`'s stamp check (`PROTOCOL.md:87-98`) and its
-newer-stamp block (`PROTOCOL.md:682-683`):
+newer-stamp block (`PROTOCOL.md:686-687`):
 
 1. **`config.json` exists, parses, and its `stampVersion` matches the
    plugin's current version.** Nothing pending. Say so and stop — this
@@ -51,7 +51,7 @@ newer-stamp block (`PROTOCOL.md:682-683`):
    run `/factory-adopt` instead, and stop.
 5. **`config.json` exists, parses, and its `stampVersion` is newer than
    the plugin's current version.** The plugin never downgrades files
-   (`PROTOCOL.md:682-683`). Tell the maintainer to update the Factory
+   (`PROTOCOL.md:686-687`). Tell the maintainer to update the Factory
    plugin, write nothing, and stop — this is not a migration this skill
    can run.
 
@@ -68,7 +68,7 @@ into the same combined plan and the same single diff below without
 changing this shape.
 
 **The v1-to-v2 step asks only what the old stamp cannot answer**
-(`PROTOCOL.md:665-672`). It runs the same way on a legacy v1 repo (no
+(`PROTOCOL.md:669-676`). It runs the same way on a legacy v1 repo (no
 `config.json` at all) and on a stale v2 repo (a `config.json` that
 already exists, just below the plugin's current `stampVersion`): either
 way, the step asks all three answers fresh and never reads an existing
@@ -105,7 +105,7 @@ template, and each value is derived, never invented, the way
 git remote's owner/repo slug. Then diff the current
 `docs/agents/issue-tracker.md` against that rendering. Classify the diff
 per the adopt skill's section rules (`skills/factory-adopt/SKILL.md:229-257`,
-cross-referenced at `PROTOCOL.md:662-663`) — this skill does not restate
+cross-referenced at `PROTOCOL.md:666-667`) — this skill does not restate
 those rules, only applies them here to a legacy or stale-v2 document
 instead of a freshly-adopted one.
 
@@ -193,7 +193,7 @@ A reply of done is not evidence — the files are. After writing:
 
 ## The idempotency contract
 
-Each step is idempotent by design (`PROTOCOL.md:652-660`): a repeat run
+Each step is idempotent by design (`PROTOCOL.md:656-664`): a repeat run
 recomputes its diff from what's actually on disk, so re-running this
 skill against an already-migrated repo finds nothing pending and says
 so — the same "`config.json` exists, parses, current `stampVersion`" case
