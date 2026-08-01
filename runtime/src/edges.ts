@@ -10,6 +10,7 @@ import { parseConfig, type ParseResult } from "./config";
 import { readMarker } from "./marker";
 import { STAMP_VERSION } from "./version";
 import { CONFIG_PATH } from "./paths";
+import { ROLE_TABLE } from "./roles";
 import type { AdapterMarker, PreflightFacts, PushCheck, StampVersion, TrackerReachable } from "./preflight";
 
 export { CONFIG_PATH };
@@ -56,12 +57,33 @@ function gatherStampVersion(config: "missing-file" | ParseResult): StampVersion 
   return { repo: config !== "missing-file" && config.ok ? config.config.stampVersion : null, plugin: STAMP_VERSION };
 }
 
+// ───── planning-role implementations
+
+const SKILLS_DIR = ".claude/skills";
+
+// PROTOCOL.md:44-46: check the `~/.claude/skills/` path itself — a missing or
+// broken symlink there leaves the skill unavailable even if the source exists.
+// existsSync follows symlinks, so a broken one reads as absent, which is what
+// we want.
+function gatherAvailableRoles(home: string): string[] {
+  const names = new Set<string>();
+  for (const spec of ROLE_TABLE) {
+    for (const impl of [spec.preferred, spec.fallback]) {
+      if (impl !== null && existsSync(join(home, SKILLS_DIR, impl))) names.add(impl);
+    }
+  }
+  return [...names];
+}
+
 // ───── gatherPreflightFacts
 
 export interface GatherOpts {
   // Needs a harness run to ask; edges don't spawn agents, so the caller
   // decides how (or whether) this got asked and passes the result in.
   trackerReachable: TrackerReachable;
+  // The maintainer's home directory. A parameter rather than a `process.env`
+  // read so a test can point it at a fixture tree.
+  home: string;
 }
 
 export function gatherPreflightFacts(repoRoot: string, opts: GatherOpts): PreflightFacts {
@@ -72,6 +94,7 @@ export function gatherPreflightFacts(repoRoot: string, opts: GatherOpts): Prefli
     trackerReachable: opts.trackerReachable,
     pushCheck: gatherPushCheck(repoRoot),
     stampVersion: gatherStampVersion(config),
+    availableRoles: gatherAvailableRoles(opts.home),
   };
 }
 

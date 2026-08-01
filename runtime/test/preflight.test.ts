@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import { preflight, compareStamp } from "../src/preflight";
 import type { PreflightFacts } from "../src/preflight";
 import type { FactoryConfig } from "../src/config";
+import { ROLE_TABLE } from "../src/roles";
 
 // ───── shared fixtures
 
@@ -19,7 +20,12 @@ function greenFacts(): PreflightFacts {
     trackerReachable: { result: "ok" },
     pushCheck: { ok: true, detail: "push ok" },
     stampVersion: { repo: "2.0.0", plugin: "2.0.0" },
+    availableRoles: ROLE_TABLE.map((r) => r.preferred),
   };
+}
+
+function facts(overrides: Partial<PreflightFacts> = {}): PreflightFacts {
+  return { ...greenFacts(), ...overrides };
 }
 
 // ───── green path
@@ -310,4 +316,32 @@ test("compareStamp does a full dotted compare, not major-only: a minor-ahead rep
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].what).toMatch(/newer/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
+});
+
+// ───── planning roles
+
+test("preflight passes when every planning role resolves", () => {
+  const got = preflight(facts({ availableRoles: ROLE_TABLE.map((r) => r.preferred) }));
+  expect(got.ok).toBe(true);
+});
+
+test("a planning role with no available implementation fails preflight", () => {
+  const got = preflight(facts({ availableRoles: [] }));
+  expect(got.ok).toBe(false);
+  if (got.ok) throw new Error("unreachable");
+  expect(got.failures.some((f) => f.what.includes("Interrogate"))).toBe(true);
+});
+
+test("role failures join the other preflight failures rather than replacing them", () => {
+  const got = preflight(facts({ config: "missing-file", availableRoles: [] }));
+  expect(got.ok).toBe(false);
+  if (got.ok) throw new Error("unreachable");
+  expect(got.failures.some((f) => f.what.toLowerCase().includes("config"))).toBe(true);
+  expect(got.failures.some((f) => f.what.includes("Interrogate"))).toBe(true);
+});
+
+test("a role resolving to its fallback does not fail preflight", () => {
+  const available = ROLE_TABLE.map((r) => r.preferred).filter((p) => p !== "to-prd").concat("to-spec");
+  const got = preflight(facts({ availableRoles: available }));
+  expect(got.ok).toBe(true);
 });

@@ -13,6 +13,7 @@ import { ADAPTER_DOC_PATH, gatherPreflightFacts } from "../src/edges";
 import { preflight, type Failure, type TrackerReachable } from "../src/preflight";
 import { runHarness, type HarnessName } from "../src/harness";
 import { askWithRetry, buildPrompt, type Runner } from "../src/askloop";
+import { resolveRoles, roleReport } from "../src/roles";
 
 const REPO_ROOT = process.cwd();
 
@@ -75,10 +76,17 @@ function main(): void {
   const harnessName = parseAskReachable(process.argv.slice(2));
   const trackerReachable: TrackerReachable = harnessName ? askReachable(harnessName) : "not-asked";
 
-  const facts = gatherPreflightFacts(REPO_ROOT, { trackerReachable });
+  const facts = gatherPreflightFacts(REPO_ROOT, { trackerReachable, home: process.env.HOME ?? "" });
   const result = preflight(facts);
 
-  if (result.ok) process.exit(0);
+  if (result.ok) {
+    const roles = resolveRoles(facts.availableRoles);
+    if (roles.resolved.some((s) => s.via === "fallback")) {
+      console.log("planning roles:");
+      console.log(roleReport(roles.resolved));
+    }
+    process.exit(0);
+  }
 
   report(result.failures);
   process.exit(1);

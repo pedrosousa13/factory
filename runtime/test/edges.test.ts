@@ -117,7 +117,7 @@ describe("gatherPreflightFacts", () => {
   test("missing config.json: reports the missing-file variant, no crash", () => {
     const dir = scratchRepo();
     try {
-      const facts = gatherPreflightFacts(dir, { trackerReachable: "not-asked" });
+      const facts = gatherPreflightFacts(dir, { trackerReachable: "not-asked", home: dir });
       expect(facts.config).toBe("missing-file");
       expect(facts.adapterMarker).toBe("missing-file");
       expect(facts.stampVersion).toEqual({ repo: null, plugin: STAMP_VERSION });
@@ -131,7 +131,7 @@ describe("gatherPreflightFacts", () => {
     try {
       writeConfig(dir, "2.0.0");
       writeAdapterDoc(dir);
-      const facts = gatherPreflightFacts(dir, { trackerReachable: { result: "ok" } });
+      const facts = gatherPreflightFacts(dir, { trackerReachable: { result: "ok" }, home: dir });
 
       if (facts.config === "missing-file") throw new Error("expected a parsed config, not missing-file");
       expect(facts.config.ok).toBe(true);
@@ -148,7 +148,7 @@ describe("gatherPreflightFacts", () => {
     try {
       writeConfig(dir);
       writeAdapterDoc(dir);
-      const facts = gatherPreflightFacts(dir, { trackerReachable: "not-asked" });
+      const facts = gatherPreflightFacts(dir, { trackerReachable: "not-asked", home: dir });
 
       expect(facts.pushCheck.ok).toBe(false);
       expect(facts.pushCheck.detail.length).toBeGreaterThan(0);
@@ -161,7 +161,7 @@ describe("gatherPreflightFacts", () => {
     const dir = scratchRepo();
     try {
       const reachable = { result: "unreachable" as const, why: "no token" };
-      const facts = gatherPreflightFacts(dir, { trackerReachable: reachable });
+      const facts = gatherPreflightFacts(dir, { trackerReachable: reachable, home: dir });
       expect(facts.trackerReachable).toEqual(reachable);
     } finally {
       rmSync(dir, { recursive: true });
