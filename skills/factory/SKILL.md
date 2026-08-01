@@ -27,7 +27,12 @@ It is the source of truth; this file only bootstraps it.
      "## Prerequisites: a stamped Project repo" for the cause and the fix of
      each.
    If either produced a failure, report every one collected, with its fix,
-   and stop — do not begin Session start.
+   and stop — do not begin Session start. One failure carries an offer
+   instead of a bare stop: when the stamp failure names `/factory-migrate`
+   (a legacy v1 stamp, or a v2 stamp older than the plugin), offer to run
+   the migration now, in this session. If the maintainer accepts, follow
+   `skills/factory-migrate/SKILL.md`, then re-run the checks above; only a
+   green result begins Session start. If they decline, stop as usual.
 3. Read `docs/agents/issue-tracker.md` — the Project's Tracker adapter. It
    names where this Project's issues live and what tooling reaches them;
    load that tooling as it directs, via ToolSearch first if it names

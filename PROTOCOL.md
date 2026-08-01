@@ -698,9 +698,10 @@ sets the stamp version.
 **A stale stamp blocks autonomous execution only.** Preflight reports it as a failure that
 stops execution and not planning. Planning skills stay available, because they read the
 prose docs, not the stamp. A headless run reports the pending migration and stops, because
-preflight's stale-stamp failure blocks execution until the repo is migrated. **(pending)**
-An interactive run does not yet offer to migrate now on its own. Today the maintainer reads
-preflight's fix message and runs the migration themselves — see issue #50. Migration ends
+preflight's stale-stamp failure blocks execution until the repo is migrated. An interactive
+run offers to migrate now: when the loop skill's bootstrap check finds a stamp failure that
+names `/factory-migrate`, it offers to run the migration in the same session, and begins
+Session start only after a green re-check. A declined offer stops the run. Migration ends
 with a full preflight check that validates the config against the adapter document and the
 live tracker, and runs the non-interactive push check. Only a green preflight at the current
 version unblocks execution.

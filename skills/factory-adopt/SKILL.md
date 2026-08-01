@@ -385,7 +385,12 @@ notify-send "Factory" "$FACTORY_NOTIFY_MESSAGE"
   (`hooks/hooks.json`) and needs no separate setup. It activates as soon as
   `notifierCommand` is set in `.factory/config.json`. If the maintainer wants
   the channel wired, ask for the notifier command and write it as
-  `notifierCommand`.
+  `notifierCommand`. State the trust boundary before the maintainer answers:
+  the hook runs in every Claude Code session on this machine, and it executes
+  the `notifierCommand` of whichever repo the session has open — not only
+  during Factory runs. A repo's `notifierCommand` is therefore code that repo
+  executes on the maintainer's machine. Review it in an unfamiliar repo the
+  same way you would review its scripts before running them.
 - **Codex.** Offer to add a `notify` setting to `~/.codex/config.toml`.
   Codex's `notify` is not a shell command line, so it does not take the
   `notifierCommand` string as written. It is a TOML array of argv tokens, and
