@@ -8,6 +8,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { IssueState, TicketFacts, Urgency } from "../src/tracker";
 
 // ───────────────────────────────────────────────────────────── tracker paths
 
@@ -143,6 +144,26 @@ export const EXTRA_TICKETS: Ticket[] = [
   },
 ];
 
+// The fifth fixture ticket: already claimed by a different actor, so a claim
+// attempt against it (S4's contention case) must come back `taken` with the
+// right holder rather than silently stealing the claim.
+export const CONTENTION_ACTOR = "contention-holder";
+
+export const CONTENTION_TICKETS: Ticket[] = [
+  {
+    id: "T-5",
+    title: "Already-claimed contention fixture",
+    state: "started",
+    urgency: "P2",
+    createdAt: "2026-07-25T10:00:00Z",
+    milestone: null,
+    ready: true,
+    claimedBy: CONTENTION_ACTOR,
+    blockedBy: [],
+    body: "Fixture ticket: pre-claimed by a different actor, so a claim attempt must come back taken, not claimed.",
+  },
+];
+
 // ───────────────────────────────────────────────────────────── prompt shapes
 
 export const TICKET_FACTS_SHAPE = `type TicketFacts = {
@@ -171,6 +192,10 @@ export const SET_STATE_SHAPE = `type SetStateAnswer = { result: "ok" };`;
 
 export const UNCLAIM_SHAPE = `type UnclaimAnswer = { result: "ok" };`;
 
+export const COMMENT_SHAPE = `type CommentAnswer = { result: "ok" };`;
+
+export const SET_READY_SHAPE = `type SetReadyAnswer = { result: "ok" };`;
+
 // ───────────────────────────────────────────────────────────── ask questions
 
 export const CANDIDATES_QUESTION =
@@ -192,16 +217,108 @@ export function unclaimQuestion(issue: string): string {
   return `Release the claim on ticket ${issue} in this project's tracker.`;
 }
 
+// tracker.comment already exists in tracker.ts's Ask union (CommentAnswer) —
+// used both for a Park's durable reason (park.ts's parkCommentText supplies
+// the text) and here for the plain S4 conformance check.
+export function commentQuestion(issue: string, text: string): string {
+  // The text is fenced because an undelimited comment gets edited on the way
+  // in: a harness asked to "append this comment" followed by raw markdown
+  // treats the leading "> " as formatting to reinterpret and drops lines it
+  // reads as instructions rather than content. A Park comment is the durable
+  // record of why work stopped, so it has to arrive whole.
+  return [
+    `Append a comment to ticket ${issue} in this project's tracker.`,
+    "",
+    "The comment is every line between the BEGIN COMMENT and END COMMENT markers,",
+    "copied verbatim — same characters, same line breaks, including any leading",
+    '"> " quote markers. Do not summarize, reformat, or drop any line, and do not',
+    "include the markers themselves.",
+    "",
+    "BEGIN COMMENT",
+    text,
+    "END COMMENT",
+  ].join("\n");
+}
+
+// "unstarted" is a tracker.setState destination because Park needs it
+// (tracker.ts: Park step 3/5 sends a ticket back to unstarted so it can
+// re-enter the Queue). Reuses SET_STATE_SHAPE — the answer shape doesn't
+// vary by destination state.
+// Park's swap-label step: drop the agent-ready marker so a Parked ticket stops
+// advertising itself as work to pick up.
+export function dropReadyQuestion(issue: string): string {
+  return `Remove the ready-for-agent marker from ticket ${issue} in this project's tracker, so it is no longer offered to workers.`;
+}
+
+export function unstartedQuestion(issue: string): string {
+  return `Set ticket ${issue}'s state to "unstarted" in this project's tracker.`;
+}
+
+// A garble fixture: a bare prompt — question + phrasebook only, no answer
+// shape and no "reply with ONLY that JSON" instruction — that a harness is
+// likely, though not guaranteed, to answer in prose rather than the JSON
+// askOnce expects. It exists so the sweep can gather LIVE evidence that
+// askWithRetry's rejection path (extractJson returning null, or check()
+// rejecting the shape) actually fires against a real adversarial reply, not
+// only ever synthetic bad input in a unit test. A harness that stays
+// JSON-compliant anyway is not a failure — see sweep.ts's garble check.
+export function garblePrompt(question: string, phrasebook: string): string {
+  return [question, "", phrasebook].join("\n");
+}
+
+export const GARBLE_QUESTION =
+  'Set ticket T-1\'s state to "unstarted" in this project\'s tracker, then tell me you\'re done in one short, friendly sentence.';
+
 // ───────────────────────────────────────────────────────────── fixture reads
 
 // "Verify file" per the brief: read the fixture's own frontmatter directly
 // off disk, rather than trusting another harness ask — the ground truth for
-// what an act actually did.
-export function readFixtureField(id: string, field: "claimedBy" | "state"): string | null {
+// what an act actually did. "ready" added for S4's swap-label step: no
+// tracker.* ask covers it (only claimedBy and state have asks), so a caller
+// that patches it directly still verifies the same way.
+export function readFixtureField(id: string, field: "claimedBy" | "state" | "ready"): string | null {
   const text = readFileSync(join(TICKETS_DIR, `${id}.md`), "utf8");
   const match = text.match(new RegExp(`^${field}: (.*)$`, "m"));
   if (!match) throw new Error(`fixture file for ${id} has no ${field} field`);
   return match[1] === "null" ? null : match[1];
+}
+
+// The ticket's body text (everything below the frontmatter's closing `---`),
+// including any appended comment — the ground truth for verifying a
+// tracker.comment ask actually landed, rather than trusting its "ok" reply.
+export function readFixtureBody(id: string): string {
+  const text = readFileSync(join(TICKETS_DIR, `${id}.md`), "utf8");
+  const parts = text.split("---");
+  return parts.slice(2).join("---").trim();
+}
+
+/** Parses a fixture ticket file's frontmatter into full TicketFacts — the
+ * ground truth for recovery.ts's `claimed` input, read directly off disk
+ * rather than trusted from a harness reply (same "verify the work" rule as
+ * readFixtureField). Mirrors renderTicket's exact format; the two stay in
+ * step because they live in the same file. */
+export function readFixtureTicket(id: string): TicketFacts {
+  const text = readFileSync(join(TICKETS_DIR, `${id}.md`), "utf8");
+  const field = (name: string): string => {
+    const match = text.match(new RegExp(`^${name}: (.*)$`, "m"));
+    if (!match) throw new Error(`fixture file for ${id} has no ${name} field`);
+    return match[1];
+  };
+  const blockedByRaw = field("blockedBy").trim().replace(/^\[/, "").replace(/\]$/, "").trim();
+  const blockedBy = blockedByRaw.length > 0 ? blockedByRaw.split(",").map((s) => s.trim()) : [];
+  const milestone = field("milestone");
+  const claimedBy = field("claimedBy");
+  return {
+    id: field("id"),
+    title: field("title"),
+    urgency: field("urgency") as Urgency,
+    createdAt: field("createdAt"),
+    milestone: milestone === "null" ? null : milestone,
+    ready: field("ready") === "true",
+    state: field("state") as IssueState,
+    claimedBy: claimedBy === "null" ? null : claimedBy,
+    blockedBy,
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────── main

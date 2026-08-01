@@ -1,5 +1,5 @@
 /**
- * L2 conformance sweep — reachable, verify, and slice 2's and slice 3's asks.
+ * L2 conformance sweep — reachable, verify, and slice 2's, 3's, and 4's asks.
  *
  * For each harness (claude, codex, pi): reset the local markdown tracker
  * fixture (the committed default three plus a fourth ticket, T-4, blocked by
@@ -25,6 +25,16 @@
  * counting as failed (PRD §2). Each scratch repo is removed on every path,
  * success or failure.
  *
+ * Then, slice 4's asks against the same fixture: a Park comment on T-3,
+ * verified by reading its body back rather than trusting the "ok" reply; a
+ * setState-to-unstarted on T-2 (patched to "started" first so the file check
+ * proves a real transition); a garble case on T-1 — a bare prompt with no
+ * answer shape or JSON instruction, gathering live evidence that a bad reply
+ * actually gets rejected rather than only ever seeing synthetic bad input in
+ * a unit test; and a contention case on T-5, pre-claimed by a different
+ * actor (CONTENTION_ACTOR, fixture.ts), asserting a claim attempt comes back
+ * `taken` with the right holder and never touches the file.
+ *
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
  * fails any check.
  *
@@ -33,13 +43,14 @@
  * THROWAWAY: no tests, no error handling beyond what keeps it runnable.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Answer, TicketFacts } from "../src/tracker";
+import type { Answer, Ask, TicketFacts } from "../src/tracker";
 import { askWithRetry, buildPrompt, extractJson, type AskStatus, type Runner } from "../src/askloop";
 import { runHarness, type HarnessName } from "../src/harness";
 import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
 import { checkAgent, type AgentAsk, type ImplementResult } from "../src/agentwork";
+import { parkCommentText, type ParkReason } from "../src/park";
 import {
   CLEAR_BRIEF,
   CLEAR_BRIEF_BRANCH,
@@ -55,9 +66,16 @@ import {
   CANDIDATES_QUESTION,
   CLAIM_SHAPE,
   claimQuestion,
+  commentQuestion,
+  COMMENT_SHAPE,
+  CONTENTION_ACTOR,
+  CONTENTION_TICKETS,
   down,
   EXTRA_TICKETS,
+  garblePrompt,
+  GARBLE_QUESTION,
   READ_SHAPE,
+  readFixtureBody,
   readFixtureField,
   readQuestion,
   SET_STATE_SHAPE,
@@ -65,8 +83,21 @@ import {
   TICKETS_DIR,
   UNCLAIM_SHAPE,
   unclaimQuestion,
+  SET_READY_SHAPE,
+  dropReadyQuestion,
+  unstartedQuestion,
   up,
 } from "./fixture";
+
+// Direct fixture patch (fs, not a tracker ask) — same pattern as
+// bin/pick.ts's resetFixtureState. Used to put T-2 into "started" before the
+// setState-unstarted check, so the ask's own verification proves a real
+// transition rather than checking a field that was already "unstarted".
+function patchFixtureState(id: string, state: string): void {
+  const path = join(TICKETS_DIR, `${id}.md`);
+  const text = readFileSync(path, "utf8");
+  writeFileSync(path, text.replace(/^state: .*$/m, `state: ${state}`));
+}
 
 // ─────────────────────────────────────────────────── agent.implement asking
 //
@@ -179,6 +210,21 @@ type HarnessRecord = {
   workVerifiedOk: boolean; // greet.ts + bun check.ts + commit, all on CLEAR_BRIEF_BRANCH
   implementQuestion: ImplementOutcome["status"];
   implementQuestionOk: boolean; // answer.result === "question" && question non-empty
+  comment: AskStatus;
+  commentOk: boolean; // answer.result === "ok"
+  commentFileOk: boolean; // T-3's body carries the disclaimer, the reason, and the branch
+  dropReady: AskStatus;
+  dropReadyOk: boolean; // answer.result === "ok"
+  dropReadyFileOk: boolean; // T-3.md ready === false — the label actually dropped
+  setUnstarted: AskStatus;
+  setUnstartedOk: boolean; // answer.result === "ok"
+  setUnstartedFileOk: boolean; // T-2.md state === "unstarted" (started beforehand, by direct patch)
+  garble: AskStatus;
+  garbleRejectedLive: boolean; // status !== "valid-first-try" — live evidence a bad reply was actually rejected
+  garbleOk: boolean; // never a failure on its own: see the comment at the check itself
+  contention: AskStatus;
+  contentionOk: boolean; // answer.result === "taken" && answer.by === CONTENTION_ACTOR
+  contentionFileOk: boolean; // T-5.md claimedBy is still CONTENTION_ACTOR, untouched
   reasks: number;
   totalMs: number;
   pass: boolean;
@@ -186,7 +232,7 @@ type HarnessRecord = {
 
 function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   console.log(`\n=== ${harness} ===`);
-  up(EXTRA_TICKETS);
+  up([...EXTRA_TICKETS, ...CONTENTION_TICKETS]);
   if (!existsSync(join(TICKETS_DIR, "T-1.md"))) {
     throw new Error(`fixture reset did not produce ${join(TICKETS_DIR, "T-1.md")}`);
   }
@@ -309,6 +355,95 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     `  unclaim T-1: ${unclaimLog.status}${unclaimLog.status === "failed" ? ` — ${unclaimLog.whys[1]}` : ""} (expected ok: ${unclaimOk ? "yes" : "no"}; file claimedBy=${claimedByAfterFile})`,
   );
 
+  // ── slice 4: post a Park comment on T-3, verified by reading the fixture
+  // body back — never trusting the "ok" reply
+  const parkReason: ParkReason = {
+    k: "unanswered-question",
+    question: "Should this ticket squash-merge or regular-merge once it's unblocked?",
+    askedAt: "2026-08-01T10:00:00.000Z",
+  };
+  const parkBranchLabel = "T-3/park-comment-conformance-check";
+  const commentText = parkCommentText(parkReason, parkBranchLabel, "1 commit pushed, tests unrun");
+  const commentPrompt = buildPrompt(commentQuestion("T-3", commentText), phrasebook, COMMENT_SHAPE);
+  const commentStart = performance.now();
+  const commentLog = askWithRetry(runner, { k: "tracker.comment", issue: "T-3", text: commentText }, commentPrompt);
+  const commentMs = Math.round(performance.now() - commentStart);
+  const commentOk = commentLog.status !== "failed" && commentLog.answer.result === "ok";
+  const commentBody = readFixtureBody("T-3");
+  const commentFileOk =
+    commentBody.includes("This was generated by AI during triage") &&
+    commentBody.includes(parkReason.question) &&
+    commentBody.includes(parkBranchLabel);
+  console.log(
+    `  comment T-3: ${commentLog.status}${commentLog.status === "failed" ? ` — ${commentLog.whys[1]}` : ""} (expected ok: ${commentOk ? "yes" : "no"}; landed in body: ${commentFileOk ? "yes" : "no"})`,
+  );
+
+  // ── slice 4: setState unstarted — T-2 is patched to "started" directly
+  // first (fixture setup, not an ask) so the file check below proves a real
+  // transition rather than a field that was already "unstarted"
+  patchFixtureState("T-2", "started");
+  // ── drop the agent-ready label on T-3 (Park's swap-label step), verified
+  // against the fixture file rather than trusted from the reply
+  const dropReadyPrompt = buildPrompt(dropReadyQuestion("T-3"), phrasebook, SET_READY_SHAPE);
+  const dropReadyStart = performance.now();
+  const dropReadyLog = askWithRetry(runner, { k: "tracker.setReady", issue: "T-3", ready: false }, dropReadyPrompt);
+  const dropReadyMs = Math.round(performance.now() - dropReadyStart);
+  const dropReadyOk = dropReadyLog.status !== "failed" && dropReadyLog.answer.result === "ok";
+  const dropReadyFileOk = readFixtureField("T-3", "ready") === "false";
+  console.log(
+    `  drop ready T-3: ${dropReadyLog.status}${dropReadyLog.status === "failed" ? ` — ${dropReadyLog.whys[1]}` : ""} (expected ok: ${dropReadyOk ? "yes" : "no"}; file ready=${readFixtureField("T-3", "ready")})`,
+  );
+
+  const setUnstartedPrompt = buildPrompt(unstartedQuestion("T-2"), phrasebook, SET_STATE_SHAPE);
+  const setUnstartedStart = performance.now();
+  const setUnstartedLog = askWithRetry(runner, { k: "tracker.setState", issue: "T-2", state: "unstarted" }, setUnstartedPrompt);
+  const setUnstartedMs = Math.round(performance.now() - setUnstartedStart);
+  const setUnstartedOk = setUnstartedLog.status !== "failed" && setUnstartedLog.answer.result === "ok";
+  const setUnstartedFileOk = readFixtureField("T-2", "state") === "unstarted";
+  console.log(
+    `  setState unstarted T-2: ${setUnstartedLog.status}${setUnstartedLog.status === "failed" ? ` — ${setUnstartedLog.whys[1]}` : ""} (expected ok: ${setUnstartedOk ? "yes" : "no"}; file state=${readFixtureField("T-2", "state")})`,
+  );
+
+  // ── slice 4: garble — a bare prompt (no shape, no "reply ONLY JSON") on
+  // T-1, likely to draw prose. check() (tracker.ts) cannot accept a garbled
+  // reply as valid by construction — a "valid" status only ever follows a
+  // check() pass — so this can't gate pass/fail on the reply's content. What
+  // it proves, honestly, is whether the live rejection path (a re-ask firing,
+  // or the ask ultimately failing) actually triggered against a real
+  // adversarial reply rather than only ever synthetic bad input in a unit
+  // test. A harness that stays JSON-compliant anyway is fine, per the brief.
+  const garbleAsk: Ask = { k: "tracker.setState", issue: "T-1", state: "unstarted" };
+  const garbleStart = performance.now();
+  const garbleLog = askWithRetry(runner, garbleAsk, garblePrompt(GARBLE_QUESTION, phrasebook));
+  const garbleMs = Math.round(performance.now() - garbleStart);
+  const garbleRejectedLive = garbleLog.status !== "valid-first-try";
+  const garbleOk = true; // see the comment above: no live outcome represents "garbage accepted as valid"
+  console.log(
+    `  garble: ${garbleLog.status}${garbleLog.status === "failed" ? ` — ${garbleLog.whys[1]}` : ""} (live rejection observed: ${garbleRejectedLive ? "yes" : "no"})`,
+  );
+
+  // ── slice 4: contention — T-5 is pre-claimed by CONTENTION_ACTOR; a claim
+  // attempt by this harness's actor must come back taken, name the right
+  // holder, and the fixture file must still show the ORIGINAL holder
+  // afterward — a claim ask must never silently steal another actor's claim.
+  const contentionActor = `parity-${harness}`;
+  const contentionPrompt = buildPrompt(claimQuestion("T-5", contentionActor), phrasebook, CLAIM_SHAPE);
+  const contentionStart = performance.now();
+  const contentionLog = askWithRetry(
+    runner,
+    { k: "tracker.claim", issue: "T-5", actor: contentionActor },
+    contentionPrompt,
+  );
+  const contentionMs = Math.round(performance.now() - contentionStart);
+  const contentionOk =
+    contentionLog.status !== "failed" &&
+    contentionLog.answer.result === "taken" &&
+    contentionLog.answer.by === CONTENTION_ACTOR;
+  const contentionFileOk = readFixtureField("T-5", "claimedBy") === CONTENTION_ACTOR;
+  console.log(
+    `  contention T-5: ${contentionLog.status}${contentionLog.status === "failed" ? ` — ${contentionLog.whys[1]}` : ""} (expected taken by ${CONTENTION_ACTOR}: ${contentionOk ? "yes" : "no"}; file claimedBy=${readFixtureField("T-5", "claimedBy")})`,
+  );
+
   // ── slice 3: agent.implement — CLEAR_BRIEF on a fresh scratch code repo,
   // done + work verified against the branch the brief told the agent to
   // commit on (not trusted from the "done" reply)
@@ -364,8 +499,24 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   );
 
   // Only the tracker asks can re-ask; the agent.implement dispatches get one
-  // run each (PRD §2), so they cannot contribute to this count.
-  const asks = [reachableLog, verifyLog, candidatesLog, readT1Log, readT9Log, claimLog, startedLog, unclaimLog];
+  // run each (PRD §2), so they cannot contribute to this count. The garble
+  // ask is a tracker ask too (and does count toward re-asks when one fires),
+  // but it is deliberately excluded from `pass` — see the check itself.
+  const asks = [
+    reachableLog,
+    verifyLog,
+    candidatesLog,
+    readT1Log,
+    readT9Log,
+    claimLog,
+    startedLog,
+    unclaimLog,
+    commentLog,
+    dropReadyLog,
+    setUnstartedLog,
+    garbleLog,
+    contentionLog,
+  ];
   const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
   const totalMs =
     reachableMs +
@@ -376,6 +527,11 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     claimMs +
     startedMs +
     unclaimMs +
+    commentMs +
+    dropReadyMs +
+    setUnstartedMs +
+    garbleMs +
+    contentionMs +
     clearMs +
     vagueMs;
 
@@ -392,6 +548,15 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     setStateFileOk &&
     unclaimOk &&
     unclaimFileOk &&
+    commentOk &&
+    commentFileOk &&
+    dropReadyOk &&
+    dropReadyFileOk &&
+    setUnstartedOk &&
+    setUnstartedFileOk &&
+    garbleOk &&
+    contentionOk &&
+    contentionFileOk &&
     implementDoneOk &&
     workVerifiedOk &&
     implementQuestionOk;
@@ -423,6 +588,21 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     workVerifiedOk,
     implementQuestion: vagueLog.status,
     implementQuestionOk,
+    comment: commentLog.status,
+    commentOk,
+    dropReady: dropReadyLog.status,
+    dropReadyOk,
+    dropReadyFileOk,
+    commentFileOk,
+    setUnstarted: setUnstartedLog.status,
+    setUnstartedOk,
+    setUnstartedFileOk,
+    garble: garbleLog.status,
+    garbleRejectedLive,
+    garbleOk,
+    contention: contentionLog.status,
+    contentionOk,
+    contentionFileOk,
     reasks,
     totalMs,
     pass,
@@ -460,6 +640,20 @@ function printTable(records: HarnessRecord[]): void {
     "work?",
     "implement-question",
     "ok?",
+    "comment",
+    "ok?",
+    "file?",
+    "drop-ready",
+    "ok?",
+    "file?",
+    "setState unstarted",
+    "ok?",
+    "file?",
+    "garble",
+    "rejected-live?",
+    "contention",
+    "ok?",
+    "file?",
     "re-asks",
     "total s",
     "pass",
@@ -492,6 +686,20 @@ function printTable(records: HarnessRecord[]): void {
     r.workVerifiedOk ? "yes" : "no",
     r.implementQuestion,
     r.implementQuestionOk ? "yes" : "no",
+    r.comment,
+    r.commentOk ? "yes" : "no",
+    r.commentFileOk ? "yes" : "no",
+    r.dropReady,
+    r.dropReadyOk ? "yes" : "no",
+    r.dropReadyFileOk ? "yes" : "no",
+    r.setUnstarted,
+    r.setUnstartedOk ? "yes" : "no",
+    r.setUnstartedFileOk ? "yes" : "no",
+    r.garble,
+    r.garbleRejectedLive ? "yes" : "no",
+    r.contention,
+    r.contentionOk ? "yes" : "no",
+    r.contentionFileOk ? "yes" : "no",
     String(r.reasks),
     (r.totalMs / 1000).toFixed(1),
     r.pass ? "PASS" : "FAIL",
