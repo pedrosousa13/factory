@@ -45,6 +45,11 @@ test("the loop section is matched as a heading, not as prose mentioning it", () 
   expect(detectStamp({ configVersion: null, adapterDoc: prose })).toEqual({ k: "unstamped" });
 });
 
+test("the full heading text mid-line does not count as carrying the section", () => {
+  const prose = `# Issue tracker: GitHub\n\nWe once had a \`${LOOP_SECTION_HEADING}\` section inline in prose.\n`;
+  expect(detectStamp({ configVersion: null, adapterDoc: prose })).toEqual({ k: "unstamped" });
+});
+
 test("the loop section heading is exactly what PROTOCOL names", () => {
   expect(LOOP_SECTION_HEADING).toBe("## Factory loop operations");
 });
