@@ -69,6 +69,9 @@ export const IMPLEMENT_SHAPE = `export type ImplementResult =
   | { result: "question"; question: string }
   | { result: "failed"; reason: string };`;
 
+/** The CheckResult type text — kept byte-identical to src/agentwork.ts's CheckResult. */
+export const CHECK_SHAPE = `export type CheckResult = { result: "pass" } | { result: "fail"; detail: string };`;
+
 // The branch, the commit message, and the greeting marker CLEAR_BRIEF asks
 // for. Both hosts verify the work against these, so they are interpolated
 // into the brief rather than hand-copied beside it: a verifier that checks a

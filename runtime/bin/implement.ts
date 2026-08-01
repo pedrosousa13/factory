@@ -2,7 +2,8 @@
 // Edge entry (bun, fs + git allowed): the implement host loop, slice 3's
 // capability end to end against a scratch code repo — dispatch a clear
 // brief to a live harness, verify the WORK it claims to have done (not the
-// word), run the landing gates, fold the merge decision into a real squash
+// word), run the landing gates, fold the merge decision (read off a fixture
+// .factory/config.json, policy "human" method "rebase") into a real rebase
 // merge, then dispatch a vague brief on a fresh repo to prove the question
 // variant. Prints an honest per-step scoreboard and exits non-zero on any
 // failure. rmCodeRepo runs on every path, success or failure.
@@ -16,7 +17,7 @@
 //
 // THROWAWAY: no tests, no error handling beyond what keeps it runnable.
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runHarness, type HarnessName } from "../src/harness";
 import { extractJson } from "../src/askloop";
@@ -30,7 +31,10 @@ import {
   type GateKind,
   type ImplementResult,
 } from "../src/agentwork";
+import { effective, parseConfig } from "../src/config";
+import { STAMP_VERSION } from "../src/version";
 import {
+  CHECK_SHAPE,
   CLEAR_BRIEF,
   CLEAR_BRIEF_BRANCH,
   CLEAR_BRIEF_COMMIT,
@@ -48,7 +52,6 @@ const REVIEW_SPEC_BRIEF =
   "Review the diff of the last commit in this repo for: does it match the brief " +
   "'edit greet.ts so greet returns \"Hi, \" + name instead of \"Hello, \" + name'? " +
   "Reply with ONLY the pass/fail JSON.";
-const CHECK_SHAPE = `type CheckResult = { result: "pass" } | { result: "fail"; detail: string };`;
 
 function checkPrompt(brief: string): string {
   return [brief, "", CHECK_SHAPE, "", "Reply with ONLY that JSON, no prose."].join("\n");
@@ -161,6 +164,20 @@ function main(): void {
   try {
     // ── 1: scratch repo + dispatch CLEAR_BRIEF (harness cwd = the scratch repo)
     clearRoot = mkCodeRepo().root;
+    mkdirSync(join(clearRoot, ".factory"), { recursive: true });
+    writeFileSync(
+      join(clearRoot, ".factory/config.json"),
+      JSON.stringify(
+        {
+          stampVersion: STAMP_VERSION,
+          tracker: { kind: "local" },
+          merge: { policy: "human", method: "rebase" },
+          attackSurface: false,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
     const mainHeadBefore = git(["rev-parse", "main"], clearRoot).stdout.trim();
 
     const implementAsk: Extract<AgentAsk, { k: "agent.implement" }> = {
@@ -262,12 +279,59 @@ function main(): void {
       );
 
       if (folded.k === "pass") {
-        const decision = mergeDecision("squash", undefined, null);
+        // The real chain: fixture config on disk → parseConfig → effective()
+        // → mergeDecision — no hardcoded policy/method here.
+        const configRaw = readFileSync(join(clearRoot, ".factory/config.json"), "utf8");
+        const parsedConfig = parseConfig(configRaw);
+        if (!parsedConfig.ok) {
+          throw new Error(`fixture config failed to parse: ${parsedConfig.errors.join("; ")}`);
+        }
+        const settings = effective(parsedConfig.config, { defaultBranch: "main" });
+        const decision = mergeDecision(settings.mergePolicy.value, settings.mergeMethod?.value, "approved");
+        const decisionOk = decision.k === "merge" && decision.method === "rebase";
         steps.push(
-          step("mergeDecision", decision.k, decision.k === "merge", decision.k === "merge" ? decision.method : undefined),
+          step(
+            "mergeDecision",
+            decision.k === "merge" ? `merge:${decision.method}` : decision.k,
+            decisionOk,
+            decisionOk ? undefined : `expected {k: "merge", method: "rebase"}, got ${JSON.stringify(decision)}`,
+          ),
         );
 
-        if (decision.k === "merge") {
+        if (decision.k === "merge" && decision.method === "rebase") {
+          git(["switch", CLEAR_BRIEF_BRANCH], clearRoot);
+          const rebaseRes = git(["rebase", "main"], clearRoot);
+          git(["switch", "main"], clearRoot);
+          const ffRes = git(["merge", "--ff-only", CLEAR_BRIEF_BRANCH], clearRoot);
+          const mainHeadAfter = git(["rev-parse", "main"], clearRoot).stdout.trim();
+          const greetOnMain = readGreet(clearRoot).includes(CLEAR_BRIEF_MARKER);
+          const mergeOk =
+            rebaseRes.exit === 0 && ffRes.exit === 0 && mainHeadAfter !== mainHeadBefore && greetOnMain;
+          steps.push(
+            step(
+              "merge: rebase to main",
+              mergeOk ? "main updated" : "merge failed",
+              mergeOk,
+              `before=${mainHeadBefore.slice(0, 7)} after=${mainHeadAfter.slice(0, 7)}`,
+            ),
+          );
+
+          // #50's acceptance is "demonstrably rebases" — verify it, don't
+          // just trust the exit codes above: no merge commit landed on main,
+          // and the work commit is reachable from main (not squashed away).
+          const mergesOnMain = git(["log", "--merges", "--oneline", "main"], clearRoot).stdout.trim();
+          const branchHead = git(["rev-parse", CLEAR_BRIEF_BRANCH], clearRoot).stdout.trim();
+          const ancestorRes = git(["merge-base", "--is-ancestor", branchHead, "main"], clearRoot);
+          const rebaseVerified = mergesOnMain === "" && ancestorRes.exit === 0;
+          steps.push(
+            step(
+              "verify: rebase not squash",
+              rebaseVerified ? "no merge commits, work commit reachable from main" : "rebase not proven",
+              rebaseVerified,
+              `merges on main: ${mergesOnMain === "" ? "(none)" : mergesOnMain}`,
+            ),
+          );
+        } else if (decision.k === "merge") {
           git(["switch", "main"], clearRoot);
           git(["merge", "--squash", CLEAR_BRIEF_BRANCH], clearRoot);
           const commitRes = git(["commit", "-m", CLEAR_BRIEF_COMMIT], clearRoot);

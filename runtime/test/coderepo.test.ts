@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "bun:test";
 import {
+  CHECK_SHAPE,
   CLEAR_BRIEF,
   CLEAR_BRIEF_BRANCH,
   CLEAR_BRIEF_COMMIT,
@@ -77,4 +78,14 @@ test("IMPLEMENT_SHAPE is byte-identical to agentwork.ts's ImplementResult declar
   if (!match) throw new Error("could not find the ImplementResult declaration in agentwork.ts");
 
   expect(IMPLEMENT_SHAPE).toBe(match[0].trimEnd());
+});
+
+// ───── CHECK_SHAPE byte-identity
+
+test("CHECK_SHAPE is byte-identical to agentwork.ts's CheckResult declaration", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/agentwork.ts"), "utf8");
+  const match = source.match(/export type CheckResult =\n?(?:.*\n)*?.*?;\n/);
+  if (!match) throw new Error("could not find the CheckResult declaration in agentwork.ts");
+
+  expect(CHECK_SHAPE).toBe(match[0].trimEnd());
 });
