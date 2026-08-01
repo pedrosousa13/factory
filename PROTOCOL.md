@@ -622,11 +622,8 @@ and a step interrupted partway repairs itself on the next run. This is what make
 safe to interrupt — a maintainer can stop a run at any point and re-run it later without
 auditing what already landed.
 
-**Section rules.** Migration reuses the adopt skill's section rules for template files —
-see `skills/factory-adopt/SKILL.md` — rather than restating them: a file matching the
-rendered template is skipped, a file lacking whole template sections gets exactly those
-sections at the template's positions, and any other difference is shown to the maintainer
-and never overwritten.
+**Section rules.** Migration reuses the adopt skill's section rules for template files; see
+`skills/factory-adopt/SKILL.md`.
 
 **The v1 to v2 step asks only what a v1 repo cannot answer.** It detects the tracker choice
 from the legacy adapter document, `docs/agents/issue-tracker.md`, and offers it for
@@ -636,8 +633,10 @@ missing sections, and sets the stamp version.
 
 **A stale stamp blocks autonomous execution only.** A headless run reports the pending
 migration and stops. An interactive run offers to migrate now. Planning skills stay
-available, because they read the prose docs, not the stamp. Only a green preflight at the
-current version unblocks execution.
+available, because they read the prose docs, not the stamp. Migration ends with a full
+preflight check that validates the config against the adapter document and the live
+tracker, and runs the non-interactive push check. Only a green preflight at the current
+version unblocks execution.
 
-**A stamp newer than the installed plugin also blocks execution**, with the message to
-update the Factory plugin. The plugin never downgrades files.
+**A stamp newer than the installed plugin also blocks execution**, with the message
+"update the Factory plugin." The plugin never downgrades files.
