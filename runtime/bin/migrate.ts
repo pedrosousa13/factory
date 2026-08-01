@@ -93,10 +93,17 @@ function main(): void {
   // repo fixture itself; matches planning.ts's own up()/down() bracketing.
   up();
 
-  const { root } = mkV1Repo();
-  const { home } = mkFullSkillsHome();
+  let root: string | undefined;
+  let home: string | undefined;
 
   try {
+    // Both inside the try: mkV1Repo() throws on its own brief-mandated v1
+    // assertion (v1repo.ts) if the fixture ever stopped being v1 — that
+    // failure still has to reach the finally below, or the tracker fixture
+    // up() just wrote is never removed and this mkdtemp call leaks.
+    root = mkV1Repo().root;
+    home = mkFullSkillsHome().home;
+
     // ── step 1: detect the fixture as v1, off its own files — not trusted
     // from mkV1Repo's internal assertion.
     const preState = detectStamp(gatherStampFacts(root));
@@ -248,8 +255,11 @@ function main(): void {
     console.log(`\noverall: ${allOk ? "PASS" : "FAIL"}`);
     if (!allOk) process.exitCode = 1;
   } finally {
-    rmSkillsHome(home);
-    rmV1Repo(root);
+    // Each only if it was actually created — mkFullSkillsHome() could throw
+    // before home is assigned, or mkV1Repo() before root is, and only
+    // whichever constructors actually ran need tearing down.
+    if (home !== undefined) rmSkillsHome(home);
+    if (root !== undefined) rmV1Repo(root);
     down();
   }
 }

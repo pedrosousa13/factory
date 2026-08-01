@@ -54,10 +54,13 @@
  * offer), then a full preflight against the migrated copy. This is the PRD's
  * L2 proof for the slice — "runs the post-migration preflight per harness" —
  * and it reuses bin/migrate.ts's own shared material (v1repo.ts: the
- * rendered template, the chosen merge-policy/attack-surface answers, and the
- * tracker-reachable question) rather than a second copy of any of them. Every
- * claim is checked against the migrated copy's own files on disk, never
- * trusted from a plan field.
+ * rendered template and the chosen merge-policy/attack-surface answers)
+ * rather than a second copy of either. Its trackerReachable fact reuses this
+ * same function's own reachable check above rather than a second live ask —
+ * the intervening asks only mutate ticket contents, never whether
+ * tracker/tickets/ exists, so the earlier answer still holds. Every claim is
+ * checked against the migrated copy's own files on disk, never trusted from a
+ * plan field.
  *
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
  * fails any check.
@@ -221,8 +224,10 @@ const PHRASEBOOK_PATH = join(DIR, "phrasebook.md");
 // ───────────────────────────────────────────────────────────────── prompt
 
 // REACHABLE_SHAPE and its question now live in ./v1repo — bin/migrate.ts's
-// post-migration preflight check below asks the identical question, and
-// duplicating the shape here would fork what the two hosts test.
+// own post-migration preflight asks the identical question there, and
+// duplicating the shape here would fork what the two hosts test. The slice-6
+// block below reuses the one ask this function already makes with it,
+// rather than asking again.
 
 const VERIFY_SHAPE = `type VerifyAnswer =
   | { result: "ok"; state: "unstarted" | "started" | "parked" | "done" | "canceled"; claimedBy: string | null }
@@ -280,8 +285,8 @@ type HarnessRecord = {
   // L2 proof for this slice: "runs the post-migration preflight per harness."
   migrateDetectV1Ok: boolean; // the fixture copy detects as legacy-v1 before migration
   migrateApplyOk: boolean; // config.json + adapter doc marker on disk, detectStamp no longer legacy-v1 — all verified against the fixture's own files
-  migrateReachable: AskStatus;
-  migrateReachableOk: boolean; // answer.result === "ok"
+  migrateReachable: AskStatus; // == reachable above — reused, not re-asked (see runOne)
+  migrateReachableOk: boolean; // == reachableOk above
   migratePreflightGreenOk: boolean; // full preflight against the migrated copy is green at the current stamp version
   reasks: number;
   totalMs: number;
@@ -574,16 +579,16 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   // (conformance/v1repo.ts's mkV1Repo), migrated end to end: detect v1, plan,
   // apply (config.json + the adapter doc's adopt-theirs/retrofit offer), then
   // a full preflight against the migrated copy. Reuses bin/migrate.ts's own
-  // shared material (v1repo.ts) — the rendered template, the chosen
-  // merge-policy/attack-surface answers, and the tracker-reachable question —
-  // rather than a second copy of any of them. Every claim is checked against
-  // the fixture's own files on disk, never trusted from a plan field.
+  // shared material (v1repo.ts) — the rendered template and the chosen
+  // merge-policy/attack-surface answers — rather than a second copy of
+  // either. The preflight's trackerReachable fact reuses the reachable check
+  // already run above (no second harness call — see the comment where it's
+  // consumed, below). Every claim is checked against the fixture's own files
+  // on disk, never trusted from a plan field.
   const migrateRepo = mkV1Repo();
   const migrateSkillsHome = mkFullSkillsHome();
   let migrateDetectV1Ok = false;
   let migrateApplyOk = false;
-  let migrateReachableStatus: AskStatus = "failed";
-  let migrateReachableOk = false;
   let migratePreflightGreenOk = false;
   const migrateStart = performance.now();
   try {
@@ -615,11 +620,13 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     }
 
     const configOnDisk = JSON.parse(readFileSync(join(migrateRepo.root, CONFIG_PATH), "utf8"));
+    const configKeys = Object.keys(configOnDisk).sort().join(",");
     const markerPresent = /<!--\s*factory:tracker\s+kind=linear\s*-->/.test(
       readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8"),
     );
     const postState = detectStamp(gatherStampFacts(migrateRepo.root));
     migrateApplyOk =
+      configKeys === "attackSurface,merge,stampVersion,tracker" &&
       configOnDisk.stampVersion === STAMP_VERSION &&
       configOnDisk.tracker.kind === "linear" &&
       configOnDisk.merge.policy === CHOSEN_MERGE_POLICY &&
@@ -628,17 +635,16 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
       postState.k === "v2" &&
       postState.version === STAMP_VERSION;
 
-    // trackerReachable — the same probe the reachable check above already
-    // asks against the same local markdown tracker fixture, cwd unchanged
-    // (this file's own directory, where tracker/tickets/ actually sits).
-    const migrateReachablePrompt = buildPrompt(TRACKER_REACHABLE_QUESTION, phrasebook, REACHABLE_SHAPE);
-    const migrateReachableLog = askWithRetry(runner, { k: "tracker.reachable" }, migrateReachablePrompt);
-    migrateReachableStatus = migrateReachableLog.status;
+    // trackerReachable reuses the reachable check already run above (same
+    // question, shape, runner, cwd, and fixture) rather than asking again: the
+    // intervening asks mutate ticket *contents*, never whether
+    // tracker/tickets/ exists, so the predicate is unchanged and the answer
+    // is already in reachableLog — a second live ask here would just spend
+    // another harness call answering the same question a second time.
     const trackerReachable =
-      migrateReachableLog.status !== "failed"
-        ? migrateReachableLog.answer
-        : { result: "unreachable" as const, why: `harness ask failed: ${migrateReachableLog.whys[1]}` };
-    migrateReachableOk = trackerReachable.result === "ok";
+      reachableLog.status !== "failed"
+        ? reachableLog.answer
+        : { result: "unreachable" as const, why: `harness ask failed: ${reachableLog.whys[1]}` };
 
     const preflightFacts = gatherPreflightFacts(migrateRepo.root, {
       trackerReachable,
@@ -647,7 +653,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     const verdict = preflight(preflightFacts);
     migratePreflightGreenOk = verdict.ok && preflightFacts.stampVersion.repo === STAMP_VERSION;
     console.log(
-      `  migrate v1->v2: detect=${migrateDetectV1Ok ? "yes" : "no"} apply=${migrateApplyOk ? "yes" : "no"} reachable=${migrateReachableStatus} preflight=${verdict.ok ? "green" : "red"} (expected green: ${migratePreflightGreenOk ? "yes" : "no"})`,
+      `  migrate v1->v2: detect=${migrateDetectV1Ok ? "yes" : "no"} apply=${migrateApplyOk ? "yes" : "no"} reachable=${reachableLog.status} preflight=${verdict.ok ? "green" : "red"} (expected green: ${migratePreflightGreenOk ? "yes" : "no"})`,
     );
   } finally {
     rmSkillsHome(migrateSkillsHome.home);
@@ -729,8 +735,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     contentionLog,
     openIssuesLog,
   ];
-  const reasks =
-    asks.filter((l) => l.status === "valid-after-reask").length + (migrateReachableStatus === "valid-after-reask" ? 1 : 0);
+  const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
   const totalMs =
     reachableMs +
     verifyMs +
@@ -828,8 +833,8 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     phrasebookInlinedOk,
     migrateDetectV1Ok,
     migrateApplyOk,
-    migrateReachable: migrateReachableStatus,
-    migrateReachableOk,
+    migrateReachable: reachableLog.status,
+    migrateReachableOk: reachableOk,
     migratePreflightGreenOk,
     reasks,
     totalMs,
