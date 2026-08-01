@@ -681,3 +681,21 @@ test("an auto policy's method survives the trip through effective() into mergeDe
 
   expect(decision).toEqual({ k: "merge", method: "rebase" });
 });
+
+test("an auto policy with no method reaches mergeDecision as that policy's method", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "rebase" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+  const decision = mergeDecision(settings.mergePolicy.value, settings.mergeMethod?.value, null);
+
+  expect(decision).toEqual({ k: "merge", method: "rebase" });
+});
