@@ -33,8 +33,9 @@ It is the source of truth; this file only bootstraps it.
 
 ## Hard rules (from the protocol — details there)
 
-- The Queue is the only source of work. Empty Queue → push notification, stop.
-  Never invent work.
+- The Queue is the only source of work. Empty Queue → push notification,
+  stop — an interactive Session also notes that a fresh session can plan
+  more work; a headless run does not. Never invent work.
 - At Session start, ask which milestone to work if the Project has any (menu:
   each milestone, everything, no-milestone when such issues exist). No
   milestones → skip the question, run the whole Queue as before. Draining a

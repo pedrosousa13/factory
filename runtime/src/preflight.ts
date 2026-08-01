@@ -6,6 +6,7 @@
 // in; this module only turns facts into a verdict.
 
 import type { ParseResult } from "./config";
+import { resolveRoles } from "./roles";
 
 // ───── input facts
 
@@ -32,6 +33,9 @@ export interface PreflightFacts {
   trackerReachable: TrackerReachable;
   pushCheck: PushCheck;
   stampVersion: StampVersion;
+  // Which planning-role implementations the host found installed. Gathered by
+  // edges.ts — this module stays pure and only decides what the list means.
+  availableRoles: string[];
 }
 
 // ───── verdict shape
@@ -183,6 +187,11 @@ export function preflight(facts: PreflightFacts): PreflightResult {
       blocksExecutionOnly: true,
     });
   }
+
+  // PRD §4: each role resolves at preflight, preferred then fallback. A role
+  // with no available implementation stops the run, like any other missing
+  // prerequisite — collected, never reported alone (PROTOCOL.md:21-24).
+  failures.push(...resolveRoles(facts.availableRoles).failures);
 
   if (failures.length > 0) {
     return { ok: false, failures };

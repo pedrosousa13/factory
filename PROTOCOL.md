@@ -180,6 +180,9 @@ The Queue is the set of this Project's issues that are:
 - labeled `ready-for-agent`, and
 - in an unstarted state, and
 - in scope (see "Queue scope" below), and
+- outside the reserved planning namespace ("Wayfinder maps" below) — a
+  `wayfinder:` or `planning:` labeled issue never enters the Queue, even
+  one that also carries `ready-for-agent`, and
 - **unblocked**: nothing that blocks them is still unfinished.
 
 **Queue scope**, chosen once at Session start, narrows which issues count:
@@ -226,6 +229,10 @@ check, are in `docs/agents/issue-tracker.md`.
   against.
 
 The loop never invents work, scoped or not.
+
+An interactive Session's empty-Queue report ends by noting that a fresh
+session can plan more work — the loop does not start one itself. A
+headless run stops with no such note.
 
 ### 2. State mirroring (pickup)
 
@@ -507,6 +514,14 @@ a stamped repo it would be improvising against the live tracker. Add the
 section before charting a map here — re-running `/factory-adopt` retrofits
 it from the current template.
 
+The reserved planning namespace is every label that starts with
+`wayfinder:` or `planning:`. Today that is `wayfinder:map`,
+`wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`,
+`wayfinder:task`, and `planning:prd`. The match is on the prefix, so a new
+artifact kind inherits the exclusion by naming itself in the namespace.
+Triage (`~/.claude/skills/triage`) skips every issue in this namespace: it
+assigns no category, no state, no priority, and no milestone to one.
+
 ## Security sweeps
 
 Security work must be planned work, or it never exists: the loop never
@@ -533,6 +548,13 @@ files enters a Queue until the maintainer triages it: executing a planned
 sweep's brief is not the loop inventing work, any more than landing any
 other brief is. The maintainer may consolidate several milestones' sweeps
 into fewer — an explicit decision, not a default.
+
+A sweep skips every issue in the reserved planning namespace, the same as
+every other invariant in this document: a wayfinder map or a PRD never
+touches the attack surface, so a sweep never treats one as though it did.
+Findings a sweep files are ordinary issues labeled `needs-triage`, never
+planning artifacts — a sweep never mints a `wayfinder:` or `planning:`
+label.
 
 **Intertwined criteria, as a complement.** A Planning Session slicing an
 issue that touches the attack surface writes security acceptance criteria

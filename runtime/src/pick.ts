@@ -4,8 +4,9 @@
 // until one tracker.read proves otherwise"; PRD §4 "the runtime re-checks
 // only mechanical invariants"). No fs, no process, no I/O.
 
-import type { TicketFacts, IssueState, OpenState } from "./tracker";
+import type { QueueScope, TicketFacts, IssueState, OpenState } from "./tracker";
 import { OPEN_STATES, queueOrder } from "./tracker";
+import { isPlanningArtifact } from "./planning";
 
 // ───── branch naming
 
@@ -28,9 +29,26 @@ export function branchName(id: string, title: string): string {
 
 // ───── mechanical invariants
 
-export type PickInput = { candidates: TicketFacts[]; milestone: string | null };
+export type PickInput = { candidates: TicketFacts[]; scope: QueueScope };
 
 export type Excluded = { id: string; why: string };
+
+// PROTOCOL.md:185-192. Milestone scope is fail-open on purpose: an issue with
+// no milestone stays in scope, so a scoped run never strands unassigned work.
+// "Everything" and "(No milestone)" are different scopes, not one nullable
+// milestone — they select different Queues and report differently when empty.
+function inScope(ticket: TicketFacts, scope: QueueScope): string | null {
+  switch (scope.k) {
+    case "everything":
+      return null;
+    case "milestone":
+      if (ticket.milestone === null || ticket.milestone === scope.milestone) return null;
+      return `milestone "${ticket.milestone}" is not in scope "${scope.milestone}"`;
+    case "no-milestone":
+      if (ticket.milestone === null) return null;
+      return `milestone "${ticket.milestone}" is out of scope: this run is scoped to issues with no milestone`;
+  }
+}
 
 // Ready, unstarted, unclaimed, in-scope milestone — the mechanical invariants
 // re-checked at pickup (PRD §4). Collect every failing reason per ticket
@@ -46,9 +64,11 @@ export function applyInvariants(
     if (!ticket.ready) reasons.push("not ready");
     if (ticket.state !== "unstarted") reasons.push(`state is "${ticket.state}", not "unstarted"`);
     if (ticket.claimedBy !== null) reasons.push(`already claimed by "${ticket.claimedBy}"`);
-    if (input.milestone !== null && ticket.milestone !== input.milestone) {
-      reasons.push(`milestone "${ticket.milestone ?? "none"}" is not in scope "${input.milestone}"`);
-    }
+    // PRD §4: the Queue excludes by namespace, so a new artifact kind inherits
+    // the exclusion by naming itself correctly.
+    if (isPlanningArtifact(ticket.labels)) reasons.push("planning artifact, not a work item");
+    const scopeReason = inScope(ticket, input.scope);
+    if (scopeReason !== null) reasons.push(scopeReason);
 
     if (reasons.length > 0) {
       excluded.push({ id: ticket.id, why: reasons.join("; ") });

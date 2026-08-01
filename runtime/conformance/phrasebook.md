@@ -3,6 +3,13 @@
 Factory asks in neutral words; this file says how THIS tracker expresses each one; the
 agent brings its own file tools.
 
+## What this file is
+
+This is the planning half's contract. Planning skills read it instead of
+`docs/agents/issue-tracker.md`. It says how this tracker expresses each of
+Factory's neutral concepts. It holds prose only — no commands, no CLI names,
+and no flags. The agent works out each call itself.
+
 ## Identity
 
 - a ticket = a file `tracker/tickets/<id>.md`; its id = the filename stem (e.g. `T-1`)
@@ -23,6 +30,7 @@ agent brings its own file tools.
 | done                | frontmatter `state: done`                                               |
 | canceled            | frontmatter `state: canceled`                                           |
 | milestone           | frontmatter `milestone:` field                                          |
+| planning artifact   | any label starting `wayfinder:` or `planning:`                          |
 | blocked by          | frontmatter `blockedBy:` list of ids; blocking while any listed ticket's own file has `state` not in done/canceled |
 | queue order         | P0 > P1 > P2 > P3 > none, ties oldest `createdAt` first                 |
 | a comment           | appended text at the end of the ticket's body, under the ticket's own heading |

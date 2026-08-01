@@ -28,7 +28,24 @@ export type TicketFacts = {
   state: IssueState;
   claimedBy: string | null; // actor holding the claim, if any
   blockedBy: string[]; // ids of still-open tickets blocking this one
+  // Every tracker label on the issue EXCEPT the agent-ready flag, which stays
+  // modelled as `ready` above — slices 1-4 all read `ready`, and duplicating it
+  // here would give the same fact two sources that could disagree. Needed from
+  // slice 5 on: the reserved planning namespace is defined in terms of labels
+  // (PRD §4), and the empty-Queue breakdown counts `needs-info` and
+  // `ready-for-human` (PROTOCOL.md:210-212).
+  labels: string[];
 };
+
+// ───── Queue scope (PROTOCOL.md:185-192)
+
+// Chosen once at Session start. Three cases, not two: "everything" and
+// "no-milestone" produce different Queues AND different empty-Queue reports,
+// so they cannot share a representation.
+export type QueueScope =
+  | { k: "everything" }
+  | { k: "milestone"; milestone: string }
+  | { k: "no-milestone" };
 
 // ────────────────────────────────────────────────────────── the ask vocabulary
 
@@ -49,7 +66,13 @@ export type Ask =
   | { k: "tracker.comment"; issue: string; text: string } // "append this comment"
   | { k: "tracker.milestones" } // "list milestones in stable order"
   | { k: "tracker.milestoneCounts"; milestone: string } // "count open tickets in milestone, by state"
-  | { k: "tracker.verify"; issue: string }; // "what is this ticket's current state right now?"
+  | { k: "tracker.verify"; issue: string } // "what is this ticket's current state right now?"
+  // Every still-open issue in scope, whatever its labels — deliberately wider
+  // than tracker.candidates, which returns only ready/unstarted/unclaimed
+  // tickets. PROTOCOL.md:213-217 requires the empty-Queue breakdown to run its
+  // own query: counting within the Queue can only ever find `ready-for-agent`
+  // issues and reports zero for the two labels that matter most.
+  | { k: "tracker.openIssues"; milestone: string | null };
 
 // ──────────────────────────────────────────────────────────── the answer shapes
 
@@ -64,11 +87,11 @@ export type UnclaimAnswer = { result: "ok" };
 export type SetReadyAnswer = { result: "ok" };
 export type CommentAnswer = { result: "ok" };
 export type MilestonesAnswer = { result: "ok"; milestones: string[] };
-/** Open tickets only — done/canceled tickets don't get counted here. */
-export type MilestoneCountsAnswer = { result: "ok"; counts: Record<OpenState, number> };
+export type MilestoneCountsAnswer = { result: "ok"; counts: Record<IssueState, number> };
 export type VerifyAnswer =
   | { result: "ok"; state: IssueState; claimedBy: string | null }
   | { result: "missing" };
+export type OpenIssuesAnswer = { result: "ok"; tickets: TicketFacts[] };
 
 /** Ask kind → the answer shape it expects. */
 export type Answer = {
@@ -83,12 +106,13 @@ export type Answer = {
   "tracker.milestones": MilestonesAnswer;
   "tracker.milestoneCounts": MilestoneCountsAnswer;
   "tracker.verify": VerifyAnswer;
+  "tracker.openIssues": OpenIssuesAnswer;
 };
 
 // ──────────────────────────────────────────────────────────────────── the checker
 
 const URGENCIES: Urgency[] = ["P0", "P1", "P2", "P3", "none"];
-const STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
+export const STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
 export const OPEN_STATES: OpenState[] = ["unstarted", "started", "parked"];
 
 function isObj(x: unknown): x is Record<string, unknown> {
@@ -128,6 +152,7 @@ function ticketFacts(raw: unknown, path: string): Checked<TicketFacts> {
   if (raw.claimedBy !== null && !isStr(raw.claimedBy))
     return bad(`${path}.claimedBy: not a string or null`);
   if (!isStrArray(raw.blockedBy)) return bad(`${path}.blockedBy: not a string array`);
+  if (!isStrArray(raw.labels)) return bad(`${path}.labels: not a string array`);
   return {
     ok: true,
     value: {
@@ -140,6 +165,7 @@ function ticketFacts(raw: unknown, path: string): Checked<TicketFacts> {
       state: raw.state,
       claimedBy: raw.claimedBy,
       blockedBy: raw.blockedBy,
+      labels: raw.labels,
     },
   };
 }
@@ -206,8 +232,8 @@ export function check(
     case "tracker.milestoneCounts": {
       if (result !== "ok") return bad(`result: ${JSON.stringify(result)} is not ok`);
       if (!isObj(raw.counts)) return bad("counts: not an object");
-      const counts = {} as Record<OpenState, number>;
-      for (const s of OPEN_STATES) {
+      const counts = {} as Record<IssueState, number>;
+      for (const s of STATES) {
         const v = raw.counts[s];
         if (typeof v !== "number") return bad(`counts.${s}: not a number`);
         counts[s] = v;
@@ -223,6 +249,18 @@ export function check(
       if (raw.claimedBy !== null && !isStr(raw.claimedBy))
         return bad("claimedBy: not a string or null");
       return ok({ result: "ok", state: raw.state, claimedBy: raw.claimedBy });
+    }
+
+    case "tracker.openIssues": {
+      if (result !== "ok") return bad(`result: ${JSON.stringify(result)} is not ok`);
+      if (!Array.isArray(raw.tickets)) return bad("tickets: not an array");
+      const tickets: TicketFacts[] = [];
+      for (let i = 0; i < raw.tickets.length; i++) {
+        const t = ticketFacts(raw.tickets[i], `tickets[${i}]`);
+        if (!t.ok) return t;
+        tickets.push(t.value);
+      }
+      return ok({ result: "ok", tickets });
     }
   }
 }

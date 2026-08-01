@@ -118,7 +118,7 @@ function main(): void {
   );
 
   // ── mechanical invariants + blocker resolution (pure, src/pick.ts)
-  const { eligible } = applyInvariants({ candidates, milestone: null });
+  const { eligible } = applyInvariants({ candidates, scope: { k: "everything" } });
   const { unblocked: mechanicallyUnblocked, needsRead } = resolveBlocking(eligible, candidates);
   const stillBlocked = eligible.filter((t) => !mechanicallyUnblocked.some((u) => u.id === t.id));
 

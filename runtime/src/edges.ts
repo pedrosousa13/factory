@@ -3,13 +3,14 @@
 // to the pure modules (config.ts, marker.ts, preflight.ts) that decide what
 // they mean.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { parseConfig, type ParseResult } from "./config";
 import { readMarker } from "./marker";
 import { STAMP_VERSION } from "./version";
 import { CONFIG_PATH } from "./paths";
+import { ROLE_TABLE } from "./roles";
 import type { AdapterMarker, PreflightFacts, PushCheck, StampVersion, TrackerReachable } from "./preflight";
 
 export { CONFIG_PATH };
@@ -56,12 +57,75 @@ function gatherStampVersion(config: "missing-file" | ParseResult): StampVersion 
   return { repo: config !== "missing-file" && config.ok ? config.config.stampVersion : null, plugin: STAMP_VERSION };
 }
 
+// ───── planning-role implementations
+
+const SKILLS_DIR = ".claude/skills";
+const PLUGIN_CACHE_DIR = ".claude/plugins/cache";
+
+// PROTOCOL.md:44-46: check the `~/.claude/skills/` path itself — a missing or
+// broken symlink there leaves the skill unavailable even if the source exists.
+// existsSync follows symlinks, so a broken one reads as absent, which is what
+// we want.
+function skillInstalled(home: string, name: string): boolean {
+  return existsSync(join(home, SKILLS_DIR, name));
+}
+
+// A directory listing where "nothing here" and "can't tell" both mean the
+// same thing to a caller walking the plugin cache: no entries. existsSync
+// alone isn't enough to guard readdirSync — it passes for a path that exists
+// as a file, not a directory, and readdirSync then throws. Preflight's
+// contract is to collect every failure and report them together, so a walk
+// that can throw would crash preflight instead of just finding nothing.
+function safeReaddir(path: string): string[] {
+  try {
+    return readdirSync(path);
+  } catch {
+    return [];
+  }
+}
+
+// PROTOCOL.md:53-60: a plugin skill has no `~/.claude/skills/` path. It
+// unpacks to
+// `<home>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`,
+// and both the marketplace and the version differ per machine — the protocol
+// says the check must not care which marketplace it came from — so walk those
+// two levels instead of naming them.
+function pluginInstalled(home: string, id: string): boolean {
+  const [pluginName, skillName] = id.split(":");
+  if (pluginName === undefined || skillName === undefined) return false;
+
+  const cache = join(home, PLUGIN_CACHE_DIR);
+
+  for (const marketplace of safeReaddir(cache)) {
+    const versions = join(cache, marketplace, pluginName);
+    for (const version of safeReaddir(versions)) {
+      if (existsSync(join(versions, version, "skills", skillName))) return true;
+    }
+  }
+  return false;
+}
+
+export function gatherAvailableRoles(home: string): string[] {
+  const names = new Set<string>();
+  for (const spec of ROLE_TABLE) {
+    for (const impl of [spec.preferred, spec.fallback]) {
+      if (impl === null) continue;
+      const found = impl.k === "plugin" ? pluginInstalled(home, impl.name) : skillInstalled(home, impl.name);
+      if (found) names.add(impl.name);
+    }
+  }
+  return [...names];
+}
+
 // ───── gatherPreflightFacts
 
 export interface GatherOpts {
   // Needs a harness run to ask; edges don't spawn agents, so the caller
   // decides how (or whether) this got asked and passes the result in.
   trackerReachable: TrackerReachable;
+  // The maintainer's home directory. A parameter rather than a `process.env`
+  // read so a test can point it at a fixture tree.
+  home: string;
 }
 
 export function gatherPreflightFacts(repoRoot: string, opts: GatherOpts): PreflightFacts {
@@ -72,6 +136,7 @@ export function gatherPreflightFacts(repoRoot: string, opts: GatherOpts): Prefli
     trackerReachable: opts.trackerReachable,
     pushCheck: gatherPushCheck(repoRoot),
     stampVersion: gatherStampVersion(config),
+    availableRoles: gatherAvailableRoles(opts.home),
   };
 }
 

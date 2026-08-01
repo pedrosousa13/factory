@@ -1,5 +1,5 @@
 /**
- * L2 conformance sweep — reachable, verify, and slice 2's, 3's, and 4's asks.
+ * L2 conformance sweep — reachable, verify, and slice 2's, 3's, 4's, and 5's asks.
  *
  * For each harness (claude, codex, pi): reset the local markdown tracker
  * fixture (the committed default three plus a fourth ticket, T-4, blocked by
@@ -35,6 +35,19 @@
  * actor (CONTENTION_ACTOR, fixture.ts), asserting a claim attempt comes back
  * `taken` with the right holder and never touches the file.
  *
+ * Then, slice 5's own asks — the two named as this slice's L2 proof (PRD:
+ * "L2 confirms role resolution and prompt-inlined skill delivery on all
+ * three harnesses") plus the openIssues ask both depend on: tracker.openIssues
+ * over the whole fixture (including the two planning-artifact tickets, T-6
+ * and T-7), verified against the fixture files, not the reply — every open
+ * ticket present, and the planning artifacts' labels intact; emptyQueueReport's
+ * breakdown under a milestone scope, checked against a count taken directly
+ * from the fixture files rather than the agent's own openIssues answer; and
+ * prompt-inlined skill delivery — the phrasebook text present, byte-identical,
+ * in the actual prompt string handed to the harness. These mirror
+ * bin/planning.ts's steps 1, 4, and 6 exactly, reusing OPEN_ISSUES_QUESTION
+ * and OPEN_ISSUES_SHAPE from fixture.ts rather than a second copy of either.
+ *
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
  * fails any check.
  *
@@ -49,6 +62,7 @@ import type { Answer, Ask, TicketFacts } from "../src/tracker";
 import { askWithRetry, buildPrompt, extractJson, type AskStatus, type Runner } from "../src/askloop";
 import { runHarness, type HarnessName } from "../src/harness";
 import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
+import { breakdown, emptyQueueReport } from "../src/queuereport";
 import { checkAgent, type AgentAsk, type ImplementResult } from "../src/agentwork";
 import { parkCommentText, type ParkReason } from "../src/park";
 import {
@@ -74,12 +88,16 @@ import {
   EXTRA_TICKETS,
   garblePrompt,
   GARBLE_QUESTION,
+  OPEN_ISSUES_QUESTION,
+  OPEN_ISSUES_SHAPE,
   READ_SHAPE,
   readFixtureBody,
   readFixtureField,
+  readFixtureTicket,
   readQuestion,
   SET_STATE_SHAPE,
   startedQuestion,
+  TICKET_FACTS_SHAPE,
   TICKETS_DIR,
   UNCLAIM_SHAPE,
   unclaimQuestion,
@@ -224,6 +242,10 @@ type HarnessRecord = {
   contention: AskStatus;
   contentionOk: boolean; // answer.result === "taken" && answer.by === CONTENTION_ACTOR
   contentionFileOk: boolean; // T-5.md claimedBy is still CONTENTION_ACTOR, untouched
+  openIssues: AskStatus;
+  openIssuesOk: boolean; // every open ticket listed, T-6/T-7 present with labels intact
+  breakdownOk: boolean; // emptyQueueReport's breakdown matches a count taken directly from the fixture files
+  phrasebookInlinedOk: boolean; // the phrasebook text is present, byte-identical, in the actual prompt sent
   reasks: number;
   totalMs: number;
   pass: boolean;
@@ -236,7 +258,14 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     throw new Error(`fixture reset did not produce ${join(TICKETS_DIR, "T-1.md")}`);
   }
 
-  const runner: Runner = (prompt) => runHarness(harness, prompt, DIR);
+  // lastPrompt: the exact prompt string handed to the harness for the most
+  // recent ask — captured, not reconstructed, for slice 5's prompt-inlined
+  // skill delivery check below (mirrors bin/planning.ts's step 6).
+  let lastPrompt = "";
+  const runner: Runner = (prompt) => {
+    lastPrompt = prompt;
+    return runHarness(harness, prompt, DIR);
+  };
 
   // ── reachable
   const reachableQuestion = "Can this project's tracker be reached right now?";
@@ -273,13 +302,18 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   const candidatesMs = Math.round(performance.now() - candidatesStart);
   const candidates: TicketFacts[] = candidatesLog.status !== "failed" ? candidatesLog.answer.tickets : [];
   const candidateIds = candidates.map((t) => t.id).sort();
-  const expectedIds = ["T-1", "T-2", "T-3", "T-4"];
+  // T-6 (slice 5's planning-artifact fixture, EXTRA_TICKETS) is deliberately
+  // ready/unstarted/unclaimed, so a compliant answer to CANDIDATES_QUESTION's
+  // literal wording includes it — tracker.candidates does not itself know
+  // about the planning namespace; only applyInvariants (src/pick.ts) excludes
+  // it, and that exclusion is asserted separately, below.
+  const expectedIds = ["T-1", "T-2", "T-3", "T-4", "T-6"];
   const candidatesOk =
     candidatesLog.status !== "failed" &&
     candidateIds.length === expectedIds.length &&
     expectedIds.every((id) => candidateIds.includes(id));
   console.log(
-    `  candidates: ${candidatesLog.status}${candidatesLog.status === "failed" ? ` — ${candidatesLog.whys[1]}` : ""} (expected T-1..T-4, 4 tickets: ${candidatesOk ? "yes" : "no"}; got ${candidateIds.join(",") || "none"})`,
+    `  candidates: ${candidatesLog.status}${candidatesLog.status === "failed" ? ` — ${candidatesLog.whys[1]}` : ""} (expected T-1..T-4 + T-6, 5 tickets: ${candidatesOk ? "yes" : "no"}; got ${candidateIds.join(",") || "none"})`,
   );
 
   // ── read T-1 (body present)
@@ -305,7 +339,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
 
   // ── fail-safe: T-9 (invisible blocker) reads missing, so T-4 stays blocked
   // (pure check via src/pick.ts — no further harness call beyond the T-9 read above)
-  const { eligible } = applyInvariants({ candidates, milestone: null });
+  const { eligible } = applyInvariants({ candidates, scope: { k: "everything" } });
   const { unblocked: mechanicallyUnblocked, needsRead } = resolveBlocking(eligible, candidates);
   const stillBlocked = eligible.filter((t) => !mechanicallyUnblocked.some((u) => u.id === t.id));
   const reads: ReadResult[] =
@@ -445,6 +479,61 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     `  contention T-5: ${contentionLog.status}${contentionLog.status === "failed" ? ` — ${contentionLog.whys[1]}` : ""} (expected taken by ${CONTENTION_ACTOR}: ${contentionOk ? "yes" : "no"}; file claimedBy=${readFixtureField("T-5", "claimedBy")})`,
   );
 
+  // ── slice 5: tracker.openIssues — every still-open ticket, including the
+  // two planning artifacts (T-6, T-7) with their labels intact. Verified
+  // against the fixture files, never against the agent's claim — mirrors
+  // bin/planning.ts's step 1. Reuses OPEN_ISSUES_QUESTION/OPEN_ISSUES_SHAPE
+  // from fixture.ts rather than a second copy of the prompt.
+  const ALL_OPEN_IDS = ["T-1", "T-2", "T-3", "T-4", "T-5", "T-6", "T-7", "T-8", "T-10"];
+  const openIssuesShape = `${TICKET_FACTS_SHAPE}\n${OPEN_ISSUES_SHAPE}`;
+  const openIssuesPrompt = buildPrompt(OPEN_ISSUES_QUESTION, phrasebook, openIssuesShape);
+  const openIssuesStart = performance.now();
+  const openIssuesLog = askWithRetry(runner, { k: "tracker.openIssues", milestone: null }, openIssuesPrompt);
+  const openIssuesMs = Math.round(performance.now() - openIssuesStart);
+  const openTickets: TicketFacts[] = openIssuesLog.status !== "failed" ? openIssuesLog.answer.tickets : [];
+  const openIds = new Set(openTickets.map((t) => t.id));
+  const everyTicketListed = ALL_OPEN_IDS.every((id) => openIds.has(id));
+  const t6 = openTickets.find((t) => t.id === "T-6");
+  const t7 = openTickets.find((t) => t.id === "T-7");
+  const planningLabelsIntact =
+    t6 !== undefined && t6.labels.includes("wayfinder:map") && t7 !== undefined && t7.labels.includes("planning:prd");
+  const openIssuesOk = openIssuesLog.status !== "failed" && everyTicketListed && planningLabelsIntact;
+  console.log(
+    `  openIssues: ${openIssuesLog.status}${openIssuesLog.status === "failed" ? ` — ${openIssuesLog.whys[1]}` : ""} (every open ticket listed: ${everyTicketListed ? "yes" : "no"}; planning labels intact: ${planningLabelsIntact ? "yes" : "no"})`,
+  );
+
+  // ── slice 5: emptyQueueReport's breakdown under a milestone scope, checked
+  // against a count taken directly from the fixture files — not from the
+  // agent's openIssues reply above — mirrors bin/planning.ts's step 4. L2
+  // proof named by the PRD ("L2 confirms role resolution and prompt-inlined
+  // skill delivery on all three harnesses" — this is the breakdown half of
+  // that same empty-Queue path).
+  const groundTruthOpenIssues = ALL_OPEN_IDS.map(readFixtureTicket);
+  const groundTruthBreakdown = breakdown(groundTruthOpenIssues);
+  const report = emptyQueueReport({
+    scope: { k: "milestone", milestone: "M1" },
+    openIssues: openTickets,
+    counts: null,
+    mode: "headless",
+  });
+  const breakdownOk =
+    report.breakdown !== null &&
+    report.breakdown.open === groundTruthBreakdown.open &&
+    report.breakdown.readyForHuman === groundTruthBreakdown.readyForHuman &&
+    report.breakdown.needsInfo === groundTruthBreakdown.needsInfo &&
+    report.breakdown.blocked === groundTruthBreakdown.blocked;
+  console.log(
+    `  breakdown (milestone scope): fixture=${JSON.stringify(groundTruthBreakdown)} report=${JSON.stringify(report.breakdown)} (match: ${breakdownOk ? "yes" : "no"})`,
+  );
+
+  // ── slice 5: prompt-inlined skill delivery — the phrasebook text is
+  // present, byte-identical, in the actual prompt string handed to the
+  // runner for the openIssues ask above (captured, not reconstructed) —
+  // mirrors bin/planning.ts's step 6. The PRD's other named L2 proof for
+  // this slice.
+  const phrasebookInlinedOk = lastPrompt.includes(phrasebook);
+  console.log(`  prompt-inlined skill delivery: ${phrasebookInlinedOk ? "present, byte-identical" : "missing or altered"}`);
+
   // ── slice 3: agent.implement — CLEAR_BRIEF on a fresh scratch code repo,
   // done + work verified against the branch the brief told the agent to
   // commit on (not trusted from the "done" reply)
@@ -517,6 +606,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     setUnstartedLog,
     garbleLog,
     contentionLog,
+    openIssuesLog,
   ];
   const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
   const totalMs =
@@ -533,6 +623,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     setUnstartedMs +
     garbleMs +
     contentionMs +
+    openIssuesMs +
     clearMs +
     vagueMs;
 
@@ -557,6 +648,9 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     setUnstartedFileOk &&
     contentionOk &&
     contentionFileOk &&
+    openIssuesOk &&
+    breakdownOk &&
+    phrasebookInlinedOk &&
     implementDoneOk &&
     workVerifiedOk &&
     implementQuestionOk;
@@ -602,6 +696,10 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     contention: contentionLog.status,
     contentionOk,
     contentionFileOk,
+    openIssues: openIssuesLog.status,
+    openIssuesOk,
+    breakdownOk,
+    phrasebookInlinedOk,
     reasks,
     totalMs,
     pass,
@@ -653,6 +751,12 @@ function printTable(records: HarnessRecord[]): void {
     "contention",
     "ok?",
     "file?",
+    "openIssues",
+    "ok?",
+    "breakdown",
+    "ok?",
+    "phrasebook",
+    "ok?",
     "re-asks",
     "total s",
     "pass",
@@ -699,6 +803,12 @@ function printTable(records: HarnessRecord[]): void {
     r.contention,
     r.contentionOk ? "yes" : "no",
     r.contentionFileOk ? "yes" : "no",
+    r.openIssues,
+    r.openIssuesOk ? "yes" : "no",
+    "checked",
+    r.breakdownOk ? "yes" : "no",
+    "checked",
+    r.phrasebookInlinedOk ? "yes" : "no",
     String(r.reasks),
     (r.totalMs / 1000).toFixed(1),
     r.pass ? "PASS" : "FAIL",

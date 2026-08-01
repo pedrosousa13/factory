@@ -13,6 +13,7 @@ import { ADAPTER_DOC_PATH, gatherPreflightFacts } from "../src/edges";
 import { preflight, type Failure, type TrackerReachable } from "../src/preflight";
 import { runHarness, type HarnessName } from "../src/harness";
 import { askWithRetry, buildPrompt, type Runner } from "../src/askloop";
+import { resolveRoles, roleReport } from "../src/roles";
 
 const REPO_ROOT = process.cwd();
 
@@ -71,14 +72,40 @@ function report(failures: Failure[]): void {
 
 // ───── main
 
+// Role detection reads $HOME. With HOME unset — a cron job, a container, any
+// `env -i` invocation — an empty string would make every lookup relative to
+// the current directory, so all seven roles would report absent and every fix
+// would point at a path preflight never looked at. Say so instead.
+function requireHome(): string {
+  const home = process.env.HOME;
+  if (home !== undefined && home !== "") return home;
+
+  report([
+    {
+      what: "HOME is not set, so preflight cannot look for the planning-role implementations",
+      why: "roles resolve against $HOME/.claude/skills and $HOME/.claude/plugins/cache; with HOME empty every lookup would read the current directory instead and report all seven roles absent",
+      fix: "run preflight with HOME set to the maintainer's home directory",
+    },
+  ]);
+  process.exit(1);
+}
+
 function main(): void {
   const harnessName = parseAskReachable(process.argv.slice(2));
+  const home = requireHome();
   const trackerReachable: TrackerReachable = harnessName ? askReachable(harnessName) : "not-asked";
 
-  const facts = gatherPreflightFacts(REPO_ROOT, { trackerReachable });
+  const facts = gatherPreflightFacts(REPO_ROOT, { trackerReachable, home });
   const result = preflight(facts);
 
-  if (result.ok) process.exit(0);
+  if (result.ok) {
+    const roles = resolveRoles(facts.availableRoles);
+    if (roles.resolved.some((s) => s.via === "fallback")) {
+      console.log("planning roles:");
+      console.log(roleReport(roles.resolved));
+    }
+    process.exit(0);
+  }
 
   report(result.failures);
   process.exit(1);

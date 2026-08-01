@@ -365,12 +365,18 @@ procedure — gather context, recommend, verify the claim, grill if needed,
 apply the outcome — applies unchanged; this section only adds the
 sweep-specific rules.
 
-- **Wayfinder issues are skipped.** An open issue carrying any
-  `wayfinder:*` label is a `/wayfinder` planning artifact, not a work item
+- **Reserved-namespace issues are skipped.** The reserved planning
+  namespace is every label that starts with `wayfinder:` or `planning:`.
+  Today that is `wayfinder:map`, `wayfinder:research`,
+  `wayfinder:prototype`, `wayfinder:grilling`, `wayfinder:task`, and
+  `planning:prd`. The match is on the prefix, so a new artifact kind
+  inherits the exclusion by naming itself in the namespace. An open issue
+  carrying any of these labels is a planning artifact, not a work item
   (`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`, "Wayfinder maps"): the sweep leaves
   it exactly as it is — no category label, no state label, no milestone, no
   priority — and it counts toward none of the per-issue invariants below,
-  including sweep completion's final verification.
+  including sweep completion's final verification. A repo being adopted
+  does not get its existing planning artifacts triaged into work items.
 - **Exactly one of each label.** Every open issue ends with exactly one
   category label (`Feature`/`Improvement`/`Bug`, per
   `docs/agents/triage-labels.md`) and exactly one state label
@@ -519,8 +525,9 @@ them; starting the Loop Session is a separate, maintainer-initiated step.
 - Every open issue carries exactly one priority label when the sweep ends,
   on trackers where priority is a label (GitHub) — not zero, not two.
   Doesn't apply where priority is a native field (Linear).
-- The three "every open issue" rules above skip issues carrying a
-  `wayfinder:*` label — planning artifacts, per Phase 2's first sweep rule.
+- The three "every open issue" rules above skip issues carrying a label in
+  the reserved planning namespace — planning artifacts, per Phase 2's first
+  sweep rule.
 - No triage batch is relabeled or rewritten without the maintainer approving
   that batch first.
 - Every AI-written tracker body or comment carries the disclaimer
