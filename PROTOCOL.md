@@ -507,6 +507,14 @@ a stamped repo it would be improvising against the live tracker. Add the
 section before charting a map here — re-running `/factory-adopt` retrofits
 it from the current template.
 
+The reserved planning namespace is every label that starts with
+`wayfinder:` or `planning:`. Today that is `wayfinder:map`,
+`wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`,
+`wayfinder:task`, and `planning:prd`. The match is on the prefix, so a new
+artifact kind inherits the exclusion by naming itself in the namespace.
+Triage (`~/.claude/skills/triage`) skips every issue in this namespace: it
+assigns no category, no state, no priority, and no milestone to one.
+
 ## Security sweeps
 
 Security work must be planned work, or it never exists: the loop never
@@ -533,6 +541,13 @@ files enters a Queue until the maintainer triages it: executing a planned
 sweep's brief is not the loop inventing work, any more than landing any
 other brief is. The maintainer may consolidate several milestones' sweeps
 into fewer — an explicit decision, not a default.
+
+A sweep skips every issue in the reserved planning namespace, the same as
+every other invariant in this document: a wayfinder map or a PRD never
+touches the attack surface, so a sweep never treats one as though it did.
+Findings a sweep files are ordinary issues labeled `needs-triage`, never
+planning artifacts — a sweep never mints a `wayfinder:` or `planning:`
+label.
 
 **Intertwined criteria, as a complement.** A Planning Session slicing an
 issue that touches the attack surface writes security acceptance criteria

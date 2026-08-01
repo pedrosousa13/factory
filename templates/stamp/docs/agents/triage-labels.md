@@ -52,6 +52,12 @@ Queue. How this tracker expresses the map, its tickets, blocking, and the
 frontier is in `docs/agents/issue-tracker.md`, under "Wayfinding
 operations".
 
+The reserved planning namespace is every label that starts with
+`wayfinder:` or `planning:`. Today that is `wayfinder:map`,
+`wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`,
+`wayfinder:task`, and `planning:prd`. The match is on the prefix, so a new
+artifact kind inherits the exclusion by naming itself in the namespace.
+
 ## Labels that stand in for a missing field
 
 The eight labels in the first two tables are universal. Two further groups exist **only** where
