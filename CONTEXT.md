@@ -13,7 +13,7 @@ A piece of software the Factory builds. Lives in its own repo under `~/apps/` wi
 _Avoid_: app, product, workspace
 
 **Tracker adapter**:
-A Project's `docs/agents/issue-tracker.md` — the one file that says how its issue tracker satisfies the tracker contract in `PROTOCOL.md`. The protocol names no tracker product, so moving a Project to a different tracker rewrites this file and nothing else. The Factory's own adapter is Linear.
+A Project's `docs/agents/issue-tracker.md` — the one file that says how its issue tracker satisfies the tracker contract in `PROTOCOL.md`. The protocol names no tracker product, so moving a Project to a different tracker rewrites this file and nothing else. The Factory's own adapter is GitHub.
 _Avoid_: tracker config, issue-tracker doc, integration
 
 **Loop Session**:

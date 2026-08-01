@@ -51,7 +51,7 @@ Run `/factory-adopt` inside the repo. It will:
 
 What the Factory assumes on the machine:
 
-1. **Claude Code**, plus the **Linear MCP server** connected to the Side projects workspace for any Linear-backed Project — the Factory's own repo is one.
+1. **Claude Code**, plus the **Linear MCP server** connected to the Side projects workspace for any Linear-backed Project.
 2. **`gh`** authenticated, git over SSH.
 3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
 

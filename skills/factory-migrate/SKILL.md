@@ -1,6 +1,6 @@
 ---
 name: factory-migrate
-description: Carry a repo already stamped for the Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's current version — to the plugin's current `stampVersion`, per `PROTOCOL.md`'s "## Migration" section. Detects the stamp without changing anything, builds one combined plan for every pending step (the v1-to-v2 step detects the issue tracker from the legacy adapter doc's H1 and offers it for one-tap confirmation, then asks merge policy and attack surface fresh with no defaults), shows one diff — the retrofitted or adopted adapter document plus the four-field `config.json` — for one approval, then writes the adapter document first and `config.json` last, and verifies both against disk with a full preflight run. Use when the user runs /factory-migrate inside a repo whose stamp is legacy v1 or an older v2 version.
+description: Carry a repo already stamped for the Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's current version — to the plugin's current `stampVersion`, per `PROTOCOL.md`'s "## Migration" section. Detects the stamp without changing anything, builds one combined plan for every pending step (the v1-to-v2 step detects the issue tracker from the legacy adapter doc's H1 and offers it for one-tap confirmation, then asks merge policy and attack surface fresh with no defaults), shows one diff — every drifted template-mapped file, the adapter document among them, plus the four-field `config.json` — for one approval, then writes the documents first and `config.json` last, and verifies them against disk with a full preflight run. Use when the user runs /factory-migrate inside a repo whose stamp is legacy v1 or an older v2 version.
 ---
 
 # /factory-migrate — carry a stamped repo to the current version
@@ -110,6 +110,21 @@ cross-referenced in `PROTOCOL.md`'s "## Migration") — this skill does not rest
 those rules, only applies them here to a legacy or stale-v2 document
 instead of a freshly-adopted one.
 
+**The adapter document is not the only stamp file.** `templates/README.md`'s
+file mapping also maps `AGENTS.md`, `docs/agents/triage-labels.md`, and
+`.gitignore` into the repo, and an old stamp drifts on those exactly as it
+drifts on the adapter document. A run that retrofits the adapter document
+alone leaves the rest of the repo describing the stamp it used to have — the
+old tracker named in `AGENTS.md`, the old label scope in `triage-labels.md`.
+
+So for every other row of that mapping, do what the paragraph above does for
+the adapter document: render the template with this repo's real values — the
+tracker-specific `AGENTS-<tracker>.md` for `AGENTS.md`, the generic templates
+for the rest — and classify the diff by the same section rules. `.gitignore`
+is the one file those rules do not govern, and the adopt skill already says
+why: append the lines it lacks, leave the rest alone, and never diff it whole.
+Every file this produces joins the one diff below, under the one approval.
+
 ## One diff, one approval
 
 Show the maintainer everything this run will write, as one combined diff,
@@ -119,6 +134,8 @@ never one approval per step:
 - the adapter document, as it will read after this run — retrofitted with
   whatever the section-rules classification above found missing, adopted
   whole from the template, or unchanged if it already matches;
+- every other template-mapped file the classification above found drifted,
+  each in the same three shapes, plus the `.gitignore` lines to append;
 - the four-field `config.json` this run will write, in the shape
   `/factory-adopt`'s own config-write step states
   (`skills/factory-adopt/SKILL.md:325-349`): `stampVersion` and
@@ -189,7 +206,13 @@ A reply of done is not evidence — the files are. After writing:
    `skills/factory-adopt/SKILL.md:325-349`. Confirm `merge.policy` is one
    of `squash`/`merge`/`rebase`/`human`, and `tracker.kind` matches the
    tracker settled on above.
-3. Run `PROTOCOL.md`'s full Preflight, and show the maintainer the
+3. Re-read every other template-mapped file this run wrote — `AGENTS.md`,
+   `docs/agents/triage-labels.md`, `.gitignore` — and confirm each carries
+   what the approved diff said it would, unless the maintainer chose
+   keep-mine or merge-by-hand for it. Widen the placeholder grep to cover
+   them: run `grep -rn '{{' AGENTS.md docs/agents/` and confirm it returns
+   nothing.
+4. Run `PROTOCOL.md`'s full Preflight, and show the maintainer the
    result.
 
 ## The idempotency contract

@@ -4,11 +4,11 @@
 
 ### Issue tracker
 
-Issues live in Linear — project "Factory" on the Side projects team, via the Linear MCP tools. See `docs/agents/issue-tracker.md`.
+Issues live in the repo itself — GitHub issues on pedrosousa13/factory, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Canonical label names, as team labels on Side projects. See `docs/agents/triage-labels.md`.
+Canonical label names, as repo labels on pedrosousa13/factory — plus `in-progress` and `P0`–`P3`, labels that stand in for a missing field. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
