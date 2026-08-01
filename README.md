@@ -27,7 +27,7 @@ Run `/factory-new <name>`. It will:
 
 1. Create the repo under `~/apps/<name>` with git + a private GitHub remote
 2. Pick the issue tracker — GitHub Issues by default (the repo itself is the tracker), or Linear (a project on the Side projects team)
-3. Stamp Factory conventions: `AGENTS.md`, `docs/agents/` (issue tracker, triage labels, domain docs), triage labels on the tracker, `.scratch/` in `.gitignore`
+3. Stamp Factory conventions: `.factory/config.json` (the stamp — tracker, merge policy, attack surface, optional notifier), `AGENTS.md`, `docs/agents/` (issue tracker, triage labels, domain docs), triage labels on the tracker, `.scratch/` in `.gitignore`
 4. Drop you into a Planning Session to produce the first issues
 
 ## Existing project
@@ -38,6 +38,10 @@ Run `/factory-adopt` inside the repo. It will:
 2. **Re-triage sweep**: every open issue gets a category label (`Feature`/`Improvement`/`Bug`) + a state label (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), and issues destined for agents get durable agent briefs written into them — you approve in batches
 3. Leave the project loop-ready: `/factory` works from that point on
 
+## Already stamped, out of date
+
+Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — the legacy v1 stamp (an adapter doc with a `Factory loop operations` section, no `.factory/config.json`), or a v2 stamp below the plugin's current version — is migrated, not re-adopted. The skill detects the stamp, builds one combined plan for every pending step, shows one diff, and takes one approval. The v1-to-v2 step reads the tracker off the old adapter doc's title for one-tap confirmation and asks only what the old stamp cannot answer: merge policy and attack surface. Preflight names this skill whenever it finds a stale stamp, and `/factory` offers to run it at session start. `PROTOCOL.md`, "Migration", is the contract.
+
 ## Conventions all projects share
 
 - **Issue tracker**: GitHub Issues by default, Linear supported; one tracker per repo. See `docs/agents/issue-tracker.md` for the tool conventions.
@@ -46,6 +50,7 @@ Run `/factory-adopt` inside the repo. It will:
 - **Security sweeps**: a Project with an attack surface carries an OWASP Top 10 sweep issue in every milestone that touches it; declines are recorded in its `CONTEXT.md`. See `PROTOCOL.md`, "Security sweeps".
 - **Git**: branch per issue, PR, auto-merge on green. No half-done work on main — parked issues live on their branch.
 - **Context discipline**: Loop Sessions stay under ~40% context; superpowers subagents do the implementation; `/handoff` bridges sessions.
+- **Notifications**: an optional `notifierCommand` in `.factory/config.json` is the push channel — the plugin's Claude Code `Notification` hook and the runtime's own ping both run it with the message in `FACTORY_NOTIFY_MESSAGE`. Offered during adopt/migrate, declinable. See `PROTOCOL.md`, "Ping and Park".
 
 ## Install
 
