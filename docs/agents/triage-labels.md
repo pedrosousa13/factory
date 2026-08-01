@@ -45,11 +45,12 @@ time a map is charted here.
 
 An issue carrying any `wayfinder:*` label is a **planning artifact, not a
 work item**: it sits outside the triage state machine, carries no state
-label, no category label, and no milestone, and a triage sweep skips it
-entirely rather than bringing it up to the invariant. It never carries
-`ready-for-agent`, so it can never enter a Loop Session's Queue. How this
-tracker expresses the map, its tickets, blocking, and the frontier is in
-`docs/agents/issue-tracker.md`, under "Wayfinding operations".
+label, no category label, no milestone, and no priority label, and a triage
+sweep skips it entirely rather than bringing it up to the invariant. It
+never carries `ready-for-agent`, so it can never enter a Loop Session's
+Queue. How this tracker expresses the map, its tickets, blocking, and the
+frontier is in `docs/agents/issue-tracker.md`, under "Wayfinding
+operations".
 
 The reserved planning namespace is every label that starts with
 `wayfinder:` or `planning:`. Today that is `wayfinder:map`,
@@ -90,15 +91,55 @@ deterministic. Highest first; an issue with none sorts last:
 priority is a label. `docs/agents/issue-tracker.md` carries the resolution
 rule for an issue that ends up carrying two.
 
+## Milestones
+
+Alongside its category and state labels, every open issue also carries
+exactly one milestone — a third axis, and never a triage label: a tracker
+field, or whatever that tracker offers in its place.
+`docs/agents/issue-tracker.md` names the mechanism. Per-axis, exactly like
+the two above: assigning a milestone must not disturb the category label,
+the state label, or this Project's own domain labels.
+
+If this Project has no milestones defined yet, the invariant doesn't apply
+until they exist — milestone names are a maintainer decision, made once, not
+invented by an agent sweep.
+
+The maintainer may decline a milestone for a specific issue. That decision is
+recorded as a comment on the issue carrying this exact line:
+
+**Milestone: declined by the maintainer.**
+
+An issue carrying that line is left alone rather than re-proposed. Detection
+is that line and nothing else — a comment merely discussing milestones is not
+a decline. If the record is ambiguous or absent, treat the issue as **not**
+declined and propose a milestone again: re-asking costs one approval, while
+wrongly inferring a decline drops an issue out of the invariant silently and
+permanently.
+
 ## Security sweeps
 
-`PROTOCOL.md` defines the security-sweep issue and says when a milestone
-carries one. The two label rules a sweep follows are here.
+If this Project passes the attack-surface test — its software accepts
+untrusted input, serves HTTP, authenticates anyone, stores user data, or
+calls third-party services — then every milestone containing issues that
+touch that surface also carries one **security-sweep issue**: a full OWASP
+Top 10 pass over the code as it stands, filed, triaged, and milestoned like
+any other issue (category `Improvement`), blocked by the milestone's
+attack-surface issues, its findings filed as new `needs-triage` issues
+rather than fixed in the sweep. Planning
+Sessions file it alongside the milestone's other issues; an adoption sweep
+proposes it where missing.
 
-A sweep skips every issue in the reserved planning namespace above. A
+A sweep skips every issue in the reserved planning namespace above: a
 wayfinder map or a PRD never touches the attack surface, so a sweep never
-treats one as though it did.
+treats one as though it did. Findings a sweep files are ordinary issues
+labeled `needs-triage`, never planning artifacts — a sweep never mints a
+`wayfinder:` or `planning:` label.
 
-Findings a sweep files are ordinary issues labeled `needs-triage`, never
-planning artifacts. A sweep never mints a `wayfinder:` or `planning:`
-label.
+The maintainer may rule the Project fails the test, or decline sweeps
+outright — recorded in this Project's `CONTEXT.md` with this exact marker
+line:
+
+**Security sweeps: declined by the maintainer.**
+
+Detection is the marker line only. An ambiguous or absent record means not
+declined, and the sweep is proposed again.
