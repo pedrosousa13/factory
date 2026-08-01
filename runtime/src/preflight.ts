@@ -97,13 +97,11 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // input that decides which stamp a repo carries.
   const stamp = detectStamp(facts.stampFacts);
 
-  // What every "this repo is not stamped" failure tells the maintainer to
-  // run. Nothing in the plugin applies a migration yet — PROTOCOL.md's
-  // "## Migration" marks the applier pending, and issue #50 tracks it. So a
-  // legacy v1 repo gets the same command as a never-adopted one, and only the
-  // reason differs. /factory-adopt is safe to re-run (PROTOCOL.md:97), writes
-  // .factory/config.json at the current stamp version, and uses the same
-  // section rules a migration step would.
+  // What a "this repo is not stamped" failure tells the maintainer to run.
+  // A legacy v1 stamp routes to /factory-migrate (the stale-stamp branch
+  // below); everything unstamped routes here, to /factory-adopt, which is
+  // safe to re-run (PROTOCOL.md:97), writes .factory/config.json at the
+  // current stamp version, and uses the same section rules migration does.
   //
   // A repo that already carries a stamp also carries files, so its fixes say
   // /factory-adopt will not clobber them. A never-adopted repo has nothing to
