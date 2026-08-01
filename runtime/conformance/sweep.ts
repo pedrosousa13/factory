@@ -120,7 +120,16 @@ function verifyClearBriefWork(root: string): { workOk: boolean; note: string } {
   const switchRes = gitOut(["switch", CLEAR_BRIEF_BRANCH], root);
   if (switchRes.exit !== 0) return { workOk: false, note: `branch ${CLEAR_BRIEF_BRANCH} not found` };
 
-  const greetOk = readFileSync(join(root, "greet.ts"), "utf8").includes("Hi, ");
+  // An agent can claim "done" and leave no greet.ts (deleted, renamed, wrong
+  // branch) — exactly what this sweep exists to catch. An uncaught ENOENT here
+  // would kill the process before the scoreboard prints, turning one harness's
+  // FAIL into no scoreboard at all.
+  let greetOk: boolean;
+  try {
+    greetOk = readFileSync(join(root, "greet.ts"), "utf8").includes("Hi, ");
+  } catch {
+    return { workOk: false, note: "greet.ts unreadable on the branch" };
+  }
   const checkExit = Bun.spawnSync(["bun", "check.ts"], {
     cwd: root,
     stdin: "ignore",
