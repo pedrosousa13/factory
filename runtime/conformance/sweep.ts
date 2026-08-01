@@ -270,7 +270,11 @@ type HarnessRecord = {
   implementQuestion: ImplementOutcome["status"];
   implementQuestionOk: boolean; // answer.result === "question" && question non-empty
   journal: "valid" | "failed"; // whether the journal-step harness call itself completed without throwing
-  journalOk: boolean; // .factory/journal.json on disk deep-matches JOURNAL_CLAIM_RECORD — the file is the evidence, not the reply
+  // A file-edge transcription check, not a check that the harness journals
+  // per PROTOCOL: the prompt hands the agent the finished record, so a pass
+  // says the harness can put given bytes at a given path. It says nothing
+  // about whether the harness would write a journal on its own.
+  journalOk: boolean; // .factory/journal.json on disk deep-matches JOURNAL_CLAIM_RECORD
   comment: AskStatus;
   commentOk: boolean; // answer.result === "ok"
   commentFileOk: boolean; // T-3's body carries the disclaimer, the reason, and the branch

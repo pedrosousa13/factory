@@ -115,14 +115,16 @@ export const JOURNAL_CLAIM_RECORD = {
 };
 
 /**
- * Instructs the agent to perform PROTOCOL's claim step for
- * JOURNAL_CLAIM_TICKET: overwrite `.factory/journal.json` whole with
- * JOURNAL_CLAIM_RECORD. The file this produces on disk is the evidence the
- * sweep checks — not whatever the agent replies with.
+ * Instructs the agent to overwrite `.factory/journal.json` whole with
+ * JOURNAL_CLAIM_RECORD, in the setting of a claim on JOURNAL_CLAIM_TICKET.
+ * The record is handed over in full rather than derived by the agent, so
+ * what this measures is the file edge, not journal conformance. The file it
+ * produces on disk is the evidence the sweep checks — not whatever the agent
+ * replies with.
  */
 export function journalClaimPrompt(): string {
   return (
-    `Per PROTOCOL, you are performing the claim step for ticket '${JOURNAL_CLAIM_TICKET}' on branch ` +
+    `You are performing the claim step for ticket '${JOURNAL_CLAIM_TICKET}' on branch ` +
     `'${JOURNAL_CLAIM_BRANCH}'. At this step boundary, overwrite .factory/journal.json whole (create the ` +
     ".factory directory first if it doesn't exist yet) with exactly this JSON:\n\n" +
     `${JSON.stringify(JOURNAL_CLAIM_RECORD, null, 2)}\n\n` +
