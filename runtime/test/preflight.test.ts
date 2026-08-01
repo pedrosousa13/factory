@@ -137,7 +137,7 @@ test("missing config file: dedicated failure, distinct from per-field parse erro
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].what).toMatch(/not stamped for v2/);
-  expect(result.failures[0].fix).toBe("run the Factory adopt skill to create .factory/config.json");
+  expect(result.failures[0].fix).toBe("run /factory-adopt (safe to re-run) to create .factory/config.json");
 });
 
 test("missing adapter file: not stamped for the loop", () => {
@@ -271,6 +271,28 @@ test("legacy v1 repo (no config, adapter doc carries the loop section): fix name
   expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
   expect(result.failures[0].fix).toMatch(/legacy v1/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
+});
+
+test("a legacy v1 repo's three failures all name one command, and only the stamp failure diagnoses legacy v1", () => {
+  // Before: config missing said adopt, missing marker said adopt, stale stamp
+  // said migrate — three failures, two conflicting instructions, one repo.
+  const facts = greenFacts();
+  facts.config = "missing-file";
+  facts.adapterMarker = "missing-marker";
+  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampFacts = {
+    configVersion: null,
+    adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+  };
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(3);
+  for (const failure of result.failures) {
+    expect(failure.fix).toMatch(/^run \/factory-adopt \(safe to re-run\) to /);
+  }
+  expect(result.failures.filter((f) => /legacy v1/.test(f.fix)).length).toBe(1);
 });
 
 test("no fix names an entry point the plugin does not ship — no 'migration step' to run", () => {
