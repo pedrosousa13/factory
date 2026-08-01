@@ -214,7 +214,10 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: `repo stamp "${facts.stampVersion.repo ?? "none"}" is older than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "a stale stamp means the repo's config and docs may not match what this plugin version expects",
-      fix: `${adopt(task)}, then re-run preflight`,
+      fix:
+        stamp.k === "legacy-v1"
+          ? "run /factory-migrate to bring this legacy v1 stamp to the current version, then re-run preflight"
+          : `${adopt(task)}, then re-run preflight`,
       blocksExecutionOnly: true,
     });
   } else if (cmp > 0) {

@@ -252,11 +252,12 @@ test("unstamped repo (no config, no legacy adapter doc): treated as older than t
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).not.toMatch(/\/factory-migrate/);
   expect(result.failures[0].fix).toMatch(/stamp this repo/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-adopt and says the repo is legacy v1", () => {
+test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-migrate and says the repo is legacy v1", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: null, plugin: "2.0.0" };
   facts.stampFacts = {
@@ -268,14 +269,18 @@ test("legacy v1 repo (no config, adapter doc carries the loop section): fix name
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
-  expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).toMatch(/\/factory-migrate/);
+  expect(result.failures[0].fix).not.toMatch(/\/factory-adopt/);
   expect(result.failures[0].fix).toMatch(/legacy v1/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("a legacy v1 repo's three failures all name one command, and only the stamp failure diagnoses legacy v1", () => {
-  // Before: config missing said adopt, missing marker said adopt, stale stamp
-  // said migrate — three failures, two conflicting instructions, one repo.
+test("a legacy v1 repo's three failures: config and marker name factory-adopt, the stale stamp names factory-migrate", () => {
+  // Before task 7: config missing said adopt, missing marker said adopt, and
+  // the stale stamp also said adopt (no migration entry point existed yet).
+  // Now that /factory-migrate exists, the stale-stamp failure names it while
+  // the other two — which are about files, not the stamp version — still
+  // name /factory-adopt (safe to re-run).
   const facts = greenFacts();
   facts.config = "missing-file";
   facts.adapterMarker = "missing-marker";
@@ -289,10 +294,11 @@ test("a legacy v1 repo's three failures all name one command, and only the stamp
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(3);
-  for (const failure of result.failures) {
-    expect(failure.fix).toMatch(/^run \/factory-adopt \(safe to re-run\) to /);
-  }
-  expect(result.failures.filter((f) => /legacy v1/.test(f.fix)).length).toBe(1);
+  const adoptFixes = result.failures.filter((f) => /^run \/factory-adopt \(safe to re-run\) to /.test(f.fix));
+  const migrateFixes = result.failures.filter((f) => /^run \/factory-migrate to /.test(f.fix));
+  expect(adoptFixes.length).toBe(2);
+  expect(migrateFixes.length).toBe(1);
+  expect(migrateFixes[0].fix).toMatch(/legacy v1/);
 });
 
 test("no fix names an entry point the plugin does not ship — no 'migration step' to run", () => {
