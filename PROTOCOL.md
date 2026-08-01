@@ -606,3 +606,38 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/`, Pause note at `.scratch/pause-note.md` |
 | Git | Branch per issue → PR → merge on green; no direct commits to the default branch |
 | Config | `.factory/config.json`, committed; `stampVersion` current means stamped for v2 — see "## Prerequisites: a stamped Project repo" |
+
+## Migration
+
+Migration carries a repo from an old `stampVersion` — including the legacy v1 stamp
+detected above — to the plugin's current one.
+
+**Steps.** Migration runs as a chain of versioned steps: v1 to v2, v2 to v3, and so on. The
+plugin computes one combined diff for all pending steps, shows it to the maintainer once,
+and takes one approval — never one diff per step, even when several steps must run to
+reach the current version.
+
+**Idempotent by design.** Each step is idempotent: a repeat run finds nothing left to do,
+and a step interrupted partway repairs itself on the next run. This is what makes migration
+safe to interrupt — a maintainer can stop a run at any point and re-run it later without
+auditing what already landed.
+
+**Section rules.** Migration reuses the adopt skill's section rules for template files —
+see `skills/factory-adopt/SKILL.md` — rather than restating them: a file matching the
+rendered template is skipped, a file lacking whole template sections gets exactly those
+sections at the template's positions, and any other difference is shown to the maintainer
+and never overwritten.
+
+**The v1 to v2 step asks only what a v1 repo cannot answer.** It detects the tracker choice
+from the legacy adapter document, `docs/agents/issue-tracker.md`, and offers it for
+one-tap confirmation. A v1 repo has no record of merge policy or attack surface, so the
+step asks both fresh and defaults neither. It then writes `config.json`, retrofits the
+missing sections, and sets the stamp version.
+
+**A stale stamp blocks autonomous execution only.** A headless run reports the pending
+migration and stops. An interactive run offers to migrate now. Planning skills stay
+available, because they read the prose docs, not the stamp. Only a green preflight at the
+current version unblocks execution.
+
+**A stamp newer than the installed plugin also blocks execution**, with the message to
+update the Factory plugin. The plugin never downgrades files.

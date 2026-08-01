@@ -255,6 +255,9 @@ than the basename is deliberate: preserve it. If a file already exists:
   maintainer and let them decide whether to adopt the template version, keep
   theirs, or merge by hand.
 
+Versioned stamp migration reuses these same section rules; see "## Migration" in
+`PROTOCOL.md`.
+
 ### .gitignore
 
 If `.gitignore` doesn't exist, create it from `${CLAUDE_PLUGIN_ROOT}/templates/stamp/gitignore`
