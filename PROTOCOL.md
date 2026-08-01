@@ -176,10 +176,19 @@ maintainer interrupts):
 At every step boundary below, overwrite `.factory/journal.json` with the
 current `{ticket, branch, step, openQuestion, workers}`. PRD #39 §5 item 8
 states it plainly: "Each step overwrites it. … The journal is a hint, not
-truth." The `step` field takes one of five values: `queue-selection`,
-`state-mirroring`, `implementation`, `landing-gate`, or `issue-boundary`. A
-claim always writes `openQuestion: null` — a question never survives a new
-claim.
+truth."
+
+`step` carries one of two vocabularies. The five loop boundaries below are
+one: `queue-selection`, `state-mirroring`, `implementation`, `landing-gate`,
+and `issue-boundary`. Events inside a boundary are the other, and recovery
+is what reads them: `claim` when a session takes a ticket, `ask` when it
+pings the maintainer, and `park` while a Park is in flight. Write both
+vocabularies. A session that writes only the five leaves recovery blind:
+`park` is what tells a later run whether a Park crashed halfway, and no
+other value carries that.
+
+A claim always writes `openQuestion: null` — a question never survives a new
+claim. The ping is the one write that sets it (see "Ping and Park").
 
 ### 1. Queue selection
 
@@ -346,10 +355,18 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   Codex's `notify` — and Pi carries none. Beneath all three sits one fallback,
   the `notifierCommand` subprocess (`runtime/src/ping.ts`): PRD §5 item 4,
   "Factory does not rely on `notify` … to reach the maintainer."
+- **Journal the ask** as the ping goes out: overwrite `.factory/journal.json`
+  with `step: "ask"` and `openQuestion` set to `{text, askedAt}` — the
+  question, and the ISO 8601 time it was posted. This is the only write that
+  sets `openQuestion`, and Park below keeps it while it runs. Recovery reads
+  the pair: a journal carrying `step: "park"` and a non-null `openQuestion`
+  is a Park that crashed halfway, and the journaled question is the only
+  copy of the reason its comment still needs.
 - **Answered before the timer** → stop the timer, continue the issue with
   context intact. No Park, no state change. The answer is a maintainer
   decision: refresh the Pause note with it (mechanics below).
-- **Unanswered** → Park, which is these four steps in order:
+- **Unanswered** → Park. Overwrite the journal with `step: "park"`, keeping
+  the `openQuestion` the ping wrote, then run these four steps in order:
   1. **Store the work**: commit what exists on the issue branch and push it.
      The working tree must be clean and the default branch untouched — Parked
      work lives only on its branch.
