@@ -1,6 +1,6 @@
 ---
 name: factory-migrate
-description: Carry a repo already stamped for the Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's current version — to the plugin's current `stampVersion`, per `PROTOCOL.md`'s "## Migration" section. Detects the stamp without changing anything, builds one combined plan for every pending step (the v1-to-v2 step detects the issue tracker from the legacy adapter doc's H1 and offers it for one-tap confirmation, then asks merge policy and attack surface fresh with no defaults), shows one diff — every drifted template-mapped file, the adapter document among them, plus the four-field `config.json` — for one approval, then writes the documents first and `config.json` last, and verifies them against disk with a full preflight run. Use when the user runs /factory-migrate inside a repo whose stamp is legacy v1 or an older v2 version.
+description: Carry a repo already stamped for the Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's current version — to the plugin's current `stampVersion`, per `PROTOCOL.md`'s "## Migration" section. Detects the stamp without changing anything, builds one combined plan for every pending step (the v1-to-v2 step detects the issue tracker from the legacy adapter doc's H1 and offers it for one-tap confirmation, then asks merge policy and attack surface fresh with no defaults), shows one diff — every drifted template-mapped file, the adapter document among them, plus the `config.json` it will write (the four stamp fields, carrying an existing `notifierCommand` forward) — for one approval, then writes the documents first and `config.json` last, and verifies them against disk with a full preflight run. Use when the user runs /factory-migrate inside a repo whose stamp is legacy v1 or an older v2 version.
 ---
 
 # /factory-migrate — carry a stamped repo to the current version
@@ -75,9 +75,10 @@ already exists, just below the plugin's current `stampVersion`): either
 way, the step asks all three answers fresh and never reads an existing
 `config.json` for them. Writing the plan's `config.json` later replaces
 the file wholesale rather than merging into it, so a stale v2 repo's
-existing `tracker.repo`, `merge.method`, or any field beyond the four
-this step writes does not survive. Don't read an old config for answers;
-ask fresh, every time:
+existing `merge.method`, or any other field this step does not write, does
+not survive. `notifierCommand` is the single exception, and the paragraph
+after the bullets says why. Don't read an old config for answers; ask
+fresh, every time:
 
 - **Tracker.** Read `docs/agents/issue-tracker.md`'s first line only. If
   it matches `# Issue tracker: Linear` or `# Issue tracker: GitHub`,
@@ -94,6 +95,15 @@ ask fresh, every time:
 Ask merge policy and attack surface fresh every run, whether or not the
 tracker was detected, and regardless of what an existing `config.json`
 already says.
+
+**One field survives the rewrite: `notifierCommand`.** If the existing
+`config.json` carries it, read it and write it back into the new one
+unchanged. This is not a breach of the fresh-answers rule above. That rule
+exists so a stale answer cannot stand in for a decision this step must put
+to the maintainer, and `notifierCommand` is not one of those decisions — it
+is a machine-local address the maintainer already gave `/factory-adopt`, and
+this step never asks for it. Dropping it would silently unwire the ping
+channel and leave the verify step below rejecting a config that was correct.
 
 Once the tracker is settled, render that tracker's v2 adapter-doc
 template — `${CLAUDE_PLUGIN_ROOT}/templates/stamp/docs/agents/issue-tracker-<tracker>.md`,
@@ -142,7 +152,8 @@ never one approval per step:
   `attackSurface` as plain values, but `tracker` and `merge` as objects —
   `tracker.kind`, `merge.policy` — not flat strings. `merge.policy` is one
   of `squash`, `merge`, `rebase`, `human`; the maintainer's answer above
-  must be one of these four.
+  must be one of these four. Show `notifierCommand` as a fifth field
+  whenever the old config carried one.
 
 If the classification found the document already matches its template,
 the diff still shows `config.json` — a pending step writes `config.json`
@@ -199,8 +210,10 @@ A reply of done is not evidence — the files are. After writing:
    nothing — a surviving `{{...}}` means a template value was never
    filled in.
 2. Re-read `.factory/config.json` from disk. Confirm it parses, and that
-   it carries exactly four top-level fields — `stampVersion`, `tracker`,
-   `merge`, `attackSurface` — no more, no fewer. Confirm the shape, not
+   it carries the four top-level fields — `stampVersion`, `tracker`,
+   `merge`, `attackSurface` — and at most one more, `notifierCommand`,
+   present only if the old config carried it. Any other fifth field, or a
+   missing one of the four, is a failure. Confirm the shape, not
    just the names: `tracker` and `merge` are each objects
    (`tracker.kind`, `merge.policy`), not flat strings, per
    `skills/factory-adopt/SKILL.md:325-349`. Confirm `merge.policy` is one

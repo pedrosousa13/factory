@@ -171,7 +171,7 @@ function askAndJournal(
   // No notifierCommand is configured for this host, so no-notifier-configured
   // (or pi-no-ping for pi) is the honest outcome, not a failure — ping.ts's
   // own contract.
-  const pingOutcome = ping(harness, undefined, repoRoot);
+  const pingOutcome = ping(harness, undefined, repoRoot, question);
   const pingOk = pingOutcome.k !== "notifier-failed";
   steps.push(step(`ping ${ticketId}`, pingOutcome.k, pingOk));
 }

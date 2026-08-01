@@ -354,7 +354,10 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   carries this push where one exists — Claude Code's Notification hook, or
   Codex's `notify` — and Pi carries none. Beneath all three sits one fallback,
   the `notifierCommand` subprocess (`runtime/src/ping.ts`): PRD §5 item 4,
-  "Factory does not rely on `notify` … to reach the maintainer."
+  "Factory does not rely on `notify` … to reach the maintainer." That
+  subprocess gets the question in the `FACTORY_NOTIFY_MESSAGE` environment
+  variable and nothing else — no arguments, no stdin. The Notification hook
+  sets the same variable, so one notifier command serves both.
 - **Journal the ask** as the ping goes out: overwrite `.factory/journal.json`
   with `step: "ask"` and `openQuestion` set to `{text, askedAt}` — the
   question, and the ISO 8601 time it was posted. This is the only write that
