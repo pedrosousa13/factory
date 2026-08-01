@@ -212,6 +212,7 @@ test("check rejects a setState answer whose result is not ok", () => {
   const result = check({ k: "tracker.setState", issue: "T-1", state: "parked" }, { result: "done" });
 
   expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.why).toContain("result");
 });
 
 test("check rejects a setState answer that is not an object", () => {
@@ -232,6 +233,7 @@ test("check rejects an unclaim answer whose result is not ok", () => {
   const result = check({ k: "tracker.unclaim", issue: "T-1" }, { result: "released" });
 
   expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.why).toContain("result");
 });
 
 test("check rejects an unclaim answer that is not an object", () => {
@@ -252,6 +254,7 @@ test("check rejects a comment answer whose result is not ok", () => {
   const result = check({ k: "tracker.comment", issue: "T-1", text: "note" }, { result: "posted" });
 
   expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.why).toContain("result");
 });
 
 test("check rejects a comment answer that is not an object", () => {
