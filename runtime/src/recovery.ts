@@ -23,6 +23,11 @@ export type RecoveryInput = {
   originBranches: string[]; // branch names that exist on origin right now
   actor: string; // the current run's identity
   journal: JournalRecord | null; // this run's own last-written hint, or null if none was usable
+  // Ticket ids whose Park comment is already on the tracker. The comment is
+  // the one Park step the tracker can be asked about directly, so whether it
+  // ran is observed rather than assumed — otherwise a crash between the
+  // comment and the claim release would post the maintainer a second copy.
+  parkCommented: string[];
 };
 
 /**
@@ -40,9 +45,19 @@ export type RecoveryInput = {
  * independently confirms the freshly-derived branch exists on origin.
  * Either disagreeing falls back to the plain resume/release call above —
  * tracker and git win over the journal.
+ *
+ * INVARIANT the journal writer must hold: the journal is overwritten when a
+ * ticket is claimed, before any work on it begins. Nothing here can verify
+ * that. A journal left behind by an already-finished Park names the same
+ * ticket, the same actor, and (once the next cycle pushes) the same branch as
+ * a live interrupted Park, and no input to this function distinguishes the
+ * two — telling them apart needs a claim timestamp the tracker vocabulary
+ * does not carry. Clearing the journal at claim time is what keeps the stale
+ * record from ever being read as a Park in flight.
  */
 export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
   const onOrigin = new Set(input.originBranches);
+  const onTracker = new Set(input.parkCommented);
 
   return input.claimed.map((ticket): RecoveryDecision => {
     if (ticket.claimedBy !== input.actor) return { k: "skip", ticket: ticket.id };
@@ -68,12 +83,12 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
     // The claim is still held — this map branch only runs when
     // ticket.claimedBy === actor — so release-claim cannot have completed,
     // and park.ts's fixed step order means neither tracker write has either.
-    // commentPosted is unobservable from tracker facts alone, so it is
-    // assumed not done; replaying the durable park comment is idempotent
-    // (park.ts, S19), and "ask" is not a ParkStep, so this can never re-ask.
+    // Whether the comment ran is read off the tracker rather than guessed:
+    // tracker.comment appends, so replaying one the maintainer can already
+    // see would leave two copies of the same question on the ticket.
     const remaining = remainingPark({
       branchPushed: true,
-      commentPosted: false,
+      commentPosted: onTracker.has(ticket.id),
       claimReleased: false,
       labelSwapped: false,
       stateUnstarted: false,

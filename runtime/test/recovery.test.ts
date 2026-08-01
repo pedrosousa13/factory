@@ -42,6 +42,7 @@ function input(overrides: Partial<RecoveryInput>): RecoveryInput {
     originBranches: [BRANCH],
     actor: ACTOR,
     journal: null,
+    parkCommented: [],
     ...overrides,
   };
 }
@@ -213,4 +214,36 @@ test("multiple claimed tickets each get an independent decision in the same call
     { k: "release", ticket: "2" },
     { k: "skip", ticket: "3" },
   ]);
+});
+
+// tracker.comment appends rather than replaces, so a Park that crashed after
+// its comment landed must not post the maintainer a second copy of the same
+// question. Whether the comment ran is read off the tracker, not assumed.
+test("a Park whose comment already landed owes only the steps after it", () => {
+  const decisions = reconcileClaims(input({ journal: parkingJournal, parkCommented: ["43"] }));
+
+  expect(decisions).toEqual([
+    {
+      k: "resume-park",
+      ticket: "43",
+      branch: BRANCH,
+      remaining: ["release-claim", "swap-label", "set-unstarted"],
+    },
+  ]);
+});
+
+// The journal names one ticket. Another ticket the same actor holds must not
+// be dragged onto the Park-recovery path with it.
+test("a second ticket held by the same actor resumes plainly, not as a Park", () => {
+  const other = ticket({ id: "44", title: "Something else entirely" });
+  const otherBranch = branchName("44", "Something else entirely");
+  const decisions = reconcileClaims(
+    input({
+      claimed: [ticket({}), other],
+      originBranches: [BRANCH, otherBranch],
+      journal: parkingJournal,
+    }),
+  );
+
+  expect(decisions[1]).toEqual({ k: "resume", ticket: "44", branch: otherBranch });
 });
