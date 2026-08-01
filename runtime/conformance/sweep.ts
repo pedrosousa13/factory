@@ -601,6 +601,23 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     const currentAdapterDoc = readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8");
     const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc });
 
+    // Write order is load-bearing, not stylistic: the adapter doc FIRST,
+    // config.json LAST. config.json is the stamp, so writing it last makes it
+    // the step's single commit point — a crash before it leaves the repo at
+    // legacy-v1 and the whole step re-runs idempotently. The reverse order
+    // strands a repo stamped v2 whose doc was never retrofitted, which no
+    // later run can detect (see src/migrate.ts's header). bin/migrate.ts
+    // writes in this same order.
+    //
+    // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
+    // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
+    // same as bin/migrate.ts. missing-sections keeps the ordinary retrofit.
+    if (plan.docDiff.k === "other-difference") {
+      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), renderedAdapterDoc);
+    } else if (plan.docDiff.k === "missing-sections" && plan.retrofittedDoc !== null) {
+      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
+    }
+
     mkdirSync(join(migrateRepo.root, ".factory"), { recursive: true });
     writeFileSync(
       join(migrateRepo.root, CONFIG_PATH),
@@ -610,14 +627,6 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
         attackSurface: CHOSEN_ATTACK_SURFACE,
       }),
     );
-    // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
-    // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
-    // same as bin/migrate.ts. missing-sections keeps the ordinary retrofit.
-    if (plan.docDiff.k === "other-difference") {
-      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), renderedAdapterDoc);
-    } else if (plan.docDiff.k === "missing-sections" && plan.retrofittedDoc !== null) {
-      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
-    }
 
     const configOnDisk = JSON.parse(readFileSync(join(migrateRepo.root, CONFIG_PATH), "utf8"));
     const configKeys = Object.keys(configOnDisk).sort().join(",");

@@ -6,11 +6,23 @@
 // module hosts it at the edge (writes config.json, applies the retrofitted
 // doc).
 //
-// Idempotency is what makes migration safe to interrupt (PROTOCOL.md:620-623):
+// Idempotency is what makes migration safe to interrupt (PROTOCOL.md:627-634):
 // a step recomputes its diff from the facts on disk every time, so a repeat
 // run against an already-migrated repo finds nothing pending, and a crash
 // mid-migration is repaired by simply running the same step again on the
 // next run rather than needing to resume from where it stopped.
+//
+// That repair holds only if the host writes in one order: the adapter doc
+// FIRST, config.json LAST. config.json is the stamp, so it is the step's
+// single commit point — a crash before it leaves the repo at legacy-v1 and
+// the whole step re-runs, and the retrofit is itself idempotent (a second
+// diffDoc over an already-retrofitted doc returns "matches"). The reverse
+// order strands a repo stamped v2 whose doc was never retrofitted, and
+// nothing downstream can see it: this module reports no pending steps and
+// asserts docDiff "matches" for a doc that does not match. Recomputing the
+// diff anyway would not save it — a recomputed diff cannot tell a crashed
+// migration apart from a maintainer who edited the doc afterwards. The order
+// is the fix. Both hosts follow it (bin/migrate.ts, conformance/sweep.ts).
 
 import { STAMP_VERSION } from "./version";
 import type { StampState } from "./stamp";
@@ -124,9 +136,10 @@ export interface MigrationPlanInput {
 }
 
 export interface MigrationPlan {
-  /** sections.ts's verdict on the adapter doc against its template —
-   * "matches" both when nothing is pending and when a pending step finds
-   * nothing left to retrofit; either way the idempotent case. */
+  /** sections.ts's verdict on the adapter doc against its template. A pending
+   * step computes it. With no pending step there is no doc to compare against
+   * a template, so `NOTHING_PENDING` below asserts "matches" rather than
+   * computing it — see the note there. */
   docDiff: DocDiff;
   /** The adapter doc's content after retrofitting the sections `docDiff`
    * names, or null when there is nothing to retrofit. */
@@ -137,6 +150,12 @@ export interface MigrationPlan {
   writesConfig: boolean;
 }
 
+// `docDiff: "matches"` here is asserted, not computed: with no pending step
+// this module never calls diffDoc at all. The assertion is only as true as
+// the write order above — a host that wrote config.json before the adapter
+// doc and then crashed leaves a repo whose stamp says v2 and whose doc was
+// never retrofitted, and every later run lands here and reports "matches"
+// for a doc that does not match.
 const NOTHING_PENDING: MigrationPlan = {
   docDiff: { k: "matches" },
   retrofittedDoc: null,

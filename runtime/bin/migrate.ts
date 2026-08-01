@@ -146,17 +146,16 @@ function main(): void {
       ),
     );
 
-    // ── step 5: apply — config.json from the answers, then resolve the
-    // adapter doc per whichever offer docDiff names.
-    mkdirSync(join(root, ".factory"), { recursive: true });
-    const configText = renderV1ToV2Config({
-      tracker: plan.detectedTracker ?? "linear",
-      merge: CHOSEN_MERGE_POLICY,
-      attackSurface: CHOSEN_ATTACK_SURFACE,
-    });
-    writeFileSync(join(root, CONFIG_PATH), configText);
-
+    // ── step 5: apply — the adapter doc FIRST, config.json LAST. The order
+    // is load-bearing, not stylistic: config.json is the stamp, so writing it
+    // last makes it this step's single commit point. A crash before it leaves
+    // the fixture at legacy-v1 and the whole step re-runs idempotently. The
+    // reverse order strands a repo stamped v2 whose doc was never retrofitted,
+    // which no later run can detect (see src/migrate.ts's header).
     let adapterAction: string;
+    // The text this host means to leave on disk, whichever branch runs — the
+    // row below is scored against the file, not against the branch taken.
+    let adapterWanted: string;
     if (plan.docDiff.k === "other-difference") {
       // The maintainer's three offers on a genuine drift (SKILL.md:254-256)
       // are adopt-theirs / keep-mine / merge-by-hand. Shown, not silent: this
@@ -167,26 +166,54 @@ function main(): void {
       );
       writeFileSync(join(root, ADAPTER_DOC_PATH), renderedAdapterDoc);
       adapterAction = "adopt-theirs";
+      adapterWanted = renderedAdapterDoc;
     } else if (plan.docDiff.k === "missing-sections") {
       if (plan.retrofittedDoc === null) throw new Error("missing-sections diff carried no retrofittedDoc");
       writeFileSync(join(root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
       adapterAction = "retrofit";
+      adapterWanted = plan.retrofittedDoc;
     } else {
       adapterAction = "matches (no write needed)";
+      adapterWanted = currentAdapterDoc;
     }
+    // Scored against the fixture's own file, not hardcoded: this row is
+    // evidence, and a row that always reads "yes" is evidence of nothing.
+    const adapterApplied = readFileSync(join(root, ADAPTER_DOC_PATH), "utf8") === adapterWanted;
     steps.push(
       step(
         "apply adapter doc",
         `${plan.docDiff.k} -> ${adapterAction}`,
-        true,
-        plan.docDiff.k === "other-difference" ? plan.docDiff.detail : undefined,
+        adapterApplied,
+        adapterApplied ? undefined : "adapter doc on disk does not match what this host wrote",
       ),
     );
-    if (plan.docDiff.k !== "other-difference") {
+
+    // config.json LAST — the step's single commit point (see step 5's note).
+    mkdirSync(join(root, ".factory"), { recursive: true });
+    const configText = renderV1ToV2Config({
+      tracker: plan.detectedTracker ?? "linear",
+      merge: CHOSEN_MERGE_POLICY,
+      attackSurface: CHOSEN_ATTACK_SURFACE,
+    });
+    writeFileSync(join(root, CONFIG_PATH), configText);
+
+    // The drift this run exists to exercise. A scoreboard row, not a bare
+    // console.log: printing CONTRADICTION while the run still reports PASS
+    // makes the scoreboard lie.
+    const driftAsExpected = plan.docDiff.k === "other-difference";
+    if (!driftAsExpected) {
       console.log(
         `  CONTRADICTION: expected docDiff.k "other-difference" (the Wayfinding-operations drift established before this run), got "${plan.docDiff.k}"`,
       );
     }
+    steps.push(
+      step(
+        "expected drift",
+        plan.docDiff.k,
+        driftAsExpected,
+        driftAsExpected ? undefined : `CONTRADICTION: expected "other-difference"`,
+      ),
+    );
 
     // ── verify against the fixture's own files on disk — never against the
     // plan's fields or any agent's say-so.

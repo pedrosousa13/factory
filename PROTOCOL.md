@@ -625,9 +625,14 @@ and takes one approval — never one diff per step, even when several steps must
 reach the current version.
 
 **Idempotent by design.** Each step is idempotent: a repeat run finds nothing left to do.
-**(pending)** A step interrupted partway repairs itself on the next run. This is what makes
-migration safe to interrupt — a maintainer can stop a run at any point and re-run it later without
-auditing what already landed.
+**(pending)** A step interrupted partway repairs itself on the next run, because of the
+order it writes in: the adapter document first, `config.json` last. That order is
+load-bearing. `config.json` carries the stamp, so writing it last makes it the single
+commit point. A crash before it leaves the repo at its old stamp, and the whole step runs
+again. The reverse order leaves a repo stamped at the new version with a document nothing
+retrofitted, and the next run reports nothing pending. This is what makes migration safe to
+interrupt — a maintainer can stop a run at any point and re-run it later without auditing
+what already landed.
 
 **Section rules.** Migration reuses the adopt skill's section rules for template files; see
 `skills/factory-adopt/SKILL.md`.
