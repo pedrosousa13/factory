@@ -28,9 +28,11 @@ import {
   COMMENT_SHAPE,
   down,
   dropReadyQuestion,
+  READ_SHAPE,
   readFixtureBody,
   readFixtureField,
   readFixtureTicket,
+  readQuestion,
   SET_READY_SHAPE,
   SET_STATE_SHAPE,
   TICKETS_DIR,
@@ -45,6 +47,9 @@ import { branchName } from "../src/pick";
 import { parkCommentText, parkPlan, PARK_STEP, type ParkReason } from "../src/park";
 import { reconcileClaims, type RecoveryInput } from "../src/recovery";
 import type { JournalRecord } from "../src/journal";
+import { readJournal, writeJournal } from "../src/journalfile";
+import { interactiveAnswer, waitDecision } from "../src/answerwait";
+import { ping } from "../src/ping";
 
 const DIR = import.meta.dir;
 const PHRASEBOOK_PATH = join(DIR, "../conformance/phrasebook.md");
@@ -111,6 +116,64 @@ function patchTicketState(id: string, state: string): void {
   const path = join(TICKETS_DIR, `${id}.md`);
   const text = readFileSync(path, "utf8");
   writeFileSync(path, text.replace(/^state: .*$/m, `state: ${state}`));
+}
+
+// Simulates the maintainer answering: replying is the maintainer's own act,
+// not this run's, so it is a direct fixture patch, not a tracker.* ask — the
+// same pattern as patchTicketState above.
+function appendAnswerComment(id: string, text: string): void {
+  const path = join(TICKETS_DIR, `${id}.md`);
+  const body = readFileSync(path, "utf8");
+  writeFileSync(path, `${body}\n${text}\n`);
+}
+
+// ────────────────────────────────────────────────────── headless ask cycle
+//
+// Item 1 and item 2 of the ask/park proof (issue #43) share this exact
+// sequence — post the question as a durable ticket comment, journal it, ping
+// — up to whether an answer ever lands, which is where the two paths differ.
+
+function askAndJournal(
+  runner: Runner,
+  phrasebook: string,
+  repoRoot: string,
+  harness: HarnessName,
+  ticketId: string,
+  branch: string,
+  question: string,
+  steps: Step[],
+): void {
+  const askPrompt = buildPrompt(commentQuestion(ticketId, question), phrasebook, COMMENT_SHAPE);
+  const askOutcome = askWithRetry(runner, { k: "tracker.comment", issue: ticketId, text: question }, askPrompt);
+  const askOk = askOutcome.status !== "failed" && askOutcome.answer.result === "ok";
+  steps.push(
+    step(
+      `ask: post-question ${ticketId}`,
+      askOutcome.status,
+      askOk,
+      askOutcome.status === "failed" ? askOutcome.whys[1] : undefined,
+    ),
+  );
+  const postedOk = readFixtureBody(ticketId).includes(question);
+  steps.push(step(`verify file: question posted ${ticketId}`, postedOk ? "found" : "missing", postedOk));
+
+  // The window the wait later measures starts here, at post time — not at
+  // process start — so it is journaled immediately.
+  const askedAt = new Date().toISOString();
+  writeJournal(repoRoot, {
+    ticket: ticketId,
+    branch,
+    step: "ask",
+    openQuestion: { text: question, askedAt },
+    workers: [],
+  });
+
+  // No notifierCommand is configured for this host, so no-notifier-configured
+  // (or pi-no-ping for pi) is the honest outcome, not a failure — ping.ts's
+  // own contract.
+  const pingOutcome = ping(harness, undefined, repoRoot);
+  const pingOk = pingOutcome.k !== "notifier-failed";
+  steps.push(step(`ping ${ticketId}`, pingOutcome.k, pingOk));
 }
 
 // ───────────────────────────────────────────────────────────────── scoreboard
@@ -418,6 +481,216 @@ function main(): void {
           }
         } else {
           steps.push(step("recovery", "skipped", false, "no snapshot captured — push-branch never ran"));
+        }
+
+        // ── headless ask cycle: answered path (T-2). Proves answerwait.ts,
+        // journalfile.ts, and ping.ts live — before this slice all three had
+        // no caller but their own unit test (issue #43).
+        const askTicketBefore = readFixtureTicket("T-2");
+        const askBranch = branchName(askTicketBefore.id, askTicketBefore.title);
+        const question = "Should T-2 pull in the shared parsing library or vendor its own copy?";
+        askAndJournal(runner, phrasebook, repo.root, harness, "T-2", askBranch, question, steps);
+
+        const answerText = "Use the shared library.";
+        appendAnswerComment("T-2", `MAINTAINER ANSWER: ${answerText}`);
+
+        // Poll: a live tracker.read ask proves the read capability itself,
+        // but the `answered` value fed to waitDecision comes from the
+        // fixture file directly, never from the agent's reply.
+        const pollPrompt = buildPrompt(readQuestion("T-2"), phrasebook, READ_SHAPE);
+        const pollOutcome = askWithRetry(runner, { k: "tracker.read", issue: "T-2" }, pollPrompt);
+        const pollOk = pollOutcome.status !== "failed" && pollOutcome.answer.result === "ok";
+        steps.push(
+          step(
+            "ask: poll T-2 (answered)",
+            pollOutcome.status,
+            pollOk,
+            pollOutcome.status === "failed" ? pollOutcome.whys[1] : undefined,
+          ),
+        );
+        const answeredGroundTruth = readFixtureBody("T-2").includes(`MAINTAINER ANSWER: ${answerText}`)
+          ? answerText
+          : null;
+
+        // askedAt read back from the journal file, not the variable this
+        // closure already holds — a journal survives a crash and a kept
+        // variable does not, and that gap is the property under test.
+        const journalAfterAsk = readJournal(repo.root);
+        const askedAtFromJournal =
+          journalAfterAsk.ok && journalAfterAsk.record.openQuestion !== null
+            ? journalAfterAsk.record.openQuestion.askedAt
+            : null;
+        steps.push(
+          step("journal: read back askedAt (T-2)", askedAtFromJournal ?? "missing", askedAtFromJournal !== null),
+        );
+
+        if (askedAtFromJournal !== null) {
+          const decision = waitDecision({
+            askedAt: askedAtFromJournal,
+            now: new Date().toISOString(), // well inside the 15-minute window
+            windowMinutes: 15, // mirrors config.ts's ANSWER_WINDOW_MINUTES_DEFAULT
+            answered: answeredGroundTruth,
+          });
+          const decisionOk = decision.k === "continue" && decision.answer === answerText;
+          steps.push(step("waitDecision: answered path", decision.k, decisionOk, JSON.stringify(decision)));
+        } else {
+          steps.push(step("waitDecision: answered path", "skipped", false, "no journaled askedAt"));
+        }
+
+        // ── headless ask cycle: unanswered path (T-3). No answer ever
+        // lands; `now` arrives already past the window rather than the run
+        // actually sleeping 15 minutes — the window is a parameter.
+        const parkTicketBefore = readFixtureTicket("T-3");
+        const parkBranch = branchName(parkTicketBefore.id, parkTicketBefore.title);
+        const parkQuestion = "Should T-3 stay blocked on the pending audit, or proceed without it?";
+        askAndJournal(runner, phrasebook, repo.root, harness, "T-3", parkBranch, parkQuestion, steps);
+
+        const journalAfterAsk2 = readJournal(repo.root);
+        const askedAtFromJournal2 =
+          journalAfterAsk2.ok && journalAfterAsk2.record.openQuestion !== null
+            ? journalAfterAsk2.record.openQuestion.askedAt
+            : null;
+        steps.push(
+          step("journal: read back askedAt (T-3)", askedAtFromJournal2 ?? "missing", askedAtFromJournal2 !== null),
+        );
+
+        if (askedAtFromJournal2 !== null) {
+          // 16 minutes past the journaled askedAt: past the 15-minute window
+          // without a real sleep, proving the same deadline a real clock
+          // would eventually reach.
+          const past = new Date(Date.parse(askedAtFromJournal2) + 16 * 60_000).toISOString();
+          const decision = waitDecision({
+            askedAt: askedAtFromJournal2,
+            now: past,
+            windowMinutes: 15,
+            answered: null, // no maintainer answer was ever posted to T-3
+          });
+          const decisionOk = decision.k === "park";
+          steps.push(step("waitDecision: unanswered path", decision.k, decisionOk, JSON.stringify(decision)));
+
+          if (decisionOk) {
+            const unansweredReason: ParkReason = {
+              k: "unanswered-question",
+              question: parkQuestion,
+              askedAt: askedAtFromJournal2,
+            };
+            const unansweredText = parkCommentText(
+              unansweredReason,
+              parkBranch,
+              "no commits yet — parked before any work began",
+            );
+            const carriesQuestion =
+              unansweredText.includes(parkQuestion) && unansweredText.includes("Unanswered question");
+            steps.push(
+              step(
+                "park: unanswered-question reason carries the question",
+                carriesQuestion ? "confirmed" : "missing",
+                carriesQuestion,
+              ),
+            );
+          } else {
+            steps.push(step("park: unanswered-question reason", "skipped", false, "waitDecision did not park"));
+          }
+        } else {
+          steps.push(step("waitDecision: unanswered path", "skipped", false, "no journaled askedAt"));
+        }
+
+        // ── interactive path (PRD §5 item 3): skips ping/wait/Park entirely,
+        // no clock involved.
+        const interactiveText = "Rebase, per the maintainer's live reply.";
+        const interactiveDecision = interactiveAnswer(interactiveText);
+        const interactiveOk = interactiveDecision.k === "continue" && interactiveDecision.answer === interactiveText;
+        steps.push(step("interactiveAnswer", interactiveDecision.k, interactiveOk));
+
+        // ── stranded-ticket recovery (S19's second half): a ticket whose
+        // Park crashed after release-claim — unclaimed, but not unstarted —
+        // must come back owing exactly swap-label and set-unstarted. T-2 is
+        // mutated into that exact shape: never claimed, its state pushed to
+        // "started" (direct patch, same simulated-precondition pattern as
+        // T-1's setup above), its branch actually pushed to origin, and its
+        // Park comment actually posted and verified — every input here but
+        // the journal (which this recovery path does not consult) is real.
+        patchTicketState("T-2", "started");
+        git(["checkout", "main"], repo.root);
+        const strandedBranch = askBranch;
+        let strandedPushOk = true;
+        try {
+          git(["checkout", "-b", strandedBranch], repo.root);
+          writeFileSync(join(repo.root, "NOTES.md"), "stranded park shelved work\n");
+          git(["add", "NOTES.md"], repo.root);
+          git(["commit", "-m", "Stranded park shelved work"], repo.root);
+          git(["push", "origin", strandedBranch], repo.root);
+        } catch (e) {
+          strandedPushOk = false;
+          steps.push(step("stranded: push-branch T-2", "error", false, (e as Error).message));
+        }
+        if (strandedPushOk) {
+          steps.push(step("stranded: push-branch T-2", "pushed", true, strandedBranch));
+
+          const strandedReason: ParkReason = {
+            k: "unanswered-question",
+            question,
+            askedAt: askedAtFromJournal ?? new Date().toISOString(),
+          };
+          const strandedCommentText = parkCommentText(
+            strandedReason,
+            strandedBranch,
+            "shelved, Park crashed after release-claim",
+          );
+          const strandedCommentPrompt = buildPrompt(commentQuestion("T-2", strandedCommentText), phrasebook, COMMENT_SHAPE);
+          const strandedCommentOutcome = askWithRetry(
+            runner,
+            { k: "tracker.comment", issue: "T-2", text: strandedCommentText },
+            strandedCommentPrompt,
+          );
+          const strandedCommentAskOk =
+            strandedCommentOutcome.status !== "failed" && strandedCommentOutcome.answer.result === "ok";
+          steps.push(
+            step(
+              "stranded: post-comment T-2",
+              strandedCommentOutcome.status,
+              strandedCommentAskOk,
+              strandedCommentOutcome.status === "failed" ? strandedCommentOutcome.whys[1] : undefined,
+            ),
+          );
+          const strandedCommentFileOk =
+            readFixtureBody("T-2").includes("Unanswered question") && readFixtureBody("T-2").includes(question);
+          steps.push(
+            step("verify file: stranded comment landed", strandedCommentFileOk ? "found" : "missing", strandedCommentFileOk),
+          );
+
+          // The real unclaimed tickets read off the fixture — not a
+          // hand-picked array of only the one that qualifies. T-1 (state
+          // unstarted) and T-3 (state unstarted) are filtered out by
+          // reconcileClaims itself; only T-2 (state started, unclaimed)
+          // is the stranded signature.
+          const unclaimedTickets = ["T-1", "T-2", "T-3"].map(readFixtureTicket);
+          const strandedInput: RecoveryInput = {
+            claimed: [],
+            unclaimed: unclaimedTickets,
+            originBranches: originBranchNames(repo.origin),
+            actor,
+            journal: null,
+            parkCommented: strandedCommentFileOk ? ["T-2"] : [],
+          };
+          const strandedDecisions = reconcileClaims(strandedInput);
+          const strandedDecision = strandedDecisions[0];
+          const expectedRemaining = ["swap-label", "set-unstarted"];
+          const strandedOk =
+            strandedDecisions.length === 1 &&
+            strandedDecision !== undefined &&
+            strandedDecision.k === "resume-park" &&
+            strandedDecision.ticket === "T-2" &&
+            strandedDecision.branch === strandedBranch &&
+            strandedDecision.remaining.join(",") === expectedRemaining.join(",");
+          steps.push(
+            step(
+              "recovery: stranded ticket (resume-park)",
+              strandedDecision?.k ?? "none",
+              strandedOk,
+              JSON.stringify(strandedDecision),
+            ),
+          );
         }
       }
     } else {
