@@ -25,18 +25,32 @@ import { compareStamp } from "./preflight";
  * stampVersion the step brings the repo to. */
 export type MigrationStep = { k: "v1-to-v2"; version: string };
 
-const ALL_STEPS: MigrationStep[] = [{ k: "v1-to-v2", version: STAMP_VERSION }];
+// A step's `version` is a literal on purpose. The rule "never hardcode
+// 2.0.0 — STAMP_VERSION is the single source of truth" is about the version
+// this plugin stamps at *now*; a step's target is a historical fact, fixed
+// when that step shipped. Binding this entry to STAMP_VERSION makes it read
+// as the v1-to-v2 step to "whatever the current version is": bump
+// STAMP_VERSION to 3.0.0 without adding a v2-to-v3 entry and every 2.0.0
+// repo is offered the v1-to-v2 step, whose config render carries four
+// fields and drops the rest. STAMP_VERSION stays in use everywhere it
+// genuinely means "the version this plugin stamps at" — see
+// renderV1ToV2Config below.
+const ALL_STEPS: MigrationStep[] = [{ k: "v1-to-v2", version: "2.0.0" }];
 
 /**
  * Every registered step whose version is strictly newer than the repo's and
- * no newer than the plugin's. A repo already at or ahead of the plugin's
- * version gets none back — ahead is the block PROTOCOL.md:641-642 describes
- * ("the plugin never downgrades files"), not a downgrade to run in reverse.
+ * no newer than the plugin's, in version order. A repo already at or ahead of
+ * the plugin's version gets none back — ahead is the block PROTOCOL.md:641-642
+ * describes ("the plugin never downgrades files"), not a downgrade to run in
+ * reverse.
+ *
+ * The sort is what makes "applies each step in order" a property of the
+ * versions rather than of how someone typed `ALL_STEPS`.
  */
 export function pendingSteps(repoVersion: string, pluginVersion: string): MigrationStep[] {
   return ALL_STEPS.filter(
     (step) => compareStamp(step.version, repoVersion) > 0 && compareStamp(step.version, pluginVersion) <= 0,
-  );
+  ).sort((a, b) => compareStamp(a.version, b.version));
 }
 
 /**

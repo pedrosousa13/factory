@@ -8,6 +8,7 @@ import {
   type MigrationStep,
 } from "../src/migrate";
 import { LOOP_SECTION_HEADING } from "../src/stamp";
+import { compareStamp } from "../src/preflight";
 import { STAMP_VERSION } from "../src/version";
 import { parseConfig } from "../src/config";
 
@@ -54,7 +55,24 @@ How the loop talks to this tracker.
 // ───── pendingSteps
 
 test("pendingSteps returns exactly the v1-to-v2 step when the repo is at v1", () => {
-  expect(pendingSteps("1.0.0", STAMP_VERSION)).toEqual([{ k: "v1-to-v2", version: STAMP_VERSION }]);
+  // The step's target is the literal 2.0.0 it shipped with, not STAMP_VERSION.
+  expect(pendingSteps("1.0.0", STAMP_VERSION)).toEqual([{ k: "v1-to-v2", version: "2.0.0" }]);
+});
+
+test("pendingSteps offers a 2.0.0 repo nothing against a future plugin — the v1-to-v2 target is historical, not STAMP_VERSION", () => {
+  // Guards the bump: raising STAMP_VERSION to 3.0.0 without registering a
+  // v2-to-v3 step must leave every 2.0.0 repo with an empty chain, never with
+  // the v1-to-v2 step re-aimed at the new version.
+  expect(pendingSteps("2.0.0", "3.0.0")).toEqual([]);
+});
+
+test("pendingSteps returns steps in version order, not declaration order", () => {
+  // Vacuous while the chain has one member, and deliberately kept: it is the
+  // assertion that bites when a second step is declared out of order.
+  const chain = pendingSteps("0.0.0", "99.0.0");
+  for (let i = 1; i < chain.length; i++) {
+    expect(compareStamp(chain[i - 1].version, chain[i].version)).toBeLessThan(0);
+  }
 });
 
 test("pendingSteps returns none when the repo is already at the plugin's version", () => {
