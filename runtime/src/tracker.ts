@@ -112,9 +112,8 @@ export type Answer = {
 // ──────────────────────────────────────────────────────────────────── the checker
 
 const URGENCIES: Urgency[] = ["P0", "P1", "P2", "P3", "none"];
-const STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
+export const STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
 export const OPEN_STATES: OpenState[] = ["unstarted", "started", "parked"];
-export const ALL_STATES: IssueState[] = ["unstarted", "started", "parked", "done", "canceled"];
 
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null;
@@ -234,7 +233,7 @@ export function check(
       if (result !== "ok") return bad(`result: ${JSON.stringify(result)} is not ok`);
       if (!isObj(raw.counts)) return bad("counts: not an object");
       const counts = {} as Record<IssueState, number>;
-      for (const s of ALL_STATES) {
+      for (const s of STATES) {
         const v = raw.counts[s];
         if (typeof v !== "number") return bad(`counts.${s}: not a number`);
         counts[s] = v;

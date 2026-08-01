@@ -243,7 +243,7 @@ export const TICKET_FACTS_SHAPE = `type TicketFacts = {
   state: "unstarted" | "started" | "parked" | "done" | "canceled";
   claimedBy: string | null;
   blockedBy: string[]; // ids of still-open tickets blocking this one
-  labels: string[]; // every label the ticket carries, including any planning-namespace label
+  labels: string[]; // every label the ticket carries EXCEPT the agent-ready one, which is the ready field above; planning-namespace labels included
 };`;
 
 export const CANDIDATES_SHAPE = `${TICKET_FACTS_SHAPE}
@@ -282,7 +282,7 @@ export const CANDIDATES_QUESTION =
   "List every ticket in this project's tracker that is ready, unstarted, and unclaimed, with full facts for each. There is no milestone scope in play right now — list tickets from every milestone.";
 
 export const OPEN_ISSUES_QUESTION =
-  "List every still-open ticket in this project's tracker, whatever its labels and whether or not it is ready — with full facts for each, including every label it carries. There is no milestone scope in play right now — list tickets from every milestone.";
+  "List every still-open ticket in this project's tracker, whatever its labels and whether or not it is ready — with full facts for each. Report every label a ticket carries except the agent-ready one, which the ready field already carries. There is no milestone scope in play right now — list tickets from every milestone.";
 
 export function milestoneCountsQuestion(milestone: string): string {
   return `Count every ticket in this project's tracker whose milestone is "${milestone}", broken down by state: how many are unstarted, started, parked, done, and canceled.`;

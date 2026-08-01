@@ -47,3 +47,16 @@ The reserved planning namespace is every label that starts with
 `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`,
 `wayfinder:task`, and `planning:prd`. The match is on the prefix, so a new
 artifact kind inherits the exclusion by naming itself in the namespace.
+
+## Security sweeps
+
+`PROTOCOL.md` defines the security-sweep issue and says when a milestone
+carries one. The two label rules a sweep follows are here.
+
+A sweep skips every issue in the reserved planning namespace above. A
+wayfinder map or a PRD never touches the attack surface, so a sweep never
+treats one as though it did.
+
+Findings a sweep files are ordinary issues labeled `needs-triage`, never
+planning artifacts. A sweep never mints a `wayfinder:` or `planning:`
+label.

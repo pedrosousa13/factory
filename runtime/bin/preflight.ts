@@ -72,11 +72,30 @@ function report(failures: Failure[]): void {
 
 // ───── main
 
+// Role detection reads $HOME. With HOME unset — a cron job, a container, any
+// `env -i` invocation — an empty string would make every lookup relative to
+// the current directory, so all seven roles would report absent and every fix
+// would point at a path preflight never looked at. Say so instead.
+function requireHome(): string {
+  const home = process.env.HOME;
+  if (home !== undefined && home !== "") return home;
+
+  report([
+    {
+      what: "HOME is not set, so preflight cannot look for the planning-role implementations",
+      why: "roles resolve against $HOME/.claude/skills and $HOME/.claude/plugins/cache; with HOME empty every lookup would read the current directory instead and report all seven roles absent",
+      fix: "run preflight with HOME set to the maintainer's home directory",
+    },
+  ]);
+  process.exit(1);
+}
+
 function main(): void {
   const harnessName = parseAskReachable(process.argv.slice(2));
+  const home = requireHome();
   const trackerReachable: TrackerReachable = harnessName ? askReachable(harnessName) : "not-asked";
 
-  const facts = gatherPreflightFacts(REPO_ROOT, { trackerReachable, home: process.env.HOME ?? "" });
+  const facts = gatherPreflightFacts(REPO_ROOT, { trackerReachable, home });
   const result = preflight(facts);
 
   if (result.ok) {

@@ -145,8 +145,7 @@ function main(): void {
       ),
     );
 
-    const openTickets: TicketFacts[] =
-      openIssuesAskOk && openIssuesOutcome.status !== "failed" ? openIssuesOutcome.answer.tickets : [];
+    const openTickets: TicketFacts[] = openIssuesAskOk ? openIssuesOutcome.answer.tickets : [];
     const returnedIds = new Set(openTickets.map((t) => t.id));
     const everyTicketPresent = ALL_IDS.every((id) => returnedIds.has(id));
     steps.push(
@@ -206,7 +205,7 @@ function main(): void {
       const t = readFixtureTicket(id);
       if (t.milestone === MILESTONE) groundTruthCounts[t.state]++;
     }
-    const agentCounts = countsAskOk && countsOutcome.status !== "failed" ? countsOutcome.answer.counts : null;
+    const agentCounts = countsAskOk ? countsOutcome.answer.counts : null;
     const countsMatch =
       agentCounts !== null &&
       (["unstarted", "started", "parked", "done", "canceled"] as IssueState[]).every(
