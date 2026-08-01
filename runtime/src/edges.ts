@@ -70,6 +70,20 @@ function skillInstalled(home: string, name: string): boolean {
   return existsSync(join(home, SKILLS_DIR, name));
 }
 
+// A directory listing where "nothing here" and "can't tell" both mean the
+// same thing to a caller walking the plugin cache: no entries. existsSync
+// alone isn't enough to guard readdirSync — it passes for a path that exists
+// as a file, not a directory, and readdirSync then throws. Preflight's
+// contract is to collect every failure and report them together, so a walk
+// that can throw would crash preflight instead of just finding nothing.
+function safeReaddir(path: string): string[] {
+  try {
+    return readdirSync(path);
+  } catch {
+    return [];
+  }
+}
+
 // PROTOCOL.md:53-60: a plugin skill has no `~/.claude/skills/` path. It
 // unpacks to
 // `<home>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`,
@@ -81,12 +95,10 @@ function pluginInstalled(home: string, id: string): boolean {
   if (pluginName === undefined || skillName === undefined) return false;
 
   const cache = join(home, PLUGIN_CACHE_DIR);
-  if (!existsSync(cache)) return false;
 
-  for (const marketplace of readdirSync(cache)) {
+  for (const marketplace of safeReaddir(cache)) {
     const versions = join(cache, marketplace, pluginName);
-    if (!existsSync(versions)) continue;
-    for (const version of readdirSync(versions)) {
+    for (const version of safeReaddir(versions)) {
       if (existsSync(join(versions, version, "skills", skillName))) return true;
     }
   }

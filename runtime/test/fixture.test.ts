@@ -54,6 +54,14 @@ function fieldLine(shape: string, field: string): string {
   return line;
 }
 
+/** A field line's type portion: the trailing `//` comment and the `;` stripped. */
+function fieldType(shape: string, field: string): string {
+  const line = fieldLine(shape, field).replace(/\/\/.*$/, "").trim();
+  const match = line.match(/^\w+:\s*(.*?);?$/);
+  if (!match) throw new Error(`could not parse a type out of the ${field} field: ${line}`);
+  return match[1].trim();
+}
+
 test("TICKET_FACTS_SHAPE names tracker.ts's TicketFacts fields, all of them, in order", () => {
   expect(fieldNames(TICKET_FACTS_SHAPE)).toEqual(fieldNames(objectBody("TicketFacts")));
 });
@@ -61,6 +69,19 @@ test("TICKET_FACTS_SHAPE names tracker.ts's TicketFacts fields, all of them, in 
 test("TICKET_FACTS_SHAPE's inlined unions match the types they stand in for", () => {
   expect(quoted(fieldLine(TICKET_FACTS_SHAPE, "urgency"))).toEqual(quoted(aliasLine("Urgency")));
   expect(quoted(fieldLine(TICKET_FACTS_SHAPE, "state"))).toEqual(quoted(aliasLine("IssueState")));
+});
+
+// urgency and state are excluded: TicketFacts spells them as the `Urgency`
+// and `IssueState` aliases, while the shape (necessarily) inlines each
+// union's members, so their type text never matches textually — that's what
+// the dedicated union test above already checks instead.
+test("TICKET_FACTS_SHAPE's per-field types match tracker.ts's TicketFacts fields", () => {
+  const body = objectBody("TicketFacts");
+  const skip = new Set(["urgency", "state"]);
+  for (const field of fieldNames(body)) {
+    if (skip.has(field)) continue;
+    expect(fieldType(TICKET_FACTS_SHAPE, field)).toBe(fieldType(body, field));
+  }
 });
 
 test("MILESTONE_COUNTS_SHAPE asks for a count of every IssueState, and nothing else", () => {

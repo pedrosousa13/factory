@@ -225,13 +225,13 @@ issues — the Planning Session is the only place work gets created. Apply
 first issues onward: propose the attack-surface test's outcome to the
 maintainer, and if the Project passes it, every milestone whose issues
 touch the attack surface gets its security-sweep issue, wired blocked-by.
-A wayfinder map or a PRD in the reserved planning namespace never counts
-as an issue that milestone touches the attack surface — the same skip
+A wayfinder map or a PRD in the reserved planning namespace never counts as
+an issue that makes its milestone touch the attack surface — the same skip
 `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" section applies
 everywhere else. If the maintainer declines, record it exactly as that
-section specifies — the marker line in the Project's `CONTEXT.md`. Tell
-the maintainer that
-once the Queue has issues, their next command is `/factory`.
+section specifies — the marker line in the Project's `CONTEXT.md`. Tell the
+maintainer that once the Queue has issues, their next command is
+`/factory`.
 
 ## Hard rules
 
