@@ -330,9 +330,10 @@ export function effective(config: FactoryConfig, detected: Detected): EffectiveS
     settings.mergeMethod = { value: config.merge.policy, source: "default" };
   }
 
-  // contextBudget: reserved key, off by default — no PRD default exists yet
-  // (TBD at a later slice), so the row is omitted rather than inventing a
-  // placeholder value. Parse support stays; no enforcement lives here.
+  // contextBudget: this slice's decision on the PRD's TBD is that the budget
+  // is off unless the maintainer sets one — so an unset key means no budget,
+  // and the row is omitted rather than showing an invented placeholder.
+  // Parse support stays; no enforcement lives here.
   if (config.contextBudget !== undefined) {
     settings.contextBudget = { value: config.contextBudget, source: "config" };
   }

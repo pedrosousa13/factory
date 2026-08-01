@@ -1,7 +1,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "bun:test";
-import { CLEAR_BRIEF, IMPLEMENT_SHAPE, implementPrompt, mkCodeRepo, rmCodeRepo, VAGUE_BRIEF } from "../conformance/coderepo";
+import {
+  CLEAR_BRIEF,
+  CLEAR_BRIEF_BRANCH,
+  CLEAR_BRIEF_COMMIT,
+  CLEAR_BRIEF_MARKER,
+  IMPLEMENT_SHAPE,
+  implementPrompt,
+  mkCodeRepo,
+  rmCodeRepo,
+  VAGUE_BRIEF,
+} from "../conformance/coderepo";
 
 // ───── mkCodeRepo
 
@@ -46,6 +56,17 @@ test("implementPrompt works for the vague brief too", () => {
   expect(prompt).toContain(VAGUE_BRIEF);
   expect(prompt).toContain(IMPLEMENT_SHAPE);
   expect(prompt).toContain("Reply with ONLY that JSON");
+});
+
+// ───── CLEAR_BRIEF ↔ what the hosts verify
+
+// Both hosts verify the work against these three constants. If a constant
+// ever stops appearing in the brief the agent is actually given, the hosts
+// would assert something the agent was never asked to do.
+test("CLEAR_BRIEF asks for the branch, commit message, and marker the hosts verify", () => {
+  expect(CLEAR_BRIEF).toContain(CLEAR_BRIEF_BRANCH);
+  expect(CLEAR_BRIEF).toContain(CLEAR_BRIEF_COMMIT);
+  expect(CLEAR_BRIEF).toContain(CLEAR_BRIEF_MARKER);
 });
 
 // ───── IMPLEMENT_SHAPE byte-identity

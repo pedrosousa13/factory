@@ -4,7 +4,9 @@
  *
  * bun coderepo.ts up|down [root]
  *
- * THROWAWAY: no tests, no error handling beyond what keeps it runnable.
+ * THROWAWAY, with one exception: the shared prompt material at the bottom is
+ * pinned by runtime/test/coderepo.test.ts, because a silent drift there voids
+ * the L2 evidence. No error handling beyond what keeps it runnable.
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -67,10 +69,18 @@ export const IMPLEMENT_SHAPE = `export type ImplementResult =
   | { result: "question"; question: string }
   | { result: "failed"; reason: string };`;
 
+// The branch, the commit message, and the greeting marker CLEAR_BRIEF asks
+// for. Both hosts verify the work against these, so they are interpolated
+// into the brief rather than hand-copied beside it: a verifier that checks a
+// different branch than the brief named would assert nothing.
+export const CLEAR_BRIEF_BRANCH = "42-test/greeting";
+export const CLEAR_BRIEF_COMMIT = "Change greeting to Hi";
+export const CLEAR_BRIEF_MARKER = "Hi, ";
+
 export const CLEAR_BRIEF =
-  "Create and switch to a new branch named '42-test/greeting', then edit greet.ts so greet returns " +
-  "'Hi, ' + name instead of 'Hello, ' + name, update check.ts's expectation to match, run " +
-  "`bun check.ts` to confirm it exits 0, and commit the change with message 'Change greeting to Hi'. " +
+  `Create and switch to a new branch named '${CLEAR_BRIEF_BRANCH}', then edit greet.ts so greet returns ` +
+  `'${CLEAR_BRIEF_MARKER}' + name instead of 'Hello, ' + name, update check.ts's expectation to match, run ` +
+  `\`bun check.ts\` to confirm it exits 0, and commit the change with message '${CLEAR_BRIEF_COMMIT}'. ` +
   "Then reply with ONLY the JSON result.";
 
 export const VAGUE_BRIEF =

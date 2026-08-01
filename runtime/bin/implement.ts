@@ -30,9 +30,20 @@ import {
   type GateKind,
   type ImplementResult,
 } from "../src/agentwork";
-import { CLEAR_BRIEF, VAGUE_BRIEF, implementPrompt, mkCodeRepo, rmCodeRepo } from "../conformance/coderepo";
-
-const BRANCH = "42-test/greeting";
+import {
+  CLEAR_BRIEF,
+  CLEAR_BRIEF_BRANCH,
+  CLEAR_BRIEF_COMMIT,
+  CLEAR_BRIEF_MARKER,
+  VAGUE_BRIEF,
+  implementPrompt,
+  mkCodeRepo,
+  rmCodeRepo,
+} from "../conformance/coderepo";
+const REVIEW_STANDARDS_BRIEF =
+  "Review the diff of the last commit in this repo against ordinary TypeScript standards: " +
+  "does it keep the change minimal, leave no debug leftovers, and keep greet.ts and check.ts consistent? " +
+  "Reply with ONLY the pass/fail JSON.";
 const REVIEW_SPEC_BRIEF =
   "Review the diff of the last commit in this repo for: does it match the brief " +
   "'edit greet.ts so greet returns \"Hi, \" + name instead of \"Hello, \" + name'? " +
@@ -53,6 +64,15 @@ function git(args: string[], cwd: string): { stdout: string; exit: number } {
 function runCheckTs(cwd: string): number {
   const proc = Bun.spawnSync(["bun", "check.ts"], { cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
   return proc.exitCode;
+}
+
+/** "" when the agent left no greet.ts — a failed check, never a thrown error. */
+function readGreet(cwd: string): string {
+  try {
+    return readFileSync(join(cwd, "greet.ts"), "utf8");
+  } catch {
+    return "";
+  }
 }
 
 // ──────────────────────────────────────────────────────────── agent dispatch
@@ -146,7 +166,7 @@ function main(): void {
     const implementAsk: Extract<AgentAsk, { k: "agent.implement" }> = {
       k: "agent.implement",
       issue: "42-test",
-      branch: BRANCH,
+      branch: CLEAR_BRIEF_BRANCH,
       brief: CLEAR_BRIEF,
     };
     const implementResult = dispatchImplement(harness, clearRoot, CLEAR_BRIEF, implementAsk);
@@ -166,14 +186,19 @@ function main(): void {
     // ── 3: verify the WORK, not the word
     let workVerified = false;
     if (implementResult.result === "done") {
-      const greetText = readFileSync(join(clearRoot, "greet.ts"), "utf8");
-      const greetOk = greetText.includes("Hi, ");
+      // An agent can claim "done" and leave no greet.ts behind — the very
+      // claim this step exists to disbelieve. An uncaught ENOENT here would
+      // kill the process before the scoreboard prints, losing every step
+      // already recorded, so a missing file is a failed check, not a crash.
+      const greetOk = readGreet(clearRoot).includes(CLEAR_BRIEF_MARKER);
       const checkOk = runCheckTs(clearRoot) === 0;
       const log = git(["log", "--oneline", "-10"], clearRoot).stdout;
-      const commitOk = log.includes("Change greeting to Hi");
+      const commitOk = log.includes(CLEAR_BRIEF_COMMIT);
       workVerified = greetOk && checkOk && commitOk;
 
-      steps.push(step("verify greet.ts", greetOk ? "contains 'Hi, '" : "missing 'Hi, '", greetOk));
+      steps.push(
+        step("verify greet.ts", greetOk ? `contains '${CLEAR_BRIEF_MARKER}'` : `missing '${CLEAR_BRIEF_MARKER}'`, greetOk),
+      );
       steps.push(step("verify bun check.ts", checkOk ? "exit 0" : "nonzero exit", checkOk));
       steps.push(step("verify git log", commitOk ? "commit found" : "commit missing", commitOk, log.trim().split("\n")[0]));
       steps.push(
@@ -183,30 +208,46 @@ function main(): void {
 
     // ── 4 + 5: gates and merge, only meaningful once the work is verified
     if (implementResult.result === "done" && workVerified) {
+      // The scratch repo has `bun check.ts` and no typecheck command, so the
+      // plan is tests + both reviews. Every planned gate is dispatched below
+      // and the plan is compared against what actually ran — a gate that is
+      // printed but skipped would otherwise read as a gate that passed.
       const gates = gatePlan({ tests: true, typecheck: false });
-      steps.push(step("gatePlan", "computed", true, gates.join(", ")));
-
       const outcomes: { kind: GateKind; result: CheckResult }[] = [];
 
       const testsExit = runCheckTs(clearRoot);
       const testsResult: CheckResult =
         testsExit === 0 ? { result: "pass" } : { result: "fail", detail: `bun check.ts exit ${testsExit}` };
       outcomes.push({ kind: "tests", result: testsResult });
-      steps.push(step("gate: tests", testsResult.result, testsResult.result === "pass"));
+      steps.push(
+        step("gate: tests", testsResult.result, testsResult.result === "pass", "same command as verify bun check.ts"),
+      );
 
-      const checkAsk: Extract<AgentAsk, { k: "agent.check" }> = {
-        k: "agent.check",
-        kind: "review.spec",
-        command: REVIEW_SPEC_BRIEF,
-      };
-      const reviewResult = dispatchCheck(harness, clearRoot, REVIEW_SPEC_BRIEF, checkAsk);
-      outcomes.push({ kind: "review.spec", result: reviewResult });
+      for (const [kind, brief] of [
+        ["review.standards", REVIEW_STANDARDS_BRIEF],
+        ["review.spec", REVIEW_SPEC_BRIEF],
+      ] as const) {
+        const checkAsk: Extract<AgentAsk, { k: "agent.check" }> = { k: "agent.check", kind, command: brief };
+        const reviewResult = dispatchCheck(harness, clearRoot, brief, checkAsk);
+        outcomes.push({ kind, result: reviewResult });
+        steps.push(
+          step(
+            `gate: ${kind}`,
+            reviewResult.result,
+            reviewResult.result === "pass",
+            reviewResult.result === "fail" ? reviewResult.detail : undefined,
+          ),
+        );
+      }
+
+      const ran = outcomes.map((o) => o.kind);
+      const planMatched = gates.join(",") === ran.join(",");
       steps.push(
         step(
-          "gate: review.spec",
-          reviewResult.result,
-          reviewResult.result === "pass",
-          reviewResult.result === "fail" ? reviewResult.detail : undefined,
+          "gatePlan",
+          planMatched ? "every planned gate ran" : "plan and dispatches diverged",
+          planMatched,
+          `planned ${gates.join(", ")}; ran ${ran.join(", ")}`,
         ),
       );
 
@@ -228,10 +269,10 @@ function main(): void {
 
         if (decision.k === "merge") {
           git(["switch", "main"], clearRoot);
-          git(["merge", "--squash", BRANCH], clearRoot);
-          const commitRes = git(["commit", "-m", "Change greeting to Hi"], clearRoot);
+          git(["merge", "--squash", CLEAR_BRIEF_BRANCH], clearRoot);
+          const commitRes = git(["commit", "-m", CLEAR_BRIEF_COMMIT], clearRoot);
           const mainHeadAfter = git(["rev-parse", "main"], clearRoot).stdout.trim();
-          const greetOnMain = readFileSync(join(clearRoot, "greet.ts"), "utf8").includes("Hi, ");
+          const greetOnMain = readGreet(clearRoot).includes(CLEAR_BRIEF_MARKER);
           const mergeOk = commitRes.exit === 0 && mainHeadAfter !== mainHeadBefore && greetOnMain;
           steps.push(
             step(
@@ -254,7 +295,7 @@ function main(): void {
     const vagueAsk: Extract<AgentAsk, { k: "agent.implement" }> = {
       k: "agent.implement",
       issue: "42-test-vague",
-      branch: BRANCH,
+      branch: CLEAR_BRIEF_BRANCH,
       brief: VAGUE_BRIEF,
     };
     const vagueResult = dispatchImplement(harness, vagueRoot, VAGUE_BRIEF, vagueAsk);

@@ -124,9 +124,9 @@ export type MergeDecision =
  * "squash". Under any auto policy, the policy value itself IS a method
  * preference — "squash"/"merge"/"rebase" name both a policy and a method —
  * so an explicit method overrides it, and absent both the policy supplies
- * the method directly. The "squash" default above is never reached on this
- * branch, because an auto policy can never be absent a method to fall back
- * on: the policy already is one.
+ * the method directly, which is why the auto path needs no "squash" default
+ * of its own. config.ts's effective() resolves the same three cases into the
+ * mergeMethod setting; keep the two in step.
  */
 export function mergeDecision(
   policy: MergePolicy,

@@ -20,10 +20,10 @@
  * commit on (file content, `bun check.ts`'s exit, the commit itself) rather
  * than trusted from the reply; VAGUE_BRIEF on a fresh repo, expecting the
  * question variant with a non-empty question. Answers are validated with
- * `checkAgent()` from runtime/src/agentwork.ts, one re-ask on a malformed or
- * thrown reply (a local mirror of askloop.ts's askWithRetry, since that one is
- * typed for the tracker's Ask union and doesn't fit agent.implement). Each
- * scratch repo is removed on every path, success or failure.
+ * `checkAgent()` from runtime/src/agentwork.ts, and — unlike the tracker asks
+ * above — each dispatch gets exactly one run, with a malformed or thrown reply
+ * counting as failed (PRD §2). Each scratch repo is removed on every path,
+ * success or failure.
  *
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
  * fails any check.
@@ -40,7 +40,16 @@ import { askWithRetry, buildPrompt, extractJson, type AskStatus, type Runner } f
 import { runHarness, type HarnessName } from "../src/harness";
 import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
 import { checkAgent, type AgentAsk, type ImplementResult } from "../src/agentwork";
-import { CLEAR_BRIEF, VAGUE_BRIEF, implementPrompt, mkCodeRepo, rmCodeRepo } from "./coderepo";
+import {
+  CLEAR_BRIEF,
+  CLEAR_BRIEF_BRANCH,
+  CLEAR_BRIEF_COMMIT,
+  CLEAR_BRIEF_MARKER,
+  VAGUE_BRIEF,
+  implementPrompt,
+  mkCodeRepo,
+  rmCodeRepo,
+} from "./coderepo";
 import {
   CANDIDATES_SHAPE,
   CANDIDATES_QUESTION,
@@ -61,52 +70,38 @@ import {
 
 // ─────────────────────────────────────────────────── agent.implement asking
 //
-// askWithRetry (askloop.ts) is typed for the tracker's Ask union and validates
-// with tracker.ts's check() — agent.implement isn't a tracker Ask, so it
-// doesn't fit. This is a local mirror of the exact same one-ask/one-reask
-// logic, retyped for AgentAsk and validated with agentwork.ts's checkAgent
-// instead. askloop.ts itself is untouched (out of scope for this task).
+// The one-re-ask rule askWithRetry (askloop.ts) implements belongs to the
+// tracker's Ask vocabulary. PRD §2 gives agent.* the opposite rule: each
+// dispatch is one top-level headless run, and any parse or validation failure
+// counts as failed. bin/implement.ts already dispatches that way. Re-asking
+// here would be worse than inconsistent — the brief mutates a repo, so a
+// second send lands in a repo the first send already changed, and an agent
+// that finds the work done replies "done" for work this run never verified.
 
 type ImplementOutcome =
-  | { status: "valid-first-try" | "valid-after-reask"; answer: ImplementResult }
-  | { status: "failed"; whys: [string, string] };
+  | { status: "valid"; answer: ImplementResult }
+  | { status: "failed"; why: string };
 
 function askImplementOnce(
   runner: Runner,
   ask: Extract<AgentAsk, { k: "agent.implement" }>,
   prompt: string,
-): { ok: true; answer: ImplementResult } | { ok: false; why: string } {
+): ImplementOutcome {
   let raw: string;
   try {
     raw = runner(prompt).raw;
   } catch (e) {
-    return { ok: false, why: `harness threw: ${(e as Error).message}` };
+    return { status: "failed", why: `harness threw: ${(e as Error).message}` };
   }
   const parsed = extractJson(raw);
-  if (parsed === null) return { ok: false, why: "could not extract JSON from response" };
+  if (parsed === null) return { status: "failed", why: "could not extract JSON from response" };
   const checked = checkAgent(ask, parsed);
-  if (!checked.ok) return { ok: false, why: checked.why };
-  return { ok: true, answer: checked.answer as ImplementResult };
-}
-
-function askImplementWithRetry(
-  runner: Runner,
-  ask: Extract<AgentAsk, { k: "agent.implement" }>,
-  prompt: string,
-): ImplementOutcome {
-  const r1 = askImplementOnce(runner, ask, prompt);
-  if (r1.ok) return { status: "valid-first-try", answer: r1.answer };
-
-  const reaskPrompt = `${prompt}\n\nYour previous reply was invalid: ${r1.why}\nReply again with ONLY the corrected JSON, no prose.`;
-  const r2 = askImplementOnce(runner, ask, reaskPrompt);
-  if (r2.ok) return { status: "valid-after-reask", answer: r2.answer };
-
-  return { status: "failed", whys: [r1.why, r2.why] };
+  if (!checked.ok) return { status: "failed", why: checked.why };
+  return { status: "valid", answer: checked.answer as ImplementResult };
 }
 
 // ─────────────────────────────────────────────────────────── git (coderepo)
 
-const CLEAR_BRIEF_BRANCH = "42-test/greeting"; // per coderepo.ts's CLEAR_BRIEF text
 
 function gitOut(args: string[], cwd: string): { stdout: string; exit: number } {
   const proc = Bun.spawnSync(["git", ...args], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
@@ -118,7 +113,7 @@ function gitOut(args: string[], cwd: string): { stdout: string; exit: number } {
  * and the commit's presence on that branch — never trusting the "done" reply. */
 function verifyClearBriefWork(root: string): { workOk: boolean; note: string } {
   const switchRes = gitOut(["switch", CLEAR_BRIEF_BRANCH], root);
-  if (switchRes.exit !== 0) return { workOk: false, note: `branch ${CLEAR_BRIEF_BRANCH} not found` };
+  if (switchRes.exit !== 0) return { workOk: false, note: `git switch ${CLEAR_BRIEF_BRANCH} failed` };
 
   // An agent can claim "done" and leave no greet.ts (deleted, renamed, wrong
   // branch) — exactly what this sweep exists to catch. An uncaught ENOENT here
@@ -126,7 +121,7 @@ function verifyClearBriefWork(root: string): { workOk: boolean; note: string } {
   // FAIL into no scoreboard at all.
   let greetOk: boolean;
   try {
-    greetOk = readFileSync(join(root, "greet.ts"), "utf8").includes("Hi, ");
+    greetOk = readFileSync(join(root, "greet.ts"), "utf8").includes(CLEAR_BRIEF_MARKER);
   } catch {
     return { workOk: false, note: "greet.ts unreadable on the branch" };
   }
@@ -138,7 +133,7 @@ function verifyClearBriefWork(root: string): { workOk: boolean; note: string } {
   }).exitCode;
   const checkOk = checkExit === 0;
   const log = gitOut(["log", "--oneline", "-10"], root).stdout;
-  const commitOk = log.includes("Change greeting to Hi");
+  const commitOk = log.includes(CLEAR_BRIEF_COMMIT);
 
   const workOk = greetOk && checkOk && commitOk;
   return { workOk, note: workOk ? "verified" : `greet=${greetOk} check=${checkOk} commit=${commitOk}` };
@@ -179,10 +174,10 @@ type HarnessRecord = {
   unclaim: AskStatus;
   unclaimOk: boolean; // answer.result === "ok"
   unclaimFileOk: boolean; // T-1.md claimedBy === null
-  implementDone: AskStatus;
+  implementDone: ImplementOutcome["status"];
   implementDoneOk: boolean; // answer.result === "done"
   workVerifiedOk: boolean; // greet.ts + bun check.ts + commit, all on CLEAR_BRIEF_BRANCH
-  implementQuestion: AskStatus;
+  implementQuestion: ImplementOutcome["status"];
   implementQuestionOk: boolean; // answer.result === "question" && question non-empty
   reasks: number;
   totalMs: number;
@@ -329,7 +324,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
       branch: CLEAR_BRIEF_BRANCH,
       brief: CLEAR_BRIEF,
     };
-    clearLog = askImplementWithRetry(clearRunner, implementAsk, implementPrompt(CLEAR_BRIEF));
+    clearLog = askImplementOnce(clearRunner, implementAsk, implementPrompt(CLEAR_BRIEF));
     if (clearLog.status !== "failed" && clearLog.answer.result === "done") {
       workVerifiedOk = verifyClearBriefWork(clearRepo.root).workOk;
     }
@@ -339,7 +334,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   const clearMs = Math.round(performance.now() - clearStart);
   const implementDoneOk = clearLog.status !== "failed" && clearLog.answer.result === "done";
   console.log(
-    `  implement CLEAR_BRIEF: ${clearLog.status}${clearLog.status === "failed" ? ` — ${clearLog.whys[1]}` : ""} (expected done: ${implementDoneOk ? "yes" : "no"}; work verified: ${workVerifiedOk ? "yes" : "no"})`,
+    `  implement CLEAR_BRIEF: ${clearLog.status}${clearLog.status === "failed" ? ` — ${clearLog.why}` : ""} (expected done: ${implementDoneOk ? "yes" : "no"}; work verified: ${workVerifiedOk ? "yes" : "no"})`,
   );
 
   // ── slice 3: agent.implement — VAGUE_BRIEF on a fresh scratch code repo,
@@ -355,7 +350,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
       branch: CLEAR_BRIEF_BRANCH,
       brief: VAGUE_BRIEF,
     };
-    vagueLog = askImplementWithRetry(vagueRunner, vagueAsk, implementPrompt(VAGUE_BRIEF));
+    vagueLog = askImplementOnce(vagueRunner, vagueAsk, implementPrompt(VAGUE_BRIEF));
   } finally {
     rmCodeRepo(vagueRepo.root);
   }
@@ -365,13 +360,13 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     vagueLog.answer.result === "question" &&
     vagueLog.answer.question.trim().length > 0;
   console.log(
-    `  implement VAGUE_BRIEF: ${vagueLog.status}${vagueLog.status === "failed" ? ` — ${vagueLog.whys[1]}` : ""} (expected question: ${implementQuestionOk ? "yes" : "no"})`,
+    `  implement VAGUE_BRIEF: ${vagueLog.status}${vagueLog.status === "failed" ? ` — ${vagueLog.why}` : ""} (expected question: ${implementQuestionOk ? "yes" : "no"})`,
   );
 
+  // Only the tracker asks can re-ask; the agent.implement dispatches get one
+  // run each (PRD §2), so they cannot contribute to this count.
   const asks = [reachableLog, verifyLog, candidatesLog, readT1Log, readT9Log, claimLog, startedLog, unclaimLog];
-  const reasks =
-    asks.filter((l) => l.status === "valid-after-reask").length +
-    [clearLog, vagueLog].filter((l) => l.status === "valid-after-reask").length;
+  const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
   const totalMs =
     reachableMs +
     verifyMs +

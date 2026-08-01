@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import { parseConfig, effective, LOCK_PATH, JOURNAL_PATH } from "../src/config";
 import type { Detected } from "../src/config";
+import { mergeDecision } from "../src/agentwork";
 
 // ───── parseConfig: valid input
 
@@ -617,4 +618,66 @@ test("effective() reports the fixed lock and journal paths", () => {
   expect(settings.journalPath).toBe(".factory/journal.json");
   expect(settings.lockPath).toBe(LOCK_PATH);
   expect(settings.journalPath).toBe(JOURNAL_PATH);
+});
+
+// ───── effective() feeding mergeDecision
+//
+// The policy and the method are separate settings, resolved here and consumed
+// by agentwork.ts's mergeDecision. Nothing wires the two together yet (the
+// reducer arrives in a later slice), so these pin the seam: what effective()
+// resolves is what mergeDecision must act on.
+
+test("a rebase method under a human policy reaches mergeDecision as rebase, not squash", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "human", method: "rebase" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+  const decision = mergeDecision(settings.mergePolicy.value, settings.mergeMethod?.value, "approved");
+
+  expect(settings.mergeMethod).toEqual({ value: "rebase", source: "config" });
+  expect(decision).toEqual({ k: "merge", method: "rebase" });
+});
+
+test("an absent method under a human policy reaches mergeDecision as squash", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "human" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+  const decision = mergeDecision(settings.mergePolicy.value, settings.mergeMethod?.value, "approved");
+
+  expect(decision).toEqual({ k: "merge", method: "squash" });
+});
+
+test("an auto policy's method survives the trip through effective() into mergeDecision", () => {
+  const parsed = parseConfig(
+    JSON.stringify({
+      stampVersion: "2.0.0",
+      tracker: { kind: "local" },
+      merge: { policy: "squash", method: "rebase" },
+      attackSurface: false,
+    }),
+  );
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+
+  const settings = effective(parsed.config, detected);
+  const decision = mergeDecision(settings.mergePolicy.value, settings.mergeMethod?.value, null);
+
+  expect(decision).toEqual({ k: "merge", method: "rebase" });
 });
