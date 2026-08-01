@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectActor, gatherPreflightFacts } from "../src/edges";
+import { detectActor, gatherAvailableRoles, gatherPreflightFacts } from "../src/edges";
 import { STAMP_VERSION } from "../src/version";
 
 // ───── isolation from the host's own git identity
@@ -165,6 +165,94 @@ describe("gatherPreflightFacts", () => {
       expect(facts.trackerReachable).toEqual(reachable);
     } finally {
       rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+// ───── gatherAvailableRoles
+//
+// A fixture home built in the two real shapes: `.claude/skills/<name>` for a
+// skill-kind implementation, and
+// `.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>` for
+// a plugin-kind one.
+
+function scratchHome(): string {
+  return mkdtempSync(join(tmpdir(), "edges-home-"));
+}
+
+function mkSkill(home: string, name: string): void {
+  mkdirSync(join(home, ".claude", "skills", name), { recursive: true });
+}
+
+function mkPluginSkill(home: string, marketplace: string, plugin: string, version: string, skill: string): void {
+  mkdirSync(join(home, ".claude", "plugins", "cache", marketplace, plugin, version, "skills", skill), {
+    recursive: true,
+  });
+}
+
+describe("gatherAvailableRoles", () => {
+  test("an empty home has nothing available", () => {
+    const home = scratchHome();
+    try {
+      expect(gatherAvailableRoles(home)).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("reports the skill-kind implementations present, and only those", () => {
+    const home = scratchHome();
+    try {
+      mkSkill(home, "grilling");
+      mkSkill(home, "to-spec");
+      const found = gatherAvailableRoles(home);
+      expect(found).toContain("grilling");
+      expect(found).toContain("to-spec");
+      expect(found).not.toContain("to-prd");
+      expect(found).not.toContain("wayfinder");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("a broken symlink under ~/.claude/skills reads as absent (PROTOCOL.md:47-52)", () => {
+    const home = scratchHome();
+    try {
+      mkdirSync(join(home, ".claude", "skills"), { recursive: true });
+      symlinkSync(join(home, "no-such-source"), join(home, ".claude", "skills", "triage"));
+      expect(gatherAvailableRoles(home)).not.toContain("triage");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("finds a plugin-kind implementation under any marketplace and any version", () => {
+    const home = scratchHome();
+    try {
+      mkPluginSkill(home, "some-other-marketplace", "superpowers", "9.9.9", "test-driven-development");
+      expect(gatherAvailableRoles(home)).toContain("superpowers:test-driven-development");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("a plugin skill of the same name under a different plugin does not count", () => {
+    const home = scratchHome();
+    try {
+      mkPluginSkill(home, "some-marketplace", "not-superpowers", "1.0.0", "test-driven-development");
+      expect(gatherAvailableRoles(home)).not.toContain("superpowers:test-driven-development");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("the implement role's fallback is a plain skill, found at ~/.claude/skills/tdd", () => {
+    const home = scratchHome();
+    try {
+      mkSkill(home, "tdd");
+      expect(gatherAvailableRoles(home)).toContain("tdd");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

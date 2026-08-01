@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { ROLE_TABLE, resolveRoles, roleReport } from "../src/roles";
 
-const ALL_PREFERRED = ROLE_TABLE.map((r) => r.preferred);
+const ALL_PREFERRED = ROLE_TABLE.map((r) => r.preferred.name);
 
 test("the role table is the PRD's seven roles in the PRD's order", () => {
   expect(ROLE_TABLE.map((r) => r.role)).toEqual([
@@ -43,6 +43,23 @@ test("a role whose preferred and fallback are both absent fails preflight", () =
   expect(got.failures[0].why).toContain("to-spec");
 });
 
+test("the implement role's failure blocks execution only — a missing TDD skill must not stop planning", () => {
+  const got = resolveRoles(ALL_PREFERRED.filter((p) => p !== "superpowers:test-driven-development"));
+  expect(got.failures.length).toBe(1);
+  expect(got.failures[0].what).toContain("Implement");
+  expect(got.failures[0].blocksExecutionOnly).toBe(true);
+  // A plugin skill has no ~/.claude/skills/ path, so the fix must not name one.
+  expect(got.failures[0].fix).toContain("superpowers");
+  expect(got.failures[0].fix).not.toContain("~/.claude/skills/");
+});
+
+test("every other role's failure blocks the whole run, not execution alone", () => {
+  for (const failure of resolveRoles([]).failures) {
+    if (failure.what.includes("Implement")) continue;
+    expect(failure.blocksExecutionOnly).toBeUndefined();
+  }
+});
+
 test("every unresolvable role is reported, not just the first", () => {
   const got = resolveRoles([]);
   expect(got.failures.length).toBe(ROLE_TABLE.length);
@@ -52,7 +69,7 @@ test("every unresolvable role is reported, not just the first", () => {
 test("the run reports which implementation it selected for every role", () => {
   const report = roleReport(resolveRoles(ALL_PREFERRED).resolved);
   for (const spec of ROLE_TABLE) {
-    expect(report).toContain(spec.preferred);
+    expect(report).toContain(spec.preferred.name);
   }
 });
 

@@ -3,7 +3,7 @@
 // to the pure modules (config.ts, marker.ts, preflight.ts) that decide what
 // they mean.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { parseConfig, type ParseResult } from "./config";
@@ -60,16 +60,46 @@ function gatherStampVersion(config: "missing-file" | ParseResult): StampVersion 
 // ───── planning-role implementations
 
 const SKILLS_DIR = ".claude/skills";
+const PLUGIN_CACHE_DIR = ".claude/plugins/cache";
 
 // PROTOCOL.md:44-46: check the `~/.claude/skills/` path itself — a missing or
 // broken symlink there leaves the skill unavailable even if the source exists.
 // existsSync follows symlinks, so a broken one reads as absent, which is what
 // we want.
-function gatherAvailableRoles(home: string): string[] {
+function skillInstalled(home: string, name: string): boolean {
+  return existsSync(join(home, SKILLS_DIR, name));
+}
+
+// PROTOCOL.md:53-60: a plugin skill has no `~/.claude/skills/` path. It
+// unpacks to
+// `<home>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`,
+// and both the marketplace and the version differ per machine — the protocol
+// says the check must not care which marketplace it came from — so walk those
+// two levels instead of naming them.
+function pluginInstalled(home: string, id: string): boolean {
+  const [pluginName, skillName] = id.split(":");
+  if (pluginName === undefined || skillName === undefined) return false;
+
+  const cache = join(home, PLUGIN_CACHE_DIR);
+  if (!existsSync(cache)) return false;
+
+  for (const marketplace of readdirSync(cache)) {
+    const versions = join(cache, marketplace, pluginName);
+    if (!existsSync(versions)) continue;
+    for (const version of readdirSync(versions)) {
+      if (existsSync(join(versions, version, "skills", skillName))) return true;
+    }
+  }
+  return false;
+}
+
+export function gatherAvailableRoles(home: string): string[] {
   const names = new Set<string>();
   for (const spec of ROLE_TABLE) {
     for (const impl of [spec.preferred, spec.fallback]) {
-      if (impl !== null && existsSync(join(home, SKILLS_DIR, impl))) names.add(impl);
+      if (impl === null) continue;
+      const found = impl.k === "plugin" ? pluginInstalled(home, impl.name) : skillInstalled(home, impl.name);
+      if (found) names.add(impl.name);
     }
   }
   return [...names];

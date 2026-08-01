@@ -20,7 +20,7 @@ function greenFacts(): PreflightFacts {
     trackerReachable: { result: "ok" },
     pushCheck: { ok: true, detail: "push ok" },
     stampVersion: { repo: "2.0.0", plugin: "2.0.0" },
-    availableRoles: ROLE_TABLE.map((r) => r.preferred),
+    availableRoles: ROLE_TABLE.map((r) => r.preferred.name),
   };
 }
 
@@ -321,7 +321,7 @@ test("compareStamp does a full dotted compare, not major-only: a minor-ahead rep
 // ───── planning roles
 
 test("preflight passes when every planning role resolves", () => {
-  const got = preflight(facts({ availableRoles: ROLE_TABLE.map((r) => r.preferred) }));
+  const got = preflight(facts({ availableRoles: ROLE_TABLE.map((r) => r.preferred.name) }));
   expect(got.ok).toBe(true);
 });
 
@@ -341,7 +341,7 @@ test("role failures join the other preflight failures rather than replacing them
 });
 
 test("a role resolving to its fallback does not fail preflight", () => {
-  const available = ROLE_TABLE.map((r) => r.preferred).filter((p) => p !== "to-prd").concat("to-spec");
+  const available = ROLE_TABLE.map((r) => r.preferred.name).filter((p) => p !== "to-prd").concat("to-spec");
   const got = preflight(facts({ availableRoles: available }));
   expect(got.ok).toBe(true);
 });

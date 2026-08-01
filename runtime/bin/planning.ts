@@ -28,6 +28,7 @@ import {
   TICKET_FACTS_SHAPE,
   up,
 } from "../conformance/fixture";
+import { gatherAvailableRoles } from "../src/edges";
 import { runHarness, type HarnessName } from "../src/harness";
 import { askWithRetry, buildPrompt, type Runner } from "../src/askloop";
 import { applyInvariants } from "../src/pick";
@@ -68,24 +69,29 @@ function printSteps(steps: Step[]): void {
 
 // ───────────────────────────────────────────────── fixture skills tree (roles)
 
-// Builds a scratch "home" with `.claude/skills/<name>` directories, one per
-// installed implementation — the same on-disk shape edges.ts's
-// gatherAvailableRoles reads (`existsSync(join(home, ".claude/skills", impl))`).
-// `omit` is the one preferred implementation this run deliberately leaves
-// out, so resolveRoles has to fall back for it.
+// Builds a scratch "home" holding every role implementation in its real
+// on-disk shape — `.claude/skills/<name>` for a skill-kind one,
+// `.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>` for a
+// plugin-kind one — then reads it back through edges.ts's real
+// gatherAvailableRoles rather than listing what it just wrote. `omit` is the
+// one preferred implementation this run deliberately leaves out, so
+// resolveRoles has to fall back for it.
 function mkSkillsHome(omit: string): { home: string; available: string[] } {
   const home = mkdtempSync(join(tmpdir(), "factory-planning-skills-"));
-  const skillsDir = join(home, ".claude", "skills");
-  mkdirSync(skillsDir, { recursive: true });
-  const available: string[] = [];
   for (const spec of ROLE_TABLE) {
     for (const impl of [spec.preferred, spec.fallback]) {
-      if (impl === null || impl === omit) continue;
-      mkdirSync(join(skillsDir, impl), { recursive: true });
-      available.push(impl);
+      if (impl === null || impl.name === omit) continue;
+      if (impl.k === "plugin") {
+        const [pluginName, skillName] = impl.name.split(":");
+        mkdirSync(join(home, ".claude", "plugins", "cache", "test-marketplace", pluginName, "0.0.0", "skills", skillName), {
+          recursive: true,
+        });
+      } else {
+        mkdirSync(join(home, ".claude", "skills", impl.name), { recursive: true });
+      }
     }
   }
-  return { home, available };
+  return { home, available: gatherAvailableRoles(home) };
 }
 
 function rmSkillsHome(home: string): void {
