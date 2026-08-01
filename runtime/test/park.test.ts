@@ -85,7 +85,7 @@ test("every reason's comment also carries the shelved-work state", () => {
   }
 });
 
-// ───── parkPlan: the exact four-step order, for every reason
+// ───── parkPlan: the exact step order
 
 test("parkPlan returns the five steps in the specified order", () => {
   expect(parkPlan()).toEqual([
@@ -97,7 +97,7 @@ test("parkPlan returns the five steps in the specified order", () => {
   ]);
 });
 
-// ───── remainingPark: every prefix of the four steps
+// ───── remainingPark: every prefix of the step order
 
 test("remainingPark: nothing done owes every step in order", () => {
   expect(remainingPark(NOTHING_DONE)).toEqual([

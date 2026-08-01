@@ -1,5 +1,5 @@
 // Pure park module: how a run puts an issue down without losing it (PRD §5
-// item 6, "Ping and Park"). The four-step order below is exact and
+// item 6, "Ping and Park"). The step order below is exact and
 // load-bearing — it lets a crashed run tell "mid-Park" from "finished Park"
 // apart and resume without repeating a step or re-asking the maintainer's
 // question. No fs, no process, no clock reads — callers pass in what they

@@ -240,16 +240,15 @@ export function commentQuestion(issue: string, text: string): string {
   ].join("\n");
 }
 
-// "unstarted" is a tracker.setState destination because Park needs it
-// (tracker.ts: Park step 3/5 sends a ticket back to unstarted so it can
-// re-enter the Queue). Reuses SET_STATE_SHAPE — the answer shape doesn't
-// vary by destination state.
 // Park's swap-label step: drop the agent-ready marker so a Parked ticket stops
 // advertising itself as work to pick up.
 export function dropReadyQuestion(issue: string): string {
   return `Remove the ready-for-agent marker from ticket ${issue} in this project's tracker, so it is no longer offered to workers.`;
 }
 
+// "unstarted" is a tracker.setState destination because Park needs it (Park's
+// last step sends a ticket back to unstarted so it can re-enter the Queue).
+// Reuses SET_STATE_SHAPE — the answer shape doesn't vary by destination.
 export function unstartedQuestion(issue: string): string {
   return `Set ticket ${issue}'s state to "unstarted" in this project's tracker.`;
 }

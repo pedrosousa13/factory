@@ -221,7 +221,6 @@ type HarnessRecord = {
   setUnstartedFileOk: boolean; // T-2.md state === "unstarted" (started beforehand, by direct patch)
   garble: AskStatus;
   garbleRejectedLive: boolean; // status !== "valid-first-try" — live evidence a bad reply was actually rejected
-  garbleOk: boolean; // never a failure on its own: see the comment at the check itself
   contention: AskStatus;
   contentionOk: boolean; // answer.result === "taken" && answer.by === CONTENTION_ACTOR
   contentionFileOk: boolean; // T-5.md claimedBy is still CONTENTION_ACTOR, untouched
@@ -416,8 +415,10 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   const garbleStart = performance.now();
   const garbleLog = askWithRetry(runner, garbleAsk, garblePrompt(GARBLE_QUESTION, phrasebook));
   const garbleMs = Math.round(performance.now() - garbleStart);
+  // Reported, not scored. There is deliberately no garbleOk conjunct in pass
+  // below: a constant true ANDed into the verdict would read as a check that
+  // passed when nothing was ever checked.
   const garbleRejectedLive = garbleLog.status !== "valid-first-try";
-  const garbleOk = true; // see the comment above: no live outcome represents "garbage accepted as valid"
   console.log(
     `  garble: ${garbleLog.status}${garbleLog.status === "failed" ? ` — ${garbleLog.whys[1]}` : ""} (live rejection observed: ${garbleRejectedLive ? "yes" : "no"})`,
   );
@@ -554,7 +555,6 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     dropReadyFileOk &&
     setUnstartedOk &&
     setUnstartedFileOk &&
-    garbleOk &&
     contentionOk &&
     contentionFileOk &&
     implementDoneOk &&
@@ -599,7 +599,6 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     setUnstartedFileOk,
     garble: garbleLog.status,
     garbleRejectedLive,
-    garbleOk,
     contention: contentionLog.status,
     contentionOk,
     contentionFileOk,
