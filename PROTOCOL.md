@@ -612,14 +612,21 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 Migration carries a repo from an old `stampVersion` — including the legacy v1 stamp
 detected above — to the plugin's current one.
 
+**What ships today.** The plugin computes a migration. It detects the stamp, builds the
+step chain, diffs the adapter document against its template, and renders the new
+`config.json`. Nothing applies that result yet, and no skill or command starts a migration.
+The sentences marked **(pending)** below state what the applier must do when it lands — see
+issue #50. To bring a repo to the current stamp today, run `/factory-adopt`. It is safe to
+re-run and it uses the same section rules.
+
 **Steps.** Migration runs as a chain of versioned steps: v1 to v2, v2 to v3, and so on. The
 plugin computes one combined diff for all pending steps, shows it to the maintainer once,
 and takes one approval — never one diff per step, even when several steps must run to
 reach the current version.
 
-**Idempotent by design.** Each step is idempotent: a repeat run finds nothing left to do,
-and a step interrupted partway repairs itself on the next run. This is what makes migration
-safe to interrupt — a maintainer can stop a run at any point and re-run it later without
+**Idempotent by design.** Each step is idempotent: a repeat run finds nothing left to do.
+**(pending)** A step interrupted partway repairs itself on the next run. This is what makes
+migration safe to interrupt — a maintainer can stop a run at any point and re-run it later without
 auditing what already landed.
 
 **Section rules.** Migration reuses the adopt skill's section rules for template files; see
@@ -627,13 +634,17 @@ auditing what already landed.
 
 **The v1 to v2 step asks only what a v1 repo cannot answer.** It detects the tracker choice
 from the legacy adapter document, `docs/agents/issue-tracker.md`, and offers it for
-one-tap confirmation. A v1 repo has no record of merge policy or attack surface, so the
-step asks both fresh and defaults neither. It then writes `config.json`, retrofits the
-missing sections, and sets the stamp version.
+one-tap confirmation. It reads the tracker name from the H1 line only, case-insensitively,
+and never guesses it from the rest of the document. A document that carries front matter or
+a preamble before its H1 therefore falls through to asking for the tracker cold. A v1 repo
+has no record of merge policy or attack surface, so the step asks both fresh and defaults
+neither. **(pending)** Applying the step then writes `config.json`, retrofits the missing
+sections, and sets the stamp version.
 
-**A stale stamp blocks autonomous execution only.** A headless run reports the pending
-migration and stops. An interactive run offers to migrate now. Planning skills stay
-available, because they read the prose docs, not the stamp. Migration ends with a full
+**A stale stamp blocks autonomous execution only.** Preflight reports it as a failure that
+stops execution and not planning. Planning skills stay available, because they read the
+prose docs, not the stamp. **(pending)** A headless run reports the pending migration and
+stops, and an interactive run offers to migrate now. **(pending)** Migration ends with a full
 preflight check that validates the config against the adapter document and the live
 tracker, and runs the non-interactive push check. Only a green preflight at the current
 version unblocks execution.

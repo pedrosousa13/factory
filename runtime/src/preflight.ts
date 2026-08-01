@@ -176,16 +176,20 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   const repoStamp = facts.stampVersion.repo ?? UNSTAMPED;
   const cmp = compareStamp(repoStamp, facts.stampVersion.plugin);
   if (cmp < 0) {
-    // repo === null covers both a genuinely unstamped repo and a legacy v1
-    // repo (no config.json, but the adapter doc still carries the loop
-    // section) — detectStamp is what tells those two apart, so each gets
-    // told the one action that actually applies to it.
+    // Every branch names /factory-adopt, because nothing in the plugin
+    // applies a migration yet: PROTOCOL.md's "## Migration" marks the applier
+    // pending, and issue #50 tracks it. /factory-adopt is what a maintainer
+    // can run today — safe to re-run (PROTOCOL.md:97), it writes
+    // .factory/config.json at the current stamp version and uses the same
+    // section rules a migration step would. detectStamp still tells a legacy
+    // v1 repo apart from a never-adopted one, so the reason differs even
+    // though the command does not.
     const fix =
       facts.stampVersion.repo !== null
-        ? "run the Factory migration step to bring the repo stamp up to date, then re-run preflight"
+        ? "run /factory-adopt to bring the repo stamp up to date, then re-run preflight. It is safe to re-run."
         : detectStamp(facts.stampFacts).k === "legacy-v1"
-          ? "run the Factory migration step to bring this legacy v1 stamp up to date, then re-run preflight"
-          : "run the Factory adopt skill to stamp this repo, then re-run preflight";
+          ? "run /factory-adopt to carry this legacy v1 repo to the current stamp, then re-run preflight. It is safe to re-run."
+          : "run /factory-adopt to stamp this repo, then re-run preflight";
     failures.push({
       what: `repo stamp "${facts.stampVersion.repo ?? "none"}" is older than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "a stale stamp means the repo's config and docs may not match what this plugin version expects",

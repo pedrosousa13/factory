@@ -242,7 +242,7 @@ test("repo stamp newer than plugin: update-the-plugin failure, also blocksExecut
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("unstamped repo (no config, no legacy adapter doc): treated as older than the plugin; fix names adoption, not migration", () => {
+test("unstamped repo (no config, no legacy adapter doc): treated as older than the plugin; fix names /factory-adopt", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: null, plugin: "2.0.0" };
   facts.stampFacts = { configVersion: null, adapterDoc: null };
@@ -251,12 +251,12 @@ test("unstamped repo (no config, no legacy adapter doc): treated as older than t
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
-  expect(result.failures[0].fix).toMatch(/adopt/);
-  expect(result.failures[0].fix).not.toMatch(/migrat/i);
+  expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).toMatch(/stamp this repo/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("legacy v1 repo (no config, adapter doc carries the loop section): fix names migration, not adoption", () => {
+test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-adopt and says the repo is legacy v1", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: null, plugin: "2.0.0" };
   facts.stampFacts = {
@@ -268,9 +268,51 @@ test("legacy v1 repo (no config, adapter doc carries the loop section): fix name
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
-  expect(result.failures[0].fix).toMatch(/migrat/i);
-  expect(result.failures[0].fix).not.toMatch(/adopt/);
+  expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).toMatch(/legacy v1/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
+});
+
+test("no fix names an entry point the plugin does not ship — no 'migration step' to run", () => {
+  // Nothing applies a migration yet (PROTOCOL.md "## Migration", issue #50),
+  // so no failure may tell a maintainer to run one.
+  const cases: (() => PreflightFacts)[] = [
+    () => {
+      const f = greenFacts();
+      f.stampVersion = { repo: "1.0.0", plugin: "2.0.0" };
+      f.stampFacts = { configVersion: "1.0.0", adapterDoc: null };
+      return f;
+    },
+    () => {
+      const f = greenFacts();
+      f.stampVersion = { repo: null, plugin: "2.0.0" };
+      f.stampFacts = {
+        configVersion: null,
+        adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+      };
+      return f;
+    },
+    () => {
+      const f = greenFacts();
+      f.config = "missing-file";
+      f.adapterMarker = "missing-marker";
+      f.stampVersion = { repo: null, plugin: "2.0.0" };
+      f.stampFacts = {
+        configVersion: null,
+        adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+      };
+      return f;
+    },
+  ];
+
+  for (const build of cases) {
+    const result = preflight(build());
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    for (const failure of result.failures) {
+      expect(failure.fix).not.toMatch(/migration step/i);
+    }
+  }
 });
 
 test("both stale and newer stamp failures carry blocksExecutionOnly; push-check failure does not", () => {
