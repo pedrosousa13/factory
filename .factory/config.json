@@ -1,7 +1,8 @@
 {
   "stampVersion": "2.0.0",
   "tracker": {
-    "kind": "github"
+    "kind": "github",
+    "repo": "pedrosousa13/factory"
   },
   "merge": {
     "policy": "squash"

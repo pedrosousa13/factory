@@ -201,14 +201,41 @@ test("renderV1ToV2Config writes exactly the four fields a v1 repo can answer, st
 });
 
 test("renderV1ToV2Config's output parses as a valid config", () => {
-  const content = renderV1ToV2Config({ tracker: "github", merge: "human", attackSurface: false });
+  const content = renderV1ToV2Config({
+    tracker: "github",
+    repo: "owner/name",
+    merge: "human",
+    attackSurface: false,
+  });
   const result = parseConfig(content);
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error("unreachable");
   expect(result.config).toEqual({
     stampVersion: STAMP_VERSION,
-    tracker: { kind: "github" },
+    tracker: { kind: "github", repo: "owner/name" },
     merge: { policy: "human" },
     attackSurface: false,
   });
+});
+
+// A GitHub config with no `tracker.repo` names no repo to run `gh` against.
+// The adopt skill has always written it; migration wrote a config that
+// silently omitted it.
+test("renderV1ToV2Config writes tracker.repo when the tracker is github", () => {
+  const parsed = JSON.parse(
+    renderV1ToV2Config({ tracker: "github", repo: "pedrosousa13/factory", merge: "squash", attackSurface: false }),
+  );
+  expect(parsed.tracker).toEqual({ kind: "github", repo: "pedrosousa13/factory" });
+  // Still four top-level keys — repo is nested, not a fifth field.
+  expect(Object.keys(parsed).sort()).toEqual(["attackSurface", "merge", "stampVersion", "tracker"]);
+});
+
+// Linear scopes issues by project and team, not by a GitHub slug, so a repo
+// answer that arrives anyway is dropped rather than written into a config
+// where nothing would read it.
+test("renderV1ToV2Config never writes tracker.repo on linear", () => {
+  const parsed = JSON.parse(
+    renderV1ToV2Config({ tracker: "linear", repo: "owner/name", merge: "squash", attackSurface: false }),
+  );
+  expect(parsed.tracker).toEqual({ kind: "linear" });
 });

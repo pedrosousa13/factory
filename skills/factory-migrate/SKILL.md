@@ -152,8 +152,11 @@ never one approval per step:
   `attackSurface` as plain values, but `tracker` and `merge` as objects —
   `tracker.kind`, `merge.policy` — not flat strings. `merge.policy` is one
   of `squash`, `merge`, `rebase`, `human`; the maintainer's answer above
-  must be one of these four. Show `notifierCommand` as a fifth field
-  whenever the old config carried one.
+  must be one of these four. On GitHub, `tracker` also carries `repo`, the
+  `owner/name` slug from the git remote — the same value `{{REPO}}` takes
+  above, derived the same way and never asked for. It sits inside
+  `tracker`, so it is not a fifth top-level field. Show `notifierCommand`
+  as a fifth field whenever the old config carried one.
 
 If the classification found the document already matches its template,
 the diff still shows `config.json` — a pending step writes `config.json`
@@ -218,7 +221,8 @@ A reply of done is not evidence — the files are. After writing:
    (`tracker.kind`, `merge.policy`), not flat strings, per
    `skills/factory-adopt/SKILL.md:325-349`. Confirm `merge.policy` is one
    of `squash`/`merge`/`rebase`/`human`, and `tracker.kind` matches the
-   tracker settled on above.
+   tracker settled on above. On GitHub, confirm `tracker.repo` is present
+   and matches the git remote's slug.
 3. Re-read every other template-mapped file this run wrote — `AGENTS.md`,
    `docs/agents/triage-labels.md`, `.gitignore` — and confirm each carries
    what the approved diff said it would, unless the maintainer chose

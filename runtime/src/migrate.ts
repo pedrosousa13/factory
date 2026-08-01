@@ -213,6 +213,10 @@ export function planMigration(steps: MigrationStep[], input: MigrationPlanInput)
 
 export interface V1ToV2Answers {
   tracker: TrackerKind;
+  /** The `owner/name` slug, on github only — derived from the git remote, the
+   * way /factory-adopt derives it, never asked for. Optional because linear
+   * has no use for it and a legacy repo may not resolve one. */
+  repo?: string;
   merge: MergePolicy;
   attackSurface: boolean;
 }
@@ -222,11 +226,17 @@ export interface V1ToV2Answers {
  * four fields a v1 repo can now answer. `stampVersion` always comes from
  * `STAMP_VERSION` — never a literal, so a future version bump here can't
  * drift from the constant the rest of the runtime checks against.
+ *
+ * `tracker.repo` rides inside `tracker`, so it is not a fifth field: the
+ * top-level key set is the same four either way. It is written on github
+ * only, and only when the caller resolved one — linear scopes issues by
+ * project and team, so a repo slug there would be a value nothing reads.
  */
 export function renderV1ToV2Config(answers: V1ToV2Answers): string {
+  const writeRepo = answers.tracker === "github" && answers.repo !== undefined;
   const config = {
     stampVersion: STAMP_VERSION,
-    tracker: { kind: answers.tracker },
+    tracker: writeRepo ? { kind: answers.tracker, repo: answers.repo } : { kind: answers.tracker },
     merge: { policy: answers.merge },
     attackSurface: answers.attackSurface,
   };
