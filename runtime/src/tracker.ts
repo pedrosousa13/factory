@@ -37,7 +37,10 @@ export type Ask =
   | { k: "tracker.candidates"; milestone: string | null } // "list ready, unstarted, unclaimed tickets (in this milestone)"
   | { k: "tracker.read"; issue: string } // "give me the full facts + body + comments for one ticket"
   | { k: "tracker.claim"; issue: string; actor: string } // "claim this ticket for actor"
-  | { k: "tracker.setState"; issue: string; state: "started" | "parked" | "done" | "canceled" } // "move ticket to state"
+  // "unstarted" is here because Park needs it: PROTOCOL's Park step 3 sends a
+  // ticket back to an unstarted state, and pick.ts's Queue eligibility accepts
+  // nothing else, so without it Parked work could never be picked up again.
+  | { k: "tracker.setState"; issue: string; state: "unstarted" | "started" | "parked" | "done" | "canceled" } // "move ticket to state"
   | { k: "tracker.unclaim"; issue: string } // "release the claim; ticket re-enters the pool"
   | { k: "tracker.comment"; issue: string; text: string } // "append this comment"
   | { k: "tracker.milestones" } // "list milestones in stable order"
