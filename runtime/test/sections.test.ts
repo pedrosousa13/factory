@@ -104,6 +104,40 @@ test("an other-difference says what differs, so the maintainer can judge it", ()
   expect(got.detail).toContain("Conventions");
 });
 
+test("an other-difference names every differing section, not just the first", () => {
+  const current = TEMPLATE.replace("Conventions body.", "Rewritten one.").replace(
+    "Reachability body.",
+    "Rewritten two.",
+  );
+  const got = diffDoc(current, TEMPLATE);
+  if (got.k !== "other-difference") throw new Error("expected other-difference");
+  expect(got.detail).toContain("Conventions");
+  expect(got.detail).toContain("Reachability");
+});
+
+test("an other-difference also reports a missing tracker marker, which keep-mine would otherwise strand", () => {
+  // The real fixture's shape: one drifted section plus an H1 section with no
+  // marker. Reporting only the drift leaves a maintainer who chooses
+  // keep-mine with preflight red on `missing-marker` and nothing naming it.
+  const current = TEMPLATE.replace("<!-- factory:tracker kind=github -->\n\n", "").replace(
+    "Wayfinding body.",
+    "The maintainer rewrote this.",
+  );
+  const got = diffDoc(current, TEMPLATE);
+  if (got.k !== "other-difference") throw new Error("expected other-difference");
+  expect(got.detail).toContain("Wayfinding operations");
+  expect(got.detail).toContain("tracker marker");
+});
+
+test("a document lacking only the tracker marker is still a retrofit, not an other-difference", () => {
+  // The classification is unchanged by the reporting fix above.
+  const current = TEMPLATE.replace("<!-- factory:tracker kind=github -->\n\n", "");
+  const got = diffDoc(current, TEMPLATE);
+  if (got.k !== "missing-sections") throw new Error("expected missing-sections");
+  expect(got.missing.map((s) => s.k)).toEqual(["replace"]);
+  expect(applyMissing(current, got.missing)).toBe(TEMPLATE);
+});
+
 // ───── applyMissing round-trip: the property the whole design rests on
 
 test("applying the missing sections leaves the file byte-identical to the template", () => {

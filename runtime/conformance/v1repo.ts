@@ -56,35 +56,46 @@ function git(args: string[], cwd: string): void {
  * call. Asserts the copy really is a legacy v1 stamp — detectStamp must
  * return {k:"legacy-v1"} — and throws otherwise: a fixture that silently
  * stopped being v1 would make every downstream migration check vacuous.
+ *
+ * Everything after mkdtempSync runs inside a try that removes the partial
+ * directory before rethrowing. The caller cannot clean this one up itself:
+ * a throw happens before the `{ root }` return, so the caller's own `root`
+ * is still undefined and its `finally` guard has no path to remove. Every
+ * `git()` call can throw, not only the v1 assertion at the end.
  */
 export function mkV1Repo(): { root: string } {
   const root = mkdtempSync(join(tmpdir(), "factory-v1repo-"));
 
-  for (const rel of COPIED_PATHS) {
-    const src = join(REPO_ROOT, rel);
-    if (existsSync(src)) cpSync(src, join(root, rel), { recursive: true });
+  try {
+    for (const rel of COPIED_PATHS) {
+      const src = join(REPO_ROOT, rel);
+      if (existsSync(src)) cpSync(src, join(root, rel), { recursive: true });
+    }
+
+    git(["init", "-b", "main"], root);
+    git(["config", "user.email", "v1repo@factory.local"], root);
+    git(["config", "user.name", "Factory V1Repo Fixture"], root);
+    git(["add", ...COPIED_PATHS.filter((rel) => existsSync(join(root, rel)))], root);
+    git(["commit", "-m", "Initial commit"], root);
+
+    // A local bare remote, nested inside root (never `git add`ed, so it never
+    // enters the tracked tree) — git push --dry-run needs somewhere real to
+    // talk to, and this is real git talking to real git, just never over the
+    // network, so preflight's push check can pass at zero cost.
+    const bare = join(root, ".origin-bare");
+    git(["init", "--bare", bare], root);
+    git(["remote", "add", "origin", bare], root);
+
+    const state = detectStamp(gatherStampFacts(root));
+    if (state.k !== "legacy-v1") {
+      throw new Error(`mkV1Repo: fixture is not a legacy v1 stamp (detectStamp returned ${JSON.stringify(state)})`);
+    }
+
+    return { root };
+  } catch (err) {
+    rmV1Repo(root);
+    throw err;
   }
-
-  git(["init", "-b", "main"], root);
-  git(["config", "user.email", "v1repo@factory.local"], root);
-  git(["config", "user.name", "Factory V1Repo Fixture"], root);
-  git(["add", ...COPIED_PATHS.filter((rel) => existsSync(join(root, rel)))], root);
-  git(["commit", "-m", "Initial commit"], root);
-
-  // A local bare remote, nested inside root (never `git add`ed, so it never
-  // enters the tracked tree) — git push --dry-run needs somewhere real to
-  // talk to, and this is real git talking to real git, just never over the
-  // network, so preflight's push check can pass at zero cost.
-  const bare = join(root, ".origin-bare");
-  git(["init", "--bare", bare], root);
-  git(["remote", "add", "origin", bare], root);
-
-  const state = detectStamp(gatherStampFacts(root));
-  if (state.k !== "legacy-v1") {
-    throw new Error(`mkV1Repo: fixture is not a legacy v1 stamp (detectStamp returned ${JSON.stringify(state)})`);
-  }
-
-  return { root };
 }
 
 export function rmV1Repo(root: string): void {
@@ -123,8 +134,8 @@ export function renderRealLinearAdapterDoc(): string {
   return text;
 }
 
-// The v1-to-v2 step's two fresh questions carry no default (PROTOCOL.md:628-
-// 632) — the host answers as the maintainer would, not as a harness would, so
+// The v1-to-v2 step's two fresh questions carry no default (PROTOCOL.md:640-
+// 647) — the host answers as the maintainer would, not as a harness would, so
 // no ask is dispatched for either. "squash" matches this repo's own history
 // (`git log --merges` returns nothing — every merge here already lands as a
 // single commit); attackSurface false is the conservative starting point

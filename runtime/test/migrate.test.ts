@@ -159,6 +159,23 @@ test("planMigration retrofits a doc missing a whole section, using sections.ts's
   expect(plan.questions).toEqual([{ k: "merge-policy" }, { k: "attack-surface" }]);
 });
 
+// ───── planMigration: the other-difference branch
+
+test("planMigration on a drifted doc: no retrofit offered, config still written, questions still asked", () => {
+  // The branch the only real-world input in existence takes — this repo's own
+  // v1 adapter doc has drifted from its template (see conformance/v1repo.ts).
+  const drifted = LINEAR_V1_DOC.replace("Conventions body.", "The maintainer rewrote this section.");
+  const plan = planMigration(pendingSteps("1.0.0", STAMP_VERSION), {
+    adapterDoc: drifted,
+    renderedAdapterDoc: LINEAR_V1_DOC,
+  });
+  expect(plan.docDiff.k).toBe("other-difference");
+  expect(plan.retrofittedDoc).toBeNull();
+  expect(plan.writesConfig).toBe(true);
+  expect(plan.detectedTracker).toBe("linear");
+  expect(plan.questions).toEqual([{ k: "merge-policy" }, { k: "attack-surface" }]);
+});
+
 // ───── planMigration: one combined plan for several pending steps
 
 test("a combined plan over several pending steps still returns one plan, not one per step", () => {

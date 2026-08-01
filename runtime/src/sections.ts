@@ -108,6 +108,14 @@ function closesFence(line: string, fence: string): boolean {
  * section either matches or lacks nothing but the tracker marker — the signature
  * of a repo stamped by an older Factory. Anything else is an `other-difference`:
  * show it, never overwrite.
+ *
+ * An `other-difference`'s `detail` names every section that differs, and then
+ * every section that merely lacks the tracker marker. The maintainer's three
+ * offers (SKILL.md:254-256) apply to the whole document, so a `detail` that
+ * named one section would hide the rest behind whichever choice they made. A
+ * document whose headings do not line up at all returns earlier and names the
+ * stray section instead: with no mapping there is nothing to compare section
+ * by section.
  */
 export function diffDoc(current: string, rendered: string): DocDiff {
   const cur = parseSections(current);
@@ -125,14 +133,31 @@ export function diffDoc(current: string, rendered: string): DocDiff {
   // Template indices whose current counterpart is there but lacks the tracker
   // marker — the one sub-section retrofit SKILL.md:249-253 licenses by name.
   const markerless = new Set<number>();
+  // Every section the maintainer has to judge, and every section that merely
+  // lacks the marker. The loop runs to the end rather than returning on the
+  // first difference: a document can differ in one section AND lack the
+  // marker in another, and naming only the first leaves the maintainer to
+  // choose keep-mine and then find preflight still red on `missing-marker`
+  // with nothing in the report pointing at it.
+  const differing: string[] = [];
+  const markerNotes: string[] = [];
   for (let i = 0; i < cur.length; i++) {
     const want = tpl[mapped[i]];
     if (sameBody(cur[i].body, want.body)) continue;
     if (lacksOnlyMarker(cur[i].body, want.body)) {
       markerless.add(mapped[i]);
+      markerNotes.push(`${label(want)} lacks the tracker marker`);
       continue;
     }
-    return { k: "other-difference", detail: `${label(want)} differs from the template` };
+    differing.push(`${label(want)} differs from the template`);
+  }
+  // Classification is unchanged: one genuine difference is what makes this an
+  // other-difference (SKILL.md:244). A document whose only finding is a
+  // missing marker still takes the `replace` retrofit below. The marker notes
+  // ride along in `detail` only when some other section already sent the
+  // document here.
+  if (differing.length > 0) {
+    return { k: "other-difference", detail: [...differing, ...markerNotes].join("; ") };
   }
 
   const present = new Set(mapped);

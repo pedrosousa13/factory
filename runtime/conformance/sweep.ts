@@ -906,7 +906,11 @@ function printTable(records: HarnessRecord[]): void {
     "ok?",
     "migrate apply",
     "ok?",
-    "migrate reachable",
+    // Labelled as a reuse, not a check: this column is the `reachable` column
+    // above, printed a second time. The migration's preflight consumes that
+    // same answer rather than spending a second harness call on the same
+    // question. A reader must not count it as independent evidence.
+    "migrate reachable (=reachable)",
     "ok?",
     "migrate preflight",
     "ok?",
