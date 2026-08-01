@@ -97,3 +97,32 @@ test("waitDecision: an answer wins even when the timestamps are unparseable", ()
   const result = waitDecision({ askedAt: "not a date", now: "also not", windowMinutes, answered: "yes" });
   expect(result).toEqual({ k: "continue", answer: "yes" });
 });
+
+// Date.parse is too permissive to be this guard on its own: it rolls a
+// nonexistent calendar date into the next month rather than rejecting it, and
+// it accepts a bare date with no time. Either would hand back a window
+// measured from a moment that never happened.
+test("waitDecision: a nonexistent calendar date parks instead of rolling over", () => {
+  const result = waitDecision({ askedAt: "2026-02-30T00:00:00Z", now: deadline, windowMinutes, answered: null });
+  expect(result).toEqual({ k: "park" });
+});
+
+test("waitDecision: a date with no time parks", () => {
+  const result = waitDecision({ askedAt: "2026-08-01", now: deadline, windowMinutes, answered: null });
+  expect(result).toEqual({ k: "park" });
+});
+
+// Both timestamps are written by this runtime in the canonical Z form, so a
+// non-canonical one is corruption rather than a legitimate variant.
+test("waitDecision: a non-canonical offset timestamp parks rather than being guessed at", () => {
+  const result = waitDecision({ askedAt: "2026-08-01T12:00:00+02:00", now: deadline, windowMinutes, answered: null });
+  expect(result).toEqual({ k: "park" });
+});
+
+test("waitDecision: seconds-precision and millisecond-precision timestamps both work", () => {
+  const noMillis = waitDecision({ askedAt: "2026-08-01T10:00:00Z", now: beforeDeadline, windowMinutes, answered: null });
+  expect(noMillis).toEqual({ k: "keep-waiting" });
+
+  const withMillis = waitDecision({ askedAt, now: beforeDeadline, windowMinutes, answered: null });
+  expect(withMillis).toEqual({ k: "keep-waiting" });
+});
