@@ -1,6 +1,7 @@
 // Pure planning-namespace module: the one predicate that keeps planning
 // artifacts out of every work path (PRD §4 "One reserved planning namespace";
-// PROTOCOL.md:495-498). Queue selection, triage, adoption, and security sweeps
+// PROTOCOL.md "## Wayfinder maps", which defines the namespace). Queue
+// selection, triage, adoption, and security sweeps
 // all skip an issue this returns true for. No fs, no process, no I/O.
 
 // ───── the namespace

@@ -83,8 +83,9 @@ export function gatherStampFacts(repoRoot: string): StampFacts {
 const SKILLS_DIR = ".claude/skills";
 const PLUGIN_CACHE_DIR = ".claude/plugins/cache";
 
-// PROTOCOL.md:44-46: check the `~/.claude/skills/` path itself — a missing or
-// broken symlink there leaves the skill unavailable even if the source exists.
+// PROTOCOL.md "## Preflight: prerequisites, not the stamp", the dependent-skills
+// check: read the `~/.claude/skills/` path itself — a missing or broken
+// symlink there leaves the skill unavailable even if the source exists.
 // existsSync follows symlinks, so a broken one reads as absent, which is what
 // we want.
 function skillInstalled(home: string, name: string): boolean {
@@ -105,7 +106,8 @@ function safeReaddir(path: string): string[] {
   }
 }
 
-// PROTOCOL.md:53-60: a plugin skill has no `~/.claude/skills/` path. It
+// PROTOCOL.md "## Preflight: prerequisites, not the stamp", the superpowers
+// check: a plugin skill has no `~/.claude/skills/` path. It
 // unpacks to
 // `<home>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`,
 // and both the marketplace and the version differ per machine — the protocol

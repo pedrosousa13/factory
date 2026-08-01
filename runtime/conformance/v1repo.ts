@@ -146,8 +146,8 @@ export function renderRealLinearAdapterDoc(): string {
   return text;
 }
 
-// The v1-to-v2 step's two fresh questions carry no default (PROTOCOL.md:640-
-// 647) — the host answers as the maintainer would, not as a harness would, so
+// The v1-to-v2 step's two fresh questions carry no default (PROTOCOL.md "## Migration")
+// — the host answers as the maintainer would, not as a harness would, so
 // no ask is dispatched for either. "squash" matches this repo's own history
 // (`git log --merges` returns nothing — every merge here already lands as a
 // single commit); attackSurface false is the conservative starting point

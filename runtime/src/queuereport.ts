@@ -1,4 +1,5 @@
-// Pure empty-Queue report module (PROTOCOL.md:201-228; closes S10). Three
+// Pure empty-Queue report module (PROTOCOL.md "### 1. Queue selection"; closes S10).
+// Three
 // scopes report differently, the breakdown covers every still-open issue
 // rather than the Queue candidates, and the run ends here either way — the
 // loop never invents work. No fs, no process, no clock reads.
@@ -16,11 +17,12 @@ export type OpenBreakdown = {
 };
 
 // Counts every still-open issue the caller fetched with tracker.openIssues —
-// NOT the Queue candidates. PROTOCOL.md:213-217: "Counting within the Queue is
+// NOT the Queue candidates. PROTOCOL.md "### 1. Queue selection": "Counting within
+// the Queue is
 // the mistake to avoid: it can only ever find `ready-for-agent` issues, and
 // would report zero for the two labels that matter most here."
 //
-// `blocked` is derived here, at report time, from the list. PROTOCOL.md:218-220
+// `blocked` is derived here, at report time, from the list. The same section
 // forbids a tally accumulated as the loop skipped issues: it counts the same
 // issue once per iteration, so two runs over identical state would disagree.
 //
@@ -40,7 +42,7 @@ export function breakdown(openIssues: TicketFacts[]): OpenBreakdown {
 export type MilestoneProgress = { closed: number; total: number };
 
 // Re-fetched at report time, never the Session-start snapshot: landed issues
-// may have moved the milestone's progress since (PROTOCOL.md:208-209).
+// may have moved the milestone's progress since (PROTOCOL.md "### 1. Queue selection").
 export function progress(counts: Record<IssueState, number>): MilestoneProgress {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { closed: counts.done + counts.canceled, total };
@@ -53,7 +55,7 @@ export type QueueExit = { k: "offer-planning" } | { k: "stop" };
 export type QueueEmptyReport = {
   k: "unscoped" | "milestone" | "no-milestone";
   // One-line status for the push notification, on every scope
-  // (PROTOCOL.md:203-204, 221-222).
+  // (PROTOCOL.md "### 1. Queue selection").
   notification: string;
   // The detail delivered in the session. Empty of counts on unscoped.
   lines: string[];
@@ -92,7 +94,7 @@ export function emptyQueueReport(input: ReportInput): QueueEmptyReport {
 
   // Unscoped: a one-line status and nothing else. An unscoped empty Queue means
   // the Project has no agent-ready work at all, and there is no milestone to
-  // break down against (PROTOCOL.md:203-204).
+  // break down against (PROTOCOL.md "### 1. Queue selection").
   if (input.scope.k === "everything") {
     const notification = "Queue empty: no agent-ready work left in this Project.";
     return {
@@ -121,7 +123,7 @@ export function emptyQueueReport(input: ReportInput): QueueEmptyReport {
 
   // Milestone scope. An empty scoped Queue means agent-ready work is exhausted,
   // not that the milestone is complete — conflating the two is exactly the
-  // failure scoping guards against (PROTOCOL.md:205-207).
+  // failure scoping guards against (PROTOCOL.md "### 1. Queue selection").
   const p = input.counts === null ? null : progress(input.counts);
   const progressLine = p === null ? "" : `  milestone ${input.scope.milestone}: ${p.closed} of ${p.total} closed`;
   const notification = `Queue empty in milestone ${input.scope.milestone}: agent-ready work exhausted, ${b.open} still open.`;

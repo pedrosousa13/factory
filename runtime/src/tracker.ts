@@ -33,11 +33,11 @@ export type TicketFacts = {
   // here would give the same fact two sources that could disagree. Needed from
   // slice 5 on: the reserved planning namespace is defined in terms of labels
   // (PRD §4), and the empty-Queue breakdown counts `needs-info` and
-  // `ready-for-human` (PROTOCOL.md:210-212).
+  // `ready-for-human` (PROTOCOL.md "### 1. Queue selection").
   labels: string[];
 };
 
-// ───── Queue scope (PROTOCOL.md:185-192)
+// ───── Queue scope (PROTOCOL.md "### 1. Queue selection")
 
 // Chosen once at Session start. Three cases, not two: "everything" and
 // "no-milestone" produce different Queues AND different empty-Queue reports,
@@ -69,7 +69,8 @@ export type Ask =
   | { k: "tracker.verify"; issue: string } // "what is this ticket's current state right now?"
   // Every still-open issue in scope, whatever its labels — deliberately wider
   // than tracker.candidates, which returns only ready/unstarted/unclaimed
-  // tickets. PROTOCOL.md:213-217 requires the empty-Queue breakdown to run its
+  // tickets. PROTOCOL.md "### 1. Queue selection" requires the empty-Queue
+  // breakdown to run its
   // own query: counting within the Queue can only ever find `ready-for-agent`
   // issues and reports zero for the two labels that matter most.
   | { k: "tracker.openIssues"; milestone: string | null };

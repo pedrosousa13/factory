@@ -1,4 +1,5 @@
-// Pure stamp-detection module (PRD §6 "Detection"; PROTOCOL.md:84-98): which
+// Pure stamp-detection module (PRD §6 "Detection"; PROTOCOL.md
+// "## Prerequisites: a stamped Project repo", the stamp check): which
 // of the three stamp states a repo is in. Deciding whether a v2 stamp is
 // stale, current, or newer is preflight.ts's job, not this module's — this
 // only says which kind of stamp is there. No fs, no process, no I/O.
@@ -20,9 +21,10 @@ export type StampFacts = {
 
 // ───── the legacy marker
 
-// PROTOCOL.md:90-92 names this exact heading as the legacy v1 signature: an
-// adapter doc carrying it predates config.json. A doc without it is not a v1
-// stamp at all — PROTOCOL.md:94-98 sends that repo to /factory-adopt.
+// PROTOCOL.md "## Prerequisites: a stamped Project repo" names this exact
+// heading as the legacy v1 signature: an adapter doc carrying it predates
+// config.json. A doc without it is not a v1 stamp at all — the same section
+// sends that repo to /factory-adopt.
 export const LOOP_SECTION_HEADING = "## Factory loop operations";
 
 // Anchored to the start of a line so prose mentioning the phrase does not

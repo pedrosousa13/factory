@@ -100,7 +100,8 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // What a "this repo is not stamped" failure tells the maintainer to run.
   // A legacy v1 stamp routes to /factory-migrate (the stale-stamp branch
   // below); everything unstamped routes here, to /factory-adopt, which is
-  // safe to re-run (PROTOCOL.md:97), writes .factory/config.json at the
+  // safe to re-run (PROTOCOL.md "## Prerequisites: a stamped Project repo"),
+  // writes .factory/config.json at the
   // current stamp version, and uses the same section rules migration does.
   //
   // A repo that already carries a stamp also carries files, so its fixes say
@@ -229,7 +230,8 @@ export function preflight(facts: PreflightFacts): PreflightResult {
 
   // PRD §4: each role resolves at preflight, preferred then fallback. A role
   // with no available implementation stops the run, like any other missing
-  // prerequisite — collected, never reported alone (PROTOCOL.md:21-24).
+  // prerequisite — collected, never reported alone
+  // (PROTOCOL.md "## Preflight: prerequisites, not the stamp").
   failures.push(...resolveRoles(facts.availableRoles).failures);
 
   if (failures.length > 0) {

@@ -23,8 +23,9 @@ It is the source of truth; this file only bootstraps it.
      `docs/agents/issue-tracker.md` as "stamped" — that section is the
      *legacy v1* stamp, and a repo carrying it without a current config is a
      repo to bring forward, not one to run. Several distinct failures are
-     possible. See `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md:87-98` for the cause
-     and the fix of each.
+     possible. See `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+     "## Prerequisites: a stamped Project repo" for the cause and the fix of
+     each.
    If either produced a failure, report every one collected, with its fix,
    and stop — do not begin Session start.
 3. Read `docs/agents/issue-tracker.md` — the Project's Tracker adapter. It
