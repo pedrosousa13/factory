@@ -128,7 +128,11 @@ export function v1ToV2Questions(adapterDoc: string): V1ToV2Questions {
 // ───── planning
 
 export interface MigrationPlanInput {
-  /** Current text of docs/agents/issue-tracker.md. */
+  /** Current text of docs/agents/issue-tracker.md.
+   *
+   * One doc, one template: a v1-to-v2-shaped signature. A second step that
+   * touches a different template file, or several, forces this pair open into
+   * a per-file collection. Left as is until a second step exists to shape it. */
   adapterDoc: string;
   /** The v2 template for the same tracker, placeholders already filled by
    * the caller — this module does no rendering of its own. */
@@ -172,7 +176,27 @@ const NOTHING_PENDING: MigrationPlan = {
  * shape a caller with several pending steps gets back.
  */
 export function planMigration(steps: MigrationStep[], input: MigrationPlanInput): MigrationPlan {
-  if (!steps.some((step) => step.k === "v1-to-v2")) return NOTHING_PENDING;
+  // Exhaustive over MigrationStep's tags, so declaring a v2-to-v3 variant is
+  // a compile error here rather than a chain of [v2-to-v3] quietly reporting
+  // "nothing pending".
+  let hasV1ToV2 = false;
+  for (const step of steps) {
+    // Switched on the tag in a local, not on `step` itself: MigrationStep has
+    // one member today, so it is not yet a union and TypeScript will not
+    // narrow `step` to never in the default arm. The tag is a literal type,
+    // and it does narrow.
+    const tag = step.k;
+    switch (tag) {
+      case "v1-to-v2":
+        hasV1ToV2 = true;
+        break;
+      default: {
+        const unhandled: never = tag;
+        throw new Error(`planMigration: unhandled migration step "${String(unhandled)}"`);
+      }
+    }
+  }
+  if (!hasV1ToV2) return NOTHING_PENDING;
 
   const docDiff = diffDoc(input.adapterDoc, input.renderedAdapterDoc);
   const retrofittedDoc = docDiff.k === "missing-sections" ? applyMissing(input.adapterDoc, docDiff.missing) : null;
