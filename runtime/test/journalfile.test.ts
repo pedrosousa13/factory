@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { clearJournal, JOURNAL_PATH, readJournal, startClaim, writeJournal } from "../src/journalfile";
 import type { JournalRecord } from "../src/journal";
 import { waitDecision } from "../src/answerwait";
+import { reconcileClaims } from "../src/recovery";
+import type { TicketFacts } from "../src/tracker";
 
 // ───── scratch repo root helper (a plain temp dir — no git needed here)
 
@@ -178,6 +180,67 @@ describe("startClaim", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// ───── the claim-time overwrite invariant (recovery.ts:57-64): nothing
+// downstream can tell a finished cycle's leftover journal from a live one
+// unless the journal is cleared at claim time. These pin that it is.
+
+function ticketFacts(id: string): TicketFacts {
+  return {
+    id,
+    title: id,
+    urgency: "P2",
+    createdAt: "2026-07-30T00:00:00Z",
+    milestone: null,
+    ready: false,
+    state: "unstarted", // a Park that finished cleanly, per recovery.test.ts
+    claimedBy: null,
+    blockedBy: [],
+    labels: [],
+  };
+}
+
+describe("the claim-time overwrite invariant", () => {
+  test("a new claim erases the previous cycle's open question", () => {
+    const dir = scratchDir();
+    try {
+      writeJournal(dir, {
+        ticket: "T-1",
+        branch: "issue-1",
+        step: "ask",
+        openQuestion: { text: "which tracker?", askedAt: "2026-08-01T10:00:00Z" },
+        workers: [],
+      });
+      startClaim(dir, "T-2", "issue-2", "claim");
+      const read = readJournal(dir);
+      expect(read).toEqual({
+        ok: true,
+        record: { ticket: "T-2", branch: "issue-2", step: "claim", openQuestion: null, workers: [] },
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a finished Park's leftover journal does not resurrect the Park in recovery", () => {
+    const leftover: JournalRecord = {
+      ticket: "T-1",
+      branch: "issue-1",
+      step: "ask",
+      openQuestion: { text: "which tracker?", askedAt: "2026-08-01T10:00:00Z" },
+      workers: [],
+    };
+    const decisions = reconcileClaims({
+      claimed: [], // tracker: nobody holds T-1
+      unclaimed: [ticketFacts("T-1")],
+      originBranches: ["issue-1"],
+      actor: "factory-loop",
+      journal: leftover,
+      parkCommented: ["T-1"], // the Park's comment is on the tracker
+    });
+    for (const d of decisions) expect(d.k).not.toBe("resume-park");
   });
 });
 
