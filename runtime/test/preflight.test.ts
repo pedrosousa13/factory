@@ -3,6 +3,7 @@ import { preflight, compareStamp } from "../src/preflight";
 import type { PreflightFacts } from "../src/preflight";
 import type { FactoryConfig } from "../src/config";
 import { ROLE_TABLE } from "../src/roles";
+import { LOOP_SECTION_HEADING } from "../src/stamp";
 
 // ───── shared fixtures
 
@@ -20,6 +21,7 @@ function greenFacts(): PreflightFacts {
     trackerReachable: { result: "ok" },
     pushCheck: { ok: true, detail: "push ok" },
     stampVersion: { repo: "2.0.0", plugin: "2.0.0" },
+    stampFacts: { configVersion: "2.0.0", adapterDoc: null },
     availableRoles: ROLE_TABLE.map((r) => r.preferred.name),
   };
 }
@@ -135,7 +137,7 @@ test("missing config file: dedicated failure, distinct from per-field parse erro
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].what).toMatch(/not stamped for v2/);
-  expect(result.failures[0].fix).toBe("run the Factory adopt skill to create .factory/config.json");
+  expect(result.failures[0].fix).toBe("run /factory-adopt (safe to re-run) to create .factory/config.json");
 });
 
 test("missing adapter file: not stamped for the loop", () => {
@@ -240,17 +242,99 @@ test("repo stamp newer than plugin: update-the-plugin failure, also blocksExecut
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("repo with no stamp at all is treated as older than the plugin", () => {
+test("unstamped repo (no config, no legacy adapter doc): treated as older than the plugin; fix names /factory-adopt", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampFacts = { configVersion: null, adapterDoc: null };
   const result = preflight(facts);
 
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
+  expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).toMatch(/stamp this repo/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
-  expect(result.failures[0].fix).toMatch(/run the Factory adopt skill to stamp this repo/);
-  expect(result.failures[0].fix).toMatch(/migration step if it carries a legacy v1 stamp/);
+});
+
+test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-adopt and says the repo is legacy v1", () => {
+  const facts = greenFacts();
+  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampFacts = {
+    configVersion: null,
+    adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+  };
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).toMatch(/legacy v1/);
+  expect(result.failures[0].blocksExecutionOnly).toBe(true);
+});
+
+test("a legacy v1 repo's three failures all name one command, and only the stamp failure diagnoses legacy v1", () => {
+  // Before: config missing said adopt, missing marker said adopt, stale stamp
+  // said migrate — three failures, two conflicting instructions, one repo.
+  const facts = greenFacts();
+  facts.config = "missing-file";
+  facts.adapterMarker = "missing-marker";
+  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampFacts = {
+    configVersion: null,
+    adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+  };
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(3);
+  for (const failure of result.failures) {
+    expect(failure.fix).toMatch(/^run \/factory-adopt \(safe to re-run\) to /);
+  }
+  expect(result.failures.filter((f) => /legacy v1/.test(f.fix)).length).toBe(1);
+});
+
+test("no fix names an entry point the plugin does not ship — no 'migration step' to run", () => {
+  // Nothing applies a migration yet (PROTOCOL.md "## Migration", issue #50),
+  // so no failure may tell a maintainer to run one.
+  const cases: (() => PreflightFacts)[] = [
+    () => {
+      const f = greenFacts();
+      f.stampVersion = { repo: "1.0.0", plugin: "2.0.0" };
+      f.stampFacts = { configVersion: "1.0.0", adapterDoc: null };
+      return f;
+    },
+    () => {
+      const f = greenFacts();
+      f.stampVersion = { repo: null, plugin: "2.0.0" };
+      f.stampFacts = {
+        configVersion: null,
+        adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+      };
+      return f;
+    },
+    () => {
+      const f = greenFacts();
+      f.config = "missing-file";
+      f.adapterMarker = "missing-marker";
+      f.stampVersion = { repo: null, plugin: "2.0.0" };
+      f.stampFacts = {
+        configVersion: null,
+        adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+      };
+      return f;
+    },
+  ];
+
+  for (const build of cases) {
+    const result = preflight(build());
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    for (const failure of result.failures) {
+      expect(failure.fix).not.toMatch(/migration step/i);
+    }
+  }
 });
 
 test("both stale and newer stamp failures carry blocksExecutionOnly; push-check failure does not", () => {

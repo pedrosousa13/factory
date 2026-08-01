@@ -17,11 +17,14 @@ It is the source of truth; this file only bootstraps it.
    doing anything else — accumulate failures from both rather than stopping
    at the first:
    - Every Preflight check in `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`.
-   - **Stamped**: `docs/agents/issue-tracker.md` exists *and* carries a
-     `Factory loop operations` section — one grep, cheap enough to pay
-     before every Loop Session. Two distinct failures possible;
-     `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s Prerequisites gives the cause
-     and fix for each.
+   - **Stamped**: `.factory/config.json` exists, parses, and carries a
+     `stampVersion` at the plugin's current version. That config is the v2
+     stamp. Do not read a `Factory loop operations` section in
+     `docs/agents/issue-tracker.md` as "stamped" — that section is the
+     *legacy v1* stamp, and a repo carrying it without a current config is a
+     repo to bring forward, not one to run. Several distinct failures are
+     possible. See `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md:87-98` for the cause
+     and the fix of each.
    If either produced a failure, report every one collected, with its fix,
    and stop — do not begin Session start.
 3. Read `docs/agents/issue-tracker.md` — the Project's Tracker adapter. It

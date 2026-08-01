@@ -7,6 +7,7 @@
 
 import type { ParseResult } from "./config";
 import { resolveRoles } from "./roles";
+import { detectStamp, type StampFacts } from "./stamp";
 
 // ───── input facts
 
@@ -33,6 +34,12 @@ export interface PreflightFacts {
   trackerReachable: TrackerReachable;
   pushCheck: PushCheck;
   stampVersion: StampVersion;
+  // Raw stamp facts (config version + adapter doc text), gathered by edges.ts
+  // and never pre-decided there — this module calls detectStamp itself, once,
+  // and every "this repo is not stamped" failure branches off that one
+  // verdict. It is what tells a legacy v1 repo apart from a genuinely
+  // unstamped one, which `stampVersion.repo` alone cannot do.
+  stampFacts: StampFacts;
   // Which planning-role implementations the host found installed. Gathered by
   // edges.ts — this module stays pure and only decides what the list means.
   availableRoles: string[];
@@ -79,6 +86,31 @@ const UNSTAMPED = "0.0.0";
 export function preflight(facts: PreflightFacts): PreflightResult {
   const failures: Failure[] = [];
 
+  // One stamp verdict for the whole report. A legacy v1 repo collects three
+  // "not stamped" failures at once — no config.json, no adapter marker, stale
+  // stamp — and every one of them branches off this single value, so the
+  // maintainer reads one story instead of three unrelated instructions.
+  // Computing it once also drops a standing assumption: the stale-stamp check
+  // used to read `stampVersion.repo === null` as "unstamped or legacy v1",
+  // which only holds because edges.ts derives that field and
+  // stampFacts.configVersion from the same expression. stampFacts is the one
+  // input that decides which stamp a repo carries.
+  const stamp = detectStamp(facts.stampFacts);
+
+  // What every "this repo is not stamped" failure tells the maintainer to
+  // run. Nothing in the plugin applies a migration yet — PROTOCOL.md's
+  // "## Migration" marks the applier pending, and issue #50 tracks it. So a
+  // legacy v1 repo gets the same command as a never-adopted one, and only the
+  // reason differs. /factory-adopt is safe to re-run (PROTOCOL.md:97), writes
+  // .factory/config.json at the current stamp version, and uses the same
+  // section rules a migration step would.
+  //
+  // A repo that already carries a stamp also carries files, so its fixes say
+  // /factory-adopt will not clobber them. A never-adopted repo has nothing to
+  // reassure, so it does not get the aside.
+  const adopt = (task: string): string =>
+    stamp.k === "unstamped" ? `run /factory-adopt to ${task}` : `run /factory-adopt (safe to re-run) to ${task}`;
+
   // config: missing entirely gets its own dedicated failure, like
   // adapterMarker's "missing-file" below — field-level parse/validation
   // errors keep the generic per-error wrapper.
@@ -86,7 +118,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: ".factory/config.json is missing — repo is not stamped for v2",
       why: "the runtime reads .factory/config.json to resolve the tracker, merge policy, and attack-surface settings before any work starts",
-      fix: "run the Factory adopt skill to create .factory/config.json",
+      fix: adopt("create .factory/config.json"),
     });
   } else if (!facts.config.ok) {
     for (const err of facts.config.errors) {
@@ -104,13 +136,13 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: "the tracker adapter doc is missing — repo is not stamped for the loop",
       why: "preflight reads the adapter doc's machine-readable marker to confirm the stamped tracker kind before the loop starts",
-      fix: "run the Factory adopt skill to install the tracker adapter doc",
+      fix: adopt("install the tracker adapter doc"),
     });
   } else if (facts.adapterMarker === "missing-marker") {
     failures.push({
       what: "the tracker adapter doc has no machine-readable marker — repo is not stamped for the loop",
       why: "prose edits to the adapter doc must not be able to silently change which tracker the loop trusts",
-      fix: "run the Factory adopt skill to rewrite the adapter doc with its marker",
+      fix: adopt("rewrite the adapter doc with its marker"),
     });
   }
 
@@ -124,7 +156,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: `config.json declares tracker "${configKind}" but the adapter doc marker declares "${adapterKind}"`,
       why: "the three preflight sources (config, adapter marker, live tracker) must agree on which tracker the loop uses; a mismatch means the run cannot trust any of them",
-      fix: `run the Factory adopt skill to regenerate the adapter doc for "${configKind}", or correct tracker.kind in .factory/config.json to "${adapterKind}"`,
+      fix: `run /factory-adopt to regenerate the adapter doc for "${configKind}", or correct tracker.kind in .factory/config.json to "${adapterKind}"`,
     });
   }
 
@@ -170,13 +202,19 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   const repoStamp = facts.stampVersion.repo ?? UNSTAMPED;
   const cmp = compareStamp(repoStamp, facts.stampVersion.plugin);
   if (cmp < 0) {
+    // Branches on `stamp`, the same verdict the two failures above used —
+    // never on `stampVersion.repo === null`, which cannot tell a legacy v1
+    // repo from a never-adopted one. One arm per StampState tag.
+    const task =
+      stamp.k === "v2"
+        ? "bring the repo stamp up to date"
+        : stamp.k === "legacy-v1"
+          ? "carry this legacy v1 repo to the current stamp"
+          : "stamp this repo";
     failures.push({
       what: `repo stamp "${facts.stampVersion.repo ?? "none"}" is older than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "a stale stamp means the repo's config and docs may not match what this plugin version expects",
-      fix:
-        facts.stampVersion.repo === null
-          ? "run the Factory adopt skill to stamp this repo, or the migration step if it carries a legacy v1 stamp"
-          : "run the Factory migration step to bring the repo stamp up to date, then re-run preflight",
+      fix: `${adopt(task)}, then re-run preflight`,
       blocksExecutionOnly: true,
     });
   } else if (cmp > 0) {
