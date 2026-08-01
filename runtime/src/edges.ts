@@ -157,6 +157,7 @@ export function gatherPreflightFacts(repoRoot: string, opts: GatherOpts): Prefli
     trackerReachable: opts.trackerReachable,
     pushCheck: gatherPushCheck(repoRoot),
     stampVersion: gatherStampVersion(config),
+    stampFacts: gatherStampFacts(repoRoot),
     availableRoles: gatherAvailableRoles(opts.home),
   };
 }

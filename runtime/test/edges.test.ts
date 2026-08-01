@@ -121,6 +121,7 @@ describe("gatherPreflightFacts", () => {
       expect(facts.config).toBe("missing-file");
       expect(facts.adapterMarker).toBe("missing-file");
       expect(facts.stampVersion).toEqual({ repo: null, plugin: STAMP_VERSION });
+      expect(facts.stampFacts).toEqual({ configVersion: null, adapterDoc: null });
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -138,6 +139,7 @@ describe("gatherPreflightFacts", () => {
       expect(facts.adapterMarker).toEqual({ kind: "github" });
       expect(facts.trackerReachable).toEqual({ result: "ok" });
       expect(facts.stampVersion).toEqual({ repo: "2.0.0", plugin: STAMP_VERSION });
+      expect(facts.stampFacts).toEqual({ configVersion: "2.0.0", adapterDoc: ADAPTER_DOC_WITH_MARKER });
     } finally {
       rmSync(dir, { recursive: true });
     }

@@ -7,6 +7,7 @@
 
 import type { ParseResult } from "./config";
 import { resolveRoles } from "./roles";
+import { detectStamp, type StampFacts } from "./stamp";
 
 // ───── input facts
 
@@ -33,6 +34,11 @@ export interface PreflightFacts {
   trackerReachable: TrackerReachable;
   pushCheck: PushCheck;
   stampVersion: StampVersion;
+  // Raw stamp facts (config version + adapter doc text), gathered by edges.ts
+  // and never pre-decided there — this module calls detectStamp itself so it
+  // can tell a legacy v1 repo (migrate it) apart from a genuinely unstamped
+  // one (adopt it) when stampVersion.repo is null.
+  stampFacts: StampFacts;
   // Which planning-role implementations the host found installed. Gathered by
   // edges.ts — this module stays pure and only decides what the list means.
   availableRoles: string[];
@@ -170,13 +176,20 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   const repoStamp = facts.stampVersion.repo ?? UNSTAMPED;
   const cmp = compareStamp(repoStamp, facts.stampVersion.plugin);
   if (cmp < 0) {
+    // repo === null covers both a genuinely unstamped repo and a legacy v1
+    // repo (no config.json, but the adapter doc still carries the loop
+    // section) — detectStamp is what tells those two apart, so each gets
+    // told the one action that actually applies to it.
+    const fix =
+      facts.stampVersion.repo !== null
+        ? "run the Factory migration step to bring the repo stamp up to date, then re-run preflight"
+        : detectStamp(facts.stampFacts).k === "legacy-v1"
+          ? "run the Factory migration step to bring this legacy v1 stamp up to date, then re-run preflight"
+          : "run the Factory adopt skill to stamp this repo, then re-run preflight";
     failures.push({
       what: `repo stamp "${facts.stampVersion.repo ?? "none"}" is older than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "a stale stamp means the repo's config and docs may not match what this plugin version expects",
-      fix:
-        facts.stampVersion.repo === null
-          ? "run the Factory adopt skill to stamp this repo, or the migration step if it carries a legacy v1 stamp"
-          : "run the Factory migration step to bring the repo stamp up to date, then re-run preflight",
+      fix,
       blocksExecutionOnly: true,
     });
   } else if (cmp > 0) {

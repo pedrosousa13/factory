@@ -3,6 +3,7 @@ import { preflight, compareStamp } from "../src/preflight";
 import type { PreflightFacts } from "../src/preflight";
 import type { FactoryConfig } from "../src/config";
 import { ROLE_TABLE } from "../src/roles";
+import { LOOP_SECTION_HEADING } from "../src/stamp";
 
 // ───── shared fixtures
 
@@ -20,6 +21,7 @@ function greenFacts(): PreflightFacts {
     trackerReachable: { result: "ok" },
     pushCheck: { ok: true, detail: "push ok" },
     stampVersion: { repo: "2.0.0", plugin: "2.0.0" },
+    stampFacts: { configVersion: "2.0.0", adapterDoc: null },
     availableRoles: ROLE_TABLE.map((r) => r.preferred.name),
   };
 }
@@ -240,17 +242,35 @@ test("repo stamp newer than plugin: update-the-plugin failure, also blocksExecut
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("repo with no stamp at all is treated as older than the plugin", () => {
+test("unstamped repo (no config, no legacy adapter doc): treated as older than the plugin; fix names adoption, not migration", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampFacts = { configVersion: null, adapterDoc: null };
   const result = preflight(facts);
 
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
+  expect(result.failures[0].fix).toMatch(/adopt/);
+  expect(result.failures[0].fix).not.toMatch(/migrat/i);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
-  expect(result.failures[0].fix).toMatch(/run the Factory adopt skill to stamp this repo/);
-  expect(result.failures[0].fix).toMatch(/migration step if it carries a legacy v1 stamp/);
+});
+
+test("legacy v1 repo (no config, adapter doc carries the loop section): fix names migration, not adoption", () => {
+  const facts = greenFacts();
+  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampFacts = {
+    configVersion: null,
+    adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
+  };
+  const result = preflight(facts);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failures.length).toBe(1);
+  expect(result.failures[0].fix).toMatch(/migrat/i);
+  expect(result.failures[0].fix).not.toMatch(/adopt/);
+  expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
 test("both stale and newer stamp failures carry blocksExecutionOnly; push-check failure does not", () => {
