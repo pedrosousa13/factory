@@ -341,7 +341,11 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   notification is the signal to Park. Keep working the turn while it runs; the
   maintainer's answer, if it comes, arrives mid-turn alongside a tool result.
   Do not end the turn to ask: that stalls the loop indefinitely, the exact cost
-  Park exists to remove (ADR-0001).
+  Park exists to remove (ADR-0001). The native channel for the current harness
+  carries this push where one exists — Claude Code's Notification hook, or
+  Codex's `notify` — and Pi carries none. Beneath all three sits one fallback,
+  the `notifierCommand` subprocess (`runtime/src/ping.ts`): PRD §5 item 4,
+  "Factory does not rely on `notify` … to reach the maintainer."
 - **Answered before the timer** → stop the timer, continue the issue with
   context intact. No Park, no state change. The answer is a maintainer
   decision: refresh the Pause note with it (mechanics below).

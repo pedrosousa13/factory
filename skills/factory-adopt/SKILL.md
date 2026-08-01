@@ -360,6 +360,28 @@ current `stampVersion`, this step only confirms its contents with the
 maintainer. It does not re-ask any of the three decisions already on
 record, and it does not rewrite the file.
 
+### Wire the native ping channels
+
+Once `.factory/config.json` is written, offer to wire each harness's native
+ping channel. Ask the maintainer directly — nothing about the repo answers
+this question, the same as merge policy and attack surface above.
+
+- **Claude Code.** The `Notification` hook ships with the plugin
+  (`hooks/hooks.json`) and needs no separate setup. It activates as soon as
+  `notifierCommand` is set in `.factory/config.json`. If the maintainer wants
+  the channel wired, ask for the notifier command and write it as
+  `notifierCommand`.
+- **Codex.** Offer to add a `notify` setting to `~/.codex/config.toml` that
+  points at the same notifier command. State the limit before the offer:
+  Codex's `notify` fires only at the end of a turn, not mid-turn (PRD §5 item
+  4).
+- **Pi.** Ships no notification channel. `pi-no-ping` stays the documented
+  state, and no offer applies.
+
+The offer is declinable. Record a decline the same way as the other Phase 1
+decisions above: name it in the completion report, rather than leaving it as
+a silent skip.
+
 ## Phase 2 — re-triage sweep
 
 Walk every **open** issue on the Project's issue tracker through the triage
