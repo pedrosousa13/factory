@@ -173,7 +173,17 @@ ordered cannot run the loop.
 Repeat until a stop condition (empty Queue, spent Context Budget, or the
 maintainer interrupts):
 
+At every step boundary below, overwrite `.factory/journal.json` with the
+current `{ticket, branch, step, openQuestion, workers}`. PRD #39 §5 item 8
+states it plainly: "Each step overwrites it. … The journal is a hint, not
+truth." The `step` field takes one of five values: `queue-selection`,
+`state-mirroring`, `implementation`, `landing-gate`, or `issue-boundary`. A
+claim always writes `openQuestion: null` — a question never survives a new
+claim.
+
 ### 1. Queue selection
+
+Overwrite the journal: `step: "queue-selection"`.
 
 The Queue is the set of this Project's issues that are:
 
@@ -236,6 +246,8 @@ headless run stops with no such note.
 
 ### 2. State mirroring (pickup)
 
+Overwrite the journal: `step: "state-mirroring"`.
+
 Atomically with pickup, in the tracker:
 
 - assign the issue to the maintainer,
@@ -249,6 +261,8 @@ Also write the Pause note (mechanics below): which issue, which branch, and
 nothing decided yet.
 
 ### 3. Implementation
+
+Overwrite the journal: `step: "implementation"`.
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
   the tracker's per-issue branch name (`docs/agents/issue-tracker.md`).
@@ -268,12 +282,21 @@ nothing decided yet.
 
 ### 4. Landing gate
 
+Overwrite the journal: `step: "landing-gate"`.
+
 An issue lands only when all of these pass:
 
 1. **Tests** green, if the Project has a test command.
 2. **Typecheck** green, if the Project has one.
 3. **`/review`** (Standards + Spec) against the issue brief, with no unresolved
    findings.
+
+The merge method follows `.factory/config.json`'s `merge` setting
+(`config.ts`'s `effective()`, `agentwork.ts`'s `mergeDecision`, pinned by
+`runtime/test/config.test.ts:623-701`). An explicit `merge.method` wins. An
+absent method under an auto policy — `squash`, `merge`, or `rebase` — takes
+the policy itself as the method. An absent method under the `human` policy
+defaults to `squash`. Under `human`, approval also gates the merge.
 
 Then land it:
 
@@ -291,6 +314,8 @@ No half-done work ever reaches the default branch. If the gate fails and the
 fix isn't forthcoming, the work stays on its branch and the issue is Parked.
 
 ### 5. Issue boundary
+
+Overwrite the journal: `step: "issue-boundary"`.
 
 After each issue lands or is Parked:
 
