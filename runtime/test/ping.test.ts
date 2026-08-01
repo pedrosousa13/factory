@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ping, pingPlan } from "../src/ping";
@@ -36,11 +36,15 @@ function scratchDir(): string {
   return mkdtempSync(join(tmpdir(), "ping-test-"));
 }
 
+// The question a real ping carries. Any non-empty string works for the
+// outcome tests; the contract test below is the one that reads it back.
+const MSG = "Which auth flow should T-7 use?";
+
 describe("ping", () => {
   test("pi with no notifier: pi-no-ping, no subprocess spawned", () => {
     const dir = scratchDir();
     try {
-      expect(ping("pi", undefined, dir)).toEqual({ k: "pi-no-ping" });
+      expect(ping("pi", undefined, dir, MSG)).toEqual({ k: "pi-no-ping" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -49,7 +53,7 @@ describe("ping", () => {
   test("no notifier configured: no-notifier-configured, no subprocess spawned", () => {
     const dir = scratchDir();
     try {
-      expect(ping("claude", undefined, dir)).toEqual({ k: "no-notifier-configured" });
+      expect(ping("claude", undefined, dir, MSG)).toEqual({ k: "no-notifier-configured" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -58,7 +62,7 @@ describe("ping", () => {
   test("a notifier that exits 0: pinged", () => {
     const dir = scratchDir();
     try {
-      expect(ping("claude", "exit 0", dir)).toEqual({ k: "pinged" });
+      expect(ping("claude", "exit 0", dir, MSG)).toEqual({ k: "pinged" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -67,7 +71,7 @@ describe("ping", () => {
   test("a notifier that exits non-zero: reported as notifier-failed, not thrown", () => {
     const dir = scratchDir();
     try {
-      const outcome = ping("codex", "echo 'boom' >&2; exit 3", dir);
+      const outcome = ping("codex", "echo 'boom' >&2; exit 3", dir, MSG);
       expect(outcome.k).toBe("notifier-failed");
       if (outcome.k === "notifier-failed") expect(outcome.why).toContain("boom");
     } finally {
@@ -78,7 +82,7 @@ describe("ping", () => {
   test("a notifier command that does not exist: reported as notifier-failed, not thrown", () => {
     const dir = scratchDir();
     try {
-      const outcome = ping("claude", "this-command-does-not-exist-anywhere-xyz", dir);
+      const outcome = ping("claude", "this-command-does-not-exist-anywhere-xyz", dir, MSG);
       expect(outcome.k).toBe("notifier-failed");
       if (outcome.k === "notifier-failed") expect(outcome.why.length).toBeGreaterThan(0);
     } finally {
@@ -89,7 +93,7 @@ describe("ping", () => {
   test("a failed ping never throws — the call always returns", () => {
     const dir = scratchDir();
     try {
-      expect(() => ping("claude", "exit 1", dir)).not.toThrow();
+      expect(() => ping("claude", "exit 1", dir, MSG)).not.toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -99,7 +103,24 @@ describe("ping", () => {
 test("ping: a configured notifier reaches the maintainer on pi too", () => {
   const dir = mkdtempSync(join(tmpdir(), "factory-ping-"));
   try {
-    expect(ping("pi", "exit 0", dir)).toEqual({ k: "pinged" });
+    expect(ping("pi", "exit 0", dir, MSG)).toEqual({ k: "pinged" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ───── the invocation contract
+
+// FACTORY_NOTIFY_MESSAGE is the one contract between Factory and a notifier
+// command: the hook (hooks/factory-notify.sh) already sets it, and this
+// module now sets the same key, so a maintainer writes one notifier that
+// works from either side. Passing nothing left the question unreachable.
+test("ping puts the question in FACTORY_NOTIFY_MESSAGE for the notifier to read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "factory-ping-env-"));
+  try {
+    const outcome = ping("claude", 'printf %s "$FACTORY_NOTIFY_MESSAGE" > seen.txt', dir, MSG);
+    expect(outcome).toEqual({ k: "pinged" });
+    expect(readFileSync(join(dir, "seen.txt"), "utf8")).toBe(MSG);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

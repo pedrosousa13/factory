@@ -180,7 +180,7 @@ export const EXTRA_TICKETS: Ticket[] = [
     labels: ["planning:prd"],
   },
   // Slice 5: needs-info and ready-for-human tickets, milestone "M1", so the
-  // empty-Queue breakdown (PROTOCOL.md:213-217) and a milestone-scoped
+  // empty-Queue breakdown (PROTOCOL.md "### 1. Queue selection") and a milestone-scoped
   // tracker.milestoneCounts ask both have something real to count.
   {
     id: "T-8",

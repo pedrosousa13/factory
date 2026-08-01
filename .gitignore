@@ -1,2 +1,4 @@
 .scratch/
 runtime/conformance/tracker/
+.factory/run.lock
+.factory/journal.json

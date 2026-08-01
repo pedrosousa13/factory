@@ -33,7 +33,8 @@ export type PickInput = { candidates: TicketFacts[]; scope: QueueScope };
 
 export type Excluded = { id: string; why: string };
 
-// PROTOCOL.md:185-192. Milestone scope is fail-open on purpose: an issue with
+// PROTOCOL.md "### 1. Queue selection". Milestone scope is fail-open on
+// purpose: an issue with
 // no milestone stays in scope, so a scoped run never strands unassigned work.
 // "Everything" and "(No milestone)" are different scopes, not one nullable
 // milestone — they select different Queues and report differently when empty.

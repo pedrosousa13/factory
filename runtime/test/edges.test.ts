@@ -217,7 +217,7 @@ describe("gatherAvailableRoles", () => {
     }
   });
 
-  test("a broken symlink under ~/.claude/skills reads as absent (PROTOCOL.md:47-52)", () => {
+  test(`a broken symlink under ~/.claude/skills reads as absent (PROTOCOL.md "## Preflight: prerequisites, not the stamp")`, () => {
     const home = scratchHome();
     try {
       mkdirSync(join(home, ".claude", "skills"), { recursive: true });

@@ -1,4 +1,6 @@
 import { test, expect } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { preflight, compareStamp } from "../src/preflight";
 import type { PreflightFacts } from "../src/preflight";
 import type { FactoryConfig } from "../src/config";
@@ -252,11 +254,12 @@ test("unstamped repo (no config, no legacy adapter doc): treated as older than t
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
   expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).not.toMatch(/\/factory-migrate/);
   expect(result.failures[0].fix).toMatch(/stamp this repo/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-adopt and says the repo is legacy v1", () => {
+test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-migrate and says the repo is legacy v1", () => {
   const facts = greenFacts();
   facts.stampVersion = { repo: null, plugin: "2.0.0" };
   facts.stampFacts = {
@@ -268,14 +271,18 @@ test("legacy v1 repo (no config, adapter doc carries the loop section): fix name
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
-  expect(result.failures[0].fix).toMatch(/\/factory-adopt/);
+  expect(result.failures[0].fix).toMatch(/\/factory-migrate/);
+  expect(result.failures[0].fix).not.toMatch(/\/factory-adopt/);
   expect(result.failures[0].fix).toMatch(/legacy v1/);
   expect(result.failures[0].blocksExecutionOnly).toBe(true);
 });
 
-test("a legacy v1 repo's three failures all name one command, and only the stamp failure diagnoses legacy v1", () => {
-  // Before: config missing said adopt, missing marker said adopt, stale stamp
-  // said migrate — three failures, two conflicting instructions, one repo.
+test("a legacy v1 repo's three failures: config and marker name factory-adopt, the stale stamp names factory-migrate", () => {
+  // Before task 7: config missing said adopt, missing marker said adopt, and
+  // the stale stamp also said adopt (no migration entry point existed yet).
+  // Now that /factory-migrate exists, the stale-stamp failure names it while
+  // the other two — which are about files, not the stamp version — still
+  // name /factory-adopt (safe to re-run).
   const facts = greenFacts();
   facts.config = "missing-file";
   facts.adapterMarker = "missing-marker";
@@ -289,15 +296,18 @@ test("a legacy v1 repo's three failures all name one command, and only the stamp
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(3);
-  for (const failure of result.failures) {
-    expect(failure.fix).toMatch(/^run \/factory-adopt \(safe to re-run\) to /);
-  }
-  expect(result.failures.filter((f) => /legacy v1/.test(f.fix)).length).toBe(1);
+  const adoptFixes = result.failures.filter((f) => /^run \/factory-adopt \(safe to re-run\) to /.test(f.fix));
+  const migrateFixes = result.failures.filter((f) => /^run \/factory-migrate to /.test(f.fix));
+  expect(adoptFixes.length).toBe(2);
+  expect(migrateFixes.length).toBe(1);
+  expect(migrateFixes[0].fix).toMatch(/legacy v1/);
 });
 
-test("no fix names an entry point the plugin does not ship — no 'migration step' to run", () => {
-  // Nothing applies a migration yet (PROTOCOL.md "## Migration", issue #50),
-  // so no failure may tell a maintainer to run one.
+test("every Factory entry point a fix names is one the plugin ships", () => {
+  // A fix is only actionable if the thing it tells the maintainer to run
+  // exists. This used to assert that no fix said "migration step", because
+  // nothing applied a migration yet; /factory-migrate ships now, so the
+  // durable claim is the one about entry points, checked against disk.
   const cases: (() => PreflightFacts)[] = [
     () => {
       const f = greenFacts();
@@ -327,13 +337,21 @@ test("no fix names an entry point the plugin does not ship — no 'migration ste
     },
   ];
 
+  const named = new Set<string>();
   for (const build of cases) {
     const result = preflight(build());
     expect(result.ok).toBe(false);
     if (result.ok) return;
     for (const failure of result.failures) {
-      expect(failure.fix).not.toMatch(/migration step/i);
+      for (const match of failure.fix.matchAll(/\/(factory(?:-[a-z]+)*)\b/g)) named.add(match[1]);
     }
+  }
+
+  // The cases above must actually name some — an empty set would pass the
+  // loop below while proving nothing.
+  expect(named.size).toBeGreaterThan(0);
+  for (const skill of named) {
+    expect(existsSync(join(import.meta.dir, "../../skills", skill, "SKILL.md"))).toBe(true);
   }
 });
 

@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { clearJournal, JOURNAL_PATH, readJournal, startClaim, writeJournal } from "../src/journalfile";
 import type { JournalRecord } from "../src/journal";
 import { waitDecision } from "../src/answerwait";
+import { reconcileClaims } from "../src/recovery";
+import type { TicketFacts } from "../src/tracker";
+import { branchName } from "../src/pick";
 
 // ───── scratch repo root helper (a plain temp dir — no git needed here)
 
@@ -178,6 +181,74 @@ describe("startClaim", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// ───── the claim-time overwrite invariant (recovery.ts:57-64): nothing
+// downstream can tell a finished cycle's leftover journal from a live one
+// unless the journal is cleared at claim time. These pin that it is.
+
+describe("the claim-time overwrite invariant", () => {
+  test("a new claim erases the previous cycle's open question", () => {
+    const dir = scratchDir();
+    try {
+      writeJournal(dir, {
+        ticket: "T-1",
+        branch: "issue-1",
+        step: "ask",
+        openQuestion: { text: "which tracker?", askedAt: "2026-08-01T10:00:00Z" },
+        workers: [],
+      });
+      startClaim(dir, "T-2", "issue-2", "claim");
+      const read = readJournal(dir);
+      expect(read).toEqual({
+        ok: true,
+        record: { ticket: "T-2", branch: "issue-2", step: "claim", openQuestion: null, workers: [] },
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Claimed path, not the unclaimed/stranded path: recovery.ts only ever
+  // reads `journal` inside claimed.map's parkInterrupted check, and that
+  // check requires journal.step === PARK_STEP ("park"). bin/park.ts:163-169
+  // writes step: "ask" while a question is outstanding — PARK_STEP is
+  // written later (park.ts:447), once the Park itself starts — so a
+  // finished cycle's leftover "ask" journal must NOT read as an interrupted
+  // Park: it plainly resumes.
+  test("a finished Park's leftover journal does not resurrect the Park in recovery", () => {
+    const actor = "factory-loop";
+    const title = "Ask, Park, and Recovery";
+    const branch = branchName("T-1", title);
+    const claimedTicket: TicketFacts = {
+      id: "T-1",
+      title,
+      urgency: "P2",
+      createdAt: "2026-07-30T00:00:00Z",
+      milestone: null,
+      ready: true,
+      state: "started",
+      claimedBy: actor,
+      blockedBy: [],
+      labels: [],
+    };
+    const leftover: JournalRecord = {
+      ticket: "T-1",
+      branch,
+      step: "ask", // not PARK_STEP — the question step, per bin/park.ts:166
+      openQuestion: { text: "which tracker?", askedAt: "2026-08-01T10:00:00Z" },
+      workers: [],
+    };
+    const decisions = reconcileClaims({
+      claimed: [claimedTicket],
+      unclaimed: [],
+      originBranches: [branch],
+      actor,
+      journal: leftover,
+      parkCommented: ["T-1"], // the Park's comment is on the tracker
+    });
+    expect(decisions).toEqual([{ k: "resume", ticket: "T-1", branch }]);
   });
 });
 

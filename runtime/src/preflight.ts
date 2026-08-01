@@ -97,13 +97,12 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // input that decides which stamp a repo carries.
   const stamp = detectStamp(facts.stampFacts);
 
-  // What every "this repo is not stamped" failure tells the maintainer to
-  // run. Nothing in the plugin applies a migration yet — PROTOCOL.md's
-  // "## Migration" marks the applier pending, and issue #50 tracks it. So a
-  // legacy v1 repo gets the same command as a never-adopted one, and only the
-  // reason differs. /factory-adopt is safe to re-run (PROTOCOL.md:97), writes
-  // .factory/config.json at the current stamp version, and uses the same
-  // section rules a migration step would.
+  // What a "this repo is not stamped" failure tells the maintainer to run.
+  // A legacy v1 stamp routes to /factory-migrate (the stale-stamp branch
+  // below); everything unstamped routes here, to /factory-adopt, which is
+  // safe to re-run (PROTOCOL.md "## Prerequisites: a stamped Project repo"),
+  // writes .factory/config.json at the
+  // current stamp version, and uses the same section rules migration does.
   //
   // A repo that already carries a stamp also carries files, so its fixes say
   // /factory-adopt will not clobber them. A never-adopted repo has nothing to
@@ -214,7 +213,10 @@ export function preflight(facts: PreflightFacts): PreflightResult {
     failures.push({
       what: `repo stamp "${facts.stampVersion.repo ?? "none"}" is older than the installed plugin "${facts.stampVersion.plugin}"`,
       why: "a stale stamp means the repo's config and docs may not match what this plugin version expects",
-      fix: `${adopt(task)}, then re-run preflight`,
+      fix:
+        stamp.k === "legacy-v1"
+          ? "run /factory-migrate to bring this legacy v1 stamp to the current version, then re-run preflight"
+          : `${adopt(task)}, then re-run preflight`,
       blocksExecutionOnly: true,
     });
   } else if (cmp > 0) {
@@ -228,7 +230,8 @@ export function preflight(facts: PreflightFacts): PreflightResult {
 
   // PRD §4: each role resolves at preflight, preferred then fallback. A role
   // with no available implementation stops the run, like any other missing
-  // prerequisite — collected, never reported alone (PROTOCOL.md:21-24).
+  // prerequisite — collected, never reported alone
+  // (PROTOCOL.md "## Preflight: prerequisites, not the stamp").
   failures.push(...resolveRoles(facts.availableRoles).failures);
 
   if (failures.length > 0) {

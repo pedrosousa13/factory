@@ -173,7 +173,26 @@ ordered cannot run the loop.
 Repeat until a stop condition (empty Queue, spent Context Budget, or the
 maintainer interrupts):
 
+At every step boundary below, overwrite `.factory/journal.json` with the
+current `{ticket, branch, step, openQuestion, workers}`. PRD #39 §5 item 8
+states it plainly: "Each step overwrites it. … The journal is a hint, not
+truth."
+
+`step` carries one of two vocabularies. The five loop boundaries below are
+one: `queue-selection`, `state-mirroring`, `implementation`, `landing-gate`,
+and `issue-boundary`. Events inside a boundary are the other, and recovery
+is what reads them: `claim` when a session takes a ticket, `ask` when it
+pings the maintainer, and `park` while a Park is in flight. Write both
+vocabularies. A session that writes only the five leaves recovery blind:
+`park` is what tells a later run whether a Park crashed halfway, and no
+other value carries that.
+
+A claim always writes `openQuestion: null` — a question never survives a new
+claim. The ping is the one write that sets it (see "Ping and Park").
+
 ### 1. Queue selection
+
+Overwrite the journal: `step: "queue-selection"`.
 
 The Queue is the set of this Project's issues that are:
 
@@ -236,6 +255,8 @@ headless run stops with no such note.
 
 ### 2. State mirroring (pickup)
 
+Overwrite the journal: `step: "state-mirroring"`.
+
 Atomically with pickup, in the tracker:
 
 - assign the issue to the maintainer,
@@ -249,6 +270,8 @@ Also write the Pause note (mechanics below): which issue, which branch, and
 nothing decided yet.
 
 ### 3. Implementation
+
+Overwrite the journal: `step: "implementation"`.
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
   the tracker's per-issue branch name (`docs/agents/issue-tracker.md`).
@@ -268,6 +291,8 @@ nothing decided yet.
 
 ### 4. Landing gate
 
+Overwrite the journal: `step: "landing-gate"`.
+
 An issue lands only when all of these pass:
 
 1. **Tests** green, if the Project has a test command.
@@ -275,13 +300,20 @@ An issue lands only when all of these pass:
 3. **`/review`** (Standards + Spec) against the issue brief, with no unresolved
    findings.
 
+The merge method follows `.factory/config.json`'s `merge` setting
+(`config.ts`'s `effective()`, `agentwork.ts`'s `mergeDecision`, pinned by
+`runtime/test/config.test.ts:623-701`). An explicit `merge.method` wins. An
+absent method under an auto policy — `squash`, `merge`, or `rebase` — takes
+the policy itself as the method. An absent method under the `human` policy
+defaults to `squash`. Under `human`, approval also gates the merge.
+
 Then land it:
 
 - Push the branch; open a PR titled after the issue, body summarizing the
   change and linking the issue. No AI attribution in the commits or the PR.
 - If the repo has required checks, enable auto-merge and wait for green. If it
   has none, the Landing gate above *is* the green signal — merge immediately
-  (squash), delete the branch.
+  using the resolved method, delete the branch.
 - Mirror completion in the tracker: comment with the PR link, move the issue
   to a **completed** state.
 - Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
@@ -291,6 +323,8 @@ No half-done work ever reaches the default branch. If the gate fails and the
 fix isn't forthcoming, the work stays on its branch and the issue is Parked.
 
 ### 5. Issue boundary
+
+Overwrite the journal: `step: "issue-boundary"`.
 
 After each issue lands or is Parked:
 
@@ -316,11 +350,26 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   notification is the signal to Park. Keep working the turn while it runs; the
   maintainer's answer, if it comes, arrives mid-turn alongside a tool result.
   Do not end the turn to ask: that stalls the loop indefinitely, the exact cost
-  Park exists to remove (ADR-0001).
+  Park exists to remove (ADR-0001). The native channel for the current harness
+  carries this push where one exists — Claude Code's Notification hook, or
+  Codex's `notify` — and Pi carries none. Beneath all three sits one fallback,
+  the `notifierCommand` subprocess (`runtime/src/ping.ts`): PRD §5 item 4,
+  "Factory does not rely on `notify` … to reach the maintainer." That
+  subprocess gets the question in the `FACTORY_NOTIFY_MESSAGE` environment
+  variable and nothing else — no arguments, no stdin. The Notification hook
+  sets the same variable, so one notifier command serves both.
+- **Journal the ask** as the ping goes out: overwrite `.factory/journal.json`
+  with `step: "ask"` and `openQuestion` set to `{text, askedAt}` — the
+  question, and the ISO 8601 time it was posted. This is the only write that
+  sets `openQuestion`, and Park below keeps it while it runs. Recovery reads
+  the pair: a journal carrying `step: "park"` and a non-null `openQuestion`
+  is a Park that crashed halfway, and the journaled question is the only
+  copy of the reason its comment still needs.
 - **Answered before the timer** → stop the timer, continue the issue with
   context intact. No Park, no state change. The answer is a maintainer
   decision: refresh the Pause note with it (mechanics below).
-- **Unanswered** → Park, which is these four steps in order:
+- **Unanswered** → Park. Overwrite the journal with `step: "park"`, keeping
+  the `openQuestion` the ping wrote, then run these four steps in order:
   1. **Store the work**: commit what exists on the issue branch and push it.
      The working tree must be clean and the default branch untouched — Parked
      work lives only on its branch.
@@ -614,10 +663,10 @@ detected above — to the plugin's current one.
 
 **What ships today.** The plugin computes a migration. It detects the stamp, builds the
 step chain, diffs the adapter document against its template, and renders the new
-`config.json`. Nothing applies that result yet, and no skill or command starts a migration.
-The sentences marked **(pending)** below state what the applier must do when it lands — see
-issue #50. To bring a repo to the current stamp today, run `/factory-adopt`. It is safe to
-re-run and it uses the same section rules.
+`config.json`. `/factory-migrate` is the entry point: it applies that result on a repo
+whose stamp is legacy v1 or an older v2 version. A repo with no stamp at all is not
+`/factory-migrate`'s job. Run `/factory-adopt` there instead. It is safe to re-run and it
+uses the same section rules.
 
 **Steps.** Migration runs as a chain of versioned steps: v1 to v2, v2 to v3, and so on. The
 plugin computes one combined diff for all pending steps, shows it to the maintainer once,
@@ -625,7 +674,7 @@ and takes one approval — never one diff per step, even when several steps must
 reach the current version.
 
 **Idempotent by design.** Each step is idempotent: a repeat run finds nothing left to do.
-**(pending)** A step interrupted partway repairs itself on the next run, because of the
+A step interrupted partway repairs itself on the next run, because of the
 order it writes in: the adapter document first, `config.json` last. That order is
 load-bearing. `config.json` carries the stamp, so writing it last makes it the single
 commit point. A crash before it leaves the repo at its old stamp, and the whole step runs
@@ -643,15 +692,17 @@ one-tap confirmation. It reads the tracker name from the H1 line only, case-inse
 and never guesses it from the rest of the document. A document that carries front matter or
 a preamble before its H1 therefore falls through to asking for the tracker cold. A v1 repo
 has no record of merge policy or attack surface, so the step asks both fresh and defaults
-neither. **(pending)** Applying the step then writes `config.json`, retrofits the missing
-sections, and sets the stamp version.
+neither. Applying the step then writes `config.json`, retrofits the missing sections, and
+sets the stamp version.
 
 **A stale stamp blocks autonomous execution only.** Preflight reports it as a failure that
 stops execution and not planning. Planning skills stay available, because they read the
-prose docs, not the stamp. **(pending)** A headless run reports the pending migration and
-stops, and an interactive run offers to migrate now. **(pending)** Migration ends with a full
-preflight check that validates the config against the adapter document and the live
-tracker, and runs the non-interactive push check. Only a green preflight at the current
+prose docs, not the stamp. A headless run reports the pending migration and stops, because
+preflight's stale-stamp failure blocks execution until the repo is migrated. **(pending)**
+An interactive run does not yet offer to migrate now on its own. Today the maintainer reads
+preflight's fix message and runs the migration themselves — see issue #50. Migration ends
+with a full preflight check that validates the config against the adapter document and the
+live tracker, and runs the non-interactive push check. Only a green preflight at the current
 version unblocks execution.
 
 **A stamp newer than the installed plugin also blocks execution**, with the message

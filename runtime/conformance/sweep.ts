@@ -77,7 +77,9 @@ import { askWithRetry, buildPrompt, extractJson, type AskStatus, type Runner } f
 import { runHarness, type HarnessName } from "../src/harness";
 import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
 import { breakdown, emptyQueueReport } from "../src/queuereport";
-import { checkAgent, type AgentAsk, type ImplementResult } from "../src/agentwork";
+import { checkAgent, mergeDecision, type AgentAsk, type ImplementResult } from "../src/agentwork";
+import { effective, parseConfig } from "../src/config";
+import { readJournal } from "../src/journalfile";
 import { parkCommentText, type ParkReason } from "../src/park";
 import { ADAPTER_DOC_PATH, CONFIG_PATH, gatherPreflightFacts, gatherStampFacts } from "../src/edges";
 import { pendingSteps, planMigration, renderV1ToV2Config, repoVersionOf } from "../src/migrate";
@@ -89,10 +91,13 @@ import {
   CLEAR_BRIEF_BRANCH,
   CLEAR_BRIEF_COMMIT,
   CLEAR_BRIEF_MARKER,
+  JOURNAL_CLAIM_RECORD,
+  journalClaimPrompt,
   VAGUE_BRIEF,
   implementPrompt,
   mkCodeRepo,
   rmCodeRepo,
+  verifyRebaseMerge,
 } from "./coderepo";
 import {
   CHOSEN_ATTACK_SURFACE,
@@ -260,8 +265,16 @@ type HarnessRecord = {
   implementDone: ImplementOutcome["status"];
   implementDoneOk: boolean; // answer.result === "done"
   workVerifiedOk: boolean; // greet.ts + bun check.ts + commit, all on CLEAR_BRIEF_BRANCH
+  mergeMethod: string; // mergeDecision's rendered outcome, e.g. "merge:rebase"
+  mergeOk: boolean; // decision was {merge, rebase} AND verifyRebaseMerge confirmed a real rebase (no merge commit, work commit reachable)
   implementQuestion: ImplementOutcome["status"];
   implementQuestionOk: boolean; // answer.result === "question" && question non-empty
+  journal: "valid" | "failed"; // whether the journal-step harness call itself completed without throwing
+  // A file-edge transcription check, not a check that the harness journals
+  // per PROTOCOL: the prompt hands the agent the finished record, so a pass
+  // says the harness can put given bytes at a given path. It says nothing
+  // about whether the harness would write a journal on its own.
+  journalOk: boolean; // .factory/journal.json on disk deep-matches JOURNAL_CLAIM_RECORD
   comment: AskStatus;
   commentOk: boolean; // answer.result === "ok"
   commentFileOk: boolean; // T-3's body carries the disclaimer, the reason, and the branch
@@ -676,8 +689,30 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   const clearRepo = mkCodeRepo();
   let clearLog: ImplementOutcome;
   let workVerifiedOk = false;
+  let mergeMethod = "not attempted";
+  let mergeOk = false;
   const clearStart = performance.now();
   try {
+    // Task 3's fixture config (bin/implement.ts, commit d45a6c9), mirrored
+    // here so the merge decision below reads it off disk through the SAME
+    // parseConfig -> effective -> mergeDecision chain the host exercises,
+    // rather than a hardcoded policy/method.
+    const mainHeadBefore = gitOut(["rev-parse", "main"], clearRepo.root).stdout.trim();
+    mkdirSync(join(clearRepo.root, ".factory"), { recursive: true });
+    writeFileSync(
+      join(clearRepo.root, CONFIG_PATH),
+      JSON.stringify(
+        {
+          stampVersion: STAMP_VERSION,
+          tracker: { kind: "local" },
+          merge: { policy: "human", method: "rebase" },
+          attackSurface: false,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+
     const clearRunner: Runner = (prompt) => runHarness(harness, prompt, clearRepo.root);
     const implementAsk: Extract<AgentAsk, { k: "agent.implement" }> = {
       k: "agent.implement",
@@ -689,6 +724,24 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     if (clearLog.status !== "failed" && clearLog.answer.result === "done") {
       workVerifiedOk = verifyClearBriefWork(clearRepo.root).workOk;
     }
+
+    // ── merge-rebase column (0 extra asks): the real chain — fixture
+    // config on disk -> parseConfig -> effective() -> mergeDecision — same
+    // path bin/implement.ts exercises (commit d45a6c9), then the actual
+    // rebase merge, verified with coderepo.ts's shared verifyRebaseMerge.
+    if (workVerifiedOk) {
+      const parsedConfig = parseConfig(readFileSync(join(clearRepo.root, CONFIG_PATH), "utf8"));
+      if (parsedConfig.ok) {
+        const settings = effective(parsedConfig.config, { defaultBranch: "main" });
+        const decision = mergeDecision(settings.mergePolicy.value, settings.mergeMethod?.value, "approved");
+        mergeMethod = decision.k === "merge" ? `merge:${decision.method}` : decision.k;
+        if (decision.k === "merge" && decision.method === "rebase") {
+          mergeOk = verifyRebaseMerge(clearRepo.root, CLEAR_BRIEF_BRANCH, CLEAR_BRIEF_MARKER, mainHeadBefore).mergeOk;
+        }
+      } else {
+        mergeMethod = "config parse failed";
+      }
+    }
   } finally {
     rmCodeRepo(clearRepo.root);
   }
@@ -697,6 +750,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   console.log(
     `  implement CLEAR_BRIEF: ${clearLog.status}${clearLog.status === "failed" ? ` — ${clearLog.why}` : ""} (expected done: ${implementDoneOk ? "yes" : "no"}; work verified: ${workVerifiedOk ? "yes" : "no"})`,
   );
+  console.log(`  merge: ${mergeMethod} (expected merge:rebase, verified: ${mergeOk ? "yes" : "no"})`);
 
   // ── slice 3: agent.implement — VAGUE_BRIEF on a fresh scratch code repo,
   // question variant with a non-empty question
@@ -722,6 +776,37 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     vagueLog.answer.question.trim().length > 0;
   console.log(
     `  implement VAGUE_BRIEF: ${vagueLog.status}${vagueLog.status === "failed" ? ` — ${vagueLog.why}` : ""} (expected question: ${implementQuestionOk ? "yes" : "no"})`,
+  );
+
+  // ── journal-step (the ONLY new ask this plan adds): one live ask against
+  // a fresh coderepo-fixture repo, instructing the agent to perform
+  // PROTOCOL's claim step for a named ticket — overwrite .factory/journal.json
+  // whole. The FILE is the evidence, never the reply: readJournal
+  // (src/journalfile.ts) parses what's actually on disk, and the check ANDs
+  // `ok` with the record matching JOURNAL_CLAIM_RECORD (coderepo.ts) field by
+  // field, rather than trusting whatever the agent replied.
+  const journalRepo = mkCodeRepo();
+  let journalThrew: string | null = null;
+  const journalStart = performance.now();
+  try {
+    runHarness(harness, journalClaimPrompt(), journalRepo.root);
+  } catch (e) {
+    journalThrew = (e as Error).message;
+  }
+  const journalRead = readJournal(journalRepo.root);
+  const journalOk =
+    journalThrew === null &&
+    journalRead.ok &&
+    journalRead.record.ticket === JOURNAL_CLAIM_RECORD.ticket &&
+    journalRead.record.branch === JOURNAL_CLAIM_RECORD.branch &&
+    journalRead.record.step === JOURNAL_CLAIM_RECORD.step &&
+    journalRead.record.openQuestion === JOURNAL_CLAIM_RECORD.openQuestion &&
+    journalRead.record.workers.length === JOURNAL_CLAIM_RECORD.workers.length;
+  rmCodeRepo(journalRepo.root);
+  const journalMs = Math.round(performance.now() - journalStart);
+  const journal: "valid" | "failed" = journalThrew === null ? "valid" : "failed";
+  console.log(
+    `  journal claim step: ${journal}${journalThrew ? ` — harness threw: ${journalThrew}` : ""} (expected file match: ${journalOk ? "yes" : "no"})`,
   );
 
   // Only the tracker asks can re-ask; the agent.implement dispatches get one
@@ -762,7 +847,8 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     openIssuesMs +
     migrateMs +
     clearMs +
-    vagueMs;
+    vagueMs +
+    journalMs;
 
   const pass =
     reachableOk &&
@@ -793,7 +879,9 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     migratePreflightGreenOk &&
     implementDoneOk &&
     workVerifiedOk &&
-    implementQuestionOk;
+    mergeOk &&
+    implementQuestionOk &&
+    journalOk;
 
   return {
     harness,
@@ -820,8 +908,12 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     implementDone: clearLog.status,
     implementDoneOk,
     workVerifiedOk,
+    mergeMethod,
+    mergeOk,
     implementQuestion: vagueLog.status,
     implementQuestionOk,
+    journal,
+    journalOk,
     comment: commentLog.status,
     commentOk,
     dropReady: dropReadyLog.status,
@@ -880,7 +972,11 @@ function printTable(records: HarnessRecord[]): void {
     "implement-done",
     "ok?",
     "work?",
+    "merge method",
+    "ok?",
     "implement-question",
+    "ok?",
+    "journal",
     "ok?",
     "comment",
     "ok?",
@@ -944,8 +1040,12 @@ function printTable(records: HarnessRecord[]): void {
     r.implementDone,
     r.implementDoneOk ? "yes" : "no",
     r.workVerifiedOk ? "yes" : "no",
+    r.mergeMethod,
+    r.mergeOk ? "yes" : "no",
     r.implementQuestion,
     r.implementQuestionOk ? "yes" : "no",
+    r.journal,
+    r.journalOk ? "yes" : "no",
     r.comment,
     r.commentOk ? "yes" : "no",
     r.commentFileOk ? "yes" : "no",

@@ -344,9 +344,11 @@ a default:
 
 Write `stampVersion` as the current stamp version, `STAMP_VERSION` in
 `${CLAUDE_PLUGIN_ROOT}/runtime/src/version.ts` — the single source of truth
-for this value. Write only these four fields — `stampVersion` and the three
-decisions above. Every other setting either derives from the environment or
-takes a default, and neither belongs in a freshly written file.
+for this value. Write these four fields — `stampVersion` and the three
+decisions above — plus `notifierCommand`, a fifth, if the maintainer accepts
+the channel offer below. Every other setting either derives from the
+environment or takes a default, and neither belongs in a freshly written
+file.
 
 `.factory/config.json` is committed — it is the Project's settings, not
 scratch state. Add `.factory/run.lock` and `.factory/journal.json` to
@@ -359,6 +361,52 @@ committed.
 current `stampVersion`, this step only confirms its contents with the
 maintainer. It does not re-ask any of the three decisions already on
 record, and it does not rewrite the file.
+
+### Wire the native ping channels
+
+Once `.factory/config.json` is written, offer to wire each harness's native
+ping channel. Ask the maintainer directly — nothing about the repo answers
+this question, the same as merge policy and attack surface above.
+
+**The notifier contract.** `notifierCommand` is a shell command line, run
+with the question in the `FACTORY_NOTIFY_MESSAGE` environment variable. That
+variable is the whole contract. Factory passes no arguments and writes
+nothing to the command's stdin, so a notifier that ignores the variable
+sends an empty alert. Both callers set the same key — the `Notification`
+hook (`hooks/factory-notify.sh`) and the runtime's own ping
+(`runtime/src/ping.ts`) — so one command works from either. Tell the
+maintainer this before asking for the command, and show the shape:
+
+```
+notify-send "Factory" "$FACTORY_NOTIFY_MESSAGE"
+```
+
+- **Claude Code.** The `Notification` hook ships with the plugin
+  (`hooks/hooks.json`) and needs no separate setup. It activates as soon as
+  `notifierCommand` is set in `.factory/config.json`. If the maintainer wants
+  the channel wired, ask for the notifier command and write it as
+  `notifierCommand`.
+- **Codex.** Offer to add a `notify` setting to `~/.codex/config.toml`.
+  Codex's `notify` is not a shell command line, so it does not take the
+  `notifierCommand` string as written. It is a TOML array of argv tokens, and
+  Codex appends one further argument of its own when it runs them: a JSON
+  payload describing the event. The notifier here must therefore be a
+  program that tolerates that trailing JSON argument, not a shell string
+  reading `FACTORY_NOTIFY_MESSAGE`. Shape:
+
+  ```toml
+  notify = ["/Users/me/bin/factory-notify"]
+  ```
+
+  Codex then runs `/Users/me/bin/factory-notify '{"type":"agent-turn-complete", ...}'`.
+  State the limit before the offer: Codex's `notify` fires only at the end of
+  a turn, not mid-turn (PRD §5 item 4).
+- **Pi.** Ships no notification channel. `pi-no-ping` stays the documented
+  state, and no offer applies.
+
+The offer is declinable. Record a decline the same way as the other Phase 1
+decisions above: name it in the completion report, rather than leaving it as
+a silent skip.
 
 ## Phase 2 — re-triage sweep
 

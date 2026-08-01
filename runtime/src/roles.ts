@@ -20,10 +20,12 @@ export type RoleName =
 // One role's two implementations can live in two different places, so an
 // implementation names its kind as well as itself:
 //
-//   "skill"  — installed at `<home>/.claude/skills/<name>` (PROTOCOL.md:43-52).
-//              This is how the Matt Pocock skills install, as symlinks.
-//   "plugin" — a plugin skill, addressed by its `<plugin>:<skill>` id
-//              (PROTOCOL.md:53-60). Superpowers ships this way and is never
+//   "skill"  — installed at `<home>/.claude/skills/<name>`, the dependent-skills
+//              check in PROTOCOL.md "## Preflight: prerequisites, not the
+//              stamp". This is how the Matt Pocock skills install, as symlinks.
+//   "plugin" — a plugin skill, addressed by its `<plugin>:<skill>` id, the
+//              superpowers check in the same Preflight section. Superpowers
+//              ships this way and is never
 //              installed at `~/.claude/skills/<name>`, so looking for it there
 //              can only ever report it absent.
 //
@@ -73,10 +75,10 @@ export type RoleResolution = { resolved: RoleSelection[]; failures: Failure[] };
 // Preferred first, then fallback, then a failure. Every unresolvable role is
 // reported — a maintainer who installs one skill only to meet the next missing
 // one on the following run is the failure Preflight exists to prevent
-// (PROTOCOL.md:21-24).
+// (PROTOCOL.md "## Preflight: prerequisites, not the stamp").
 // How the maintainer installs each kind. A plugin skill has no
 // ~/.claude/skills/ path at all, so pointing there would send them looking in
-// a directory the check never reads (PROTOCOL.md:60).
+// a directory the check never reads (same section, the superpowers check).
 function installFix(impl: RoleImpl): string {
   const [pluginName] = impl.name.split(":");
   return impl.k === "plugin"

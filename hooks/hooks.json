@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/factory-notify.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

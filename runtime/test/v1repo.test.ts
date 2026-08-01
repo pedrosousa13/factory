@@ -31,10 +31,27 @@ test("mkV1Repo's fixture carries no .factory/config.json", () => {
   expect(existsSync(join(root, CONFIG_PATH))).toBe(false);
 });
 
+// The fixture's v1-ness must not depend on the source repo's current state
+// (task-10 brief): mkV1Repo() always strips .factory/ from the copy and
+// always overwrites the copy's adapter doc with the checked-in snapshot, so
+// this stays true even after this repo itself migrates and grows a real
+// .factory/config.json and a rewritten adapter doc.
+test("mkV1Repo's copy carries no .factory/ directory at all", () => {
+  root = mkV1Repo().root;
+  expect(existsSync(join(root, ".factory"))).toBe(false);
+});
+
 test("mkV1Repo's adapter doc carries no tracker marker", () => {
   root = mkV1Repo().root;
   const doc = readFileSync(join(root, ADAPTER_DOC_PATH), "utf8");
   expect(readMarker(doc)).toBe("missing-marker");
+});
+
+test("mkV1Repo's adapter doc is byte-identical to the checked-in v1 snapshot", () => {
+  root = mkV1Repo().root;
+  const copied = readFileSync(join(root, ADAPTER_DOC_PATH));
+  const snapshot = readFileSync(join(import.meta.dir, "../conformance/v1-adapter-doc.snapshot.md"));
+  expect(copied.equals(snapshot)).toBe(true);
 });
 
 // ───── REACHABLE_SHAPE drift guard
