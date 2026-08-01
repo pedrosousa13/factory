@@ -5,11 +5,10 @@
  * and a local bare "origin" so a non-interactive push check can pass without
  * ever touching the network. Modelled on coderepo.ts's mkCodeRepo/rmCodeRepo.
  *
- * This repo is v1-stamped itself (no .factory/config.json, and
- * docs/agents/issue-tracker.md still carries the legacy "## Factory loop
- * operations" heading) — checked against this repo's full git history, every
- * branch and tag, and every sibling under ~/Documents/apps/: no other
- * v1-stamped fixture existed. The migration this fixture feeds runs only
+ * The fixture's v1-ness comes from a checked-in snapshot of the adapter doc
+ * (v1-adapter-doc.snapshot.md, see below) plus stripping .factory/ from the
+ * copy — not from this repo's own current state, so migrating this repo for
+ * real cannot break the fixture. The migration this fixture feeds runs only
  * against the copy this module makes; the real repo is never written to.
  *
  * bun v1repo.ts up|down [root]
@@ -19,13 +18,20 @@
  * so a drift here would silently fork what each host tests.
  */
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gatherStampFacts } from "../src/edges";
+import { gatherStampFacts, ADAPTER_DOC_PATH } from "../src/edges";
 import { detectStamp } from "../src/stamp";
 import { ROLE_TABLE, type RoleImpl } from "../src/roles";
 import type { MergePolicy } from "../src/config";
+
+// v1-adapter-doc.snapshot.md is this repo's own docs/agents/issue-tracker.md
+// as it read while the repo itself was still v1-stamped. The fixture's
+// v1-ness comes from that snapshot plus dropping .factory/ below — not from
+// this repo's current state — so a later migration of this repo cannot break
+// the fixture.
+const V1_ADAPTER_DOC_SNAPSHOT_PATH = join(import.meta.dir, "v1-adapter-doc.snapshot.md");
 
 // ───────────────────────────────────────────────────────────────── paths
 
@@ -71,6 +77,12 @@ export function mkV1Repo(): { root: string } {
       const src = join(REPO_ROOT, rel);
       if (existsSync(src)) cpSync(src, join(root, rel), { recursive: true });
     }
+
+    // The fixture's v1-ness must not depend on this repo's own current
+    // state: pin the adapter doc to the snapshot and strip any .factory/
+    // the copy picked up (it will exist once this repo itself migrates).
+    writeFileSync(join(root, ADAPTER_DOC_PATH), readFileSync(V1_ADAPTER_DOC_SNAPSHOT_PATH));
+    rmSync(join(root, ".factory"), { recursive: true, force: true });
 
     git(["init", "-b", "main"], root);
     git(["config", "user.email", "v1repo@factory.local"], root);
