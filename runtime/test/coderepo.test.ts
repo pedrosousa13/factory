@@ -9,6 +9,10 @@ import {
   CLEAR_BRIEF_MARKER,
   IMPLEMENT_SHAPE,
   implementPrompt,
+  JOURNAL_CLAIM_BRANCH,
+  JOURNAL_CLAIM_RECORD,
+  journalClaimPrompt,
+  JOURNAL_CLAIM_TICKET,
   mkCodeRepo,
   rmCodeRepo,
   VAGUE_BRIEF,
@@ -88,4 +92,19 @@ test("CHECK_SHAPE is byte-identical to agentwork.ts's CheckResult declaration", 
   if (!match) throw new Error("could not find the CheckResult declaration in agentwork.ts");
 
   expect(CHECK_SHAPE).toBe(match[0].trimEnd());
+});
+
+// ───── journalClaimPrompt ↔ JOURNAL_CLAIM_RECORD
+
+// The sweep checks readJournal's result against JOURNAL_CLAIM_RECORD's
+// fields directly (not a re-typed literal), so what matters here is that the
+// prompt actually asks for that same record — a drift between the two would
+// void the L2 evidence.
+test("journalClaimPrompt asks for the ticket, branch, and exact record readJournal is checked against", () => {
+  const prompt = journalClaimPrompt();
+
+  expect(prompt).toContain(JOURNAL_CLAIM_TICKET);
+  expect(prompt).toContain(JOURNAL_CLAIM_BRANCH);
+  expect(prompt).toContain(JSON.stringify(JOURNAL_CLAIM_RECORD, null, 2));
+  expect(prompt).toContain("claim");
 });
