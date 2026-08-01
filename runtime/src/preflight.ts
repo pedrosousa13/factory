@@ -104,6 +104,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // reason differs. /factory-adopt is safe to re-run (PROTOCOL.md:97), writes
   // .factory/config.json at the current stamp version, and uses the same
   // section rules a migration step would.
+  //
   // A repo that already carries a stamp also carries files, so its fixes say
   // /factory-adopt will not clobber them. A never-adopted repo has nothing to
   // reassure, so it does not get the aside.

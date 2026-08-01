@@ -211,7 +211,7 @@ function main(): void {
         "expected drift",
         plan.docDiff.k,
         driftAsExpected,
-        driftAsExpected ? undefined : `CONTRADICTION: expected "other-difference"`,
+        plan.docDiff.k === "other-difference" ? plan.docDiff.detail : `CONTRADICTION: expected "other-difference"`,
       ),
     );
 
