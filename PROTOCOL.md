@@ -304,7 +304,7 @@ Then land it:
   change and linking the issue. No AI attribution in the commits or the PR.
 - If the repo has required checks, enable auto-merge and wait for green. If it
   has none, the Landing gate above *is* the green signal — merge immediately
-  (squash), delete the branch.
+  using the resolved method, delete the branch.
 - Mirror completion in the tracker: comment with the PR link, move the issue
   to a **completed** state.
 - Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
