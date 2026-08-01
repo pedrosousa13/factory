@@ -48,6 +48,17 @@
  * bin/planning.ts's steps 1, 4, and 6 exactly, reusing OPEN_ISSUES_QUESTION
  * and OPEN_ISSUES_SHAPE from fixture.ts rather than a second copy of either.
  *
+ * Then, slice 6's v1-to-v2 migration — a real copy of this repo's own v1
+ * stamp (conformance/v1repo.ts's mkV1Repo), migrated end to end: detect v1,
+ * plan, apply (config.json plus the adapter doc's adopt-theirs/retrofit
+ * offer), then a full preflight against the migrated copy. This is the PRD's
+ * L2 proof for the slice — "runs the post-migration preflight per harness" —
+ * and it reuses bin/migrate.ts's own shared material (v1repo.ts: the
+ * rendered template, the chosen merge-policy/attack-surface answers, and the
+ * tracker-reachable question) rather than a second copy of any of them. Every
+ * claim is checked against the migrated copy's own files on disk, never
+ * trusted from a plan field.
+ *
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
  * fails any check.
  *
@@ -56,7 +67,7 @@
  * THROWAWAY: no tests, no error handling beyond what keeps it runnable.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Answer, Ask, TicketFacts } from "../src/tracker";
 import { askWithRetry, buildPrompt, extractJson, type AskStatus, type Runner } from "../src/askloop";
@@ -65,6 +76,11 @@ import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "..
 import { breakdown, emptyQueueReport } from "../src/queuereport";
 import { checkAgent, type AgentAsk, type ImplementResult } from "../src/agentwork";
 import { parkCommentText, type ParkReason } from "../src/park";
+import { ADAPTER_DOC_PATH, CONFIG_PATH, gatherPreflightFacts, gatherStampFacts } from "../src/edges";
+import { pendingSteps, planMigration, renderV1ToV2Config, repoVersionOf } from "../src/migrate";
+import { preflight } from "../src/preflight";
+import { detectStamp } from "../src/stamp";
+import { STAMP_VERSION } from "../src/version";
 import {
   CLEAR_BRIEF,
   CLEAR_BRIEF_BRANCH,
@@ -75,6 +91,17 @@ import {
   mkCodeRepo,
   rmCodeRepo,
 } from "./coderepo";
+import {
+  CHOSEN_ATTACK_SURFACE,
+  CHOSEN_MERGE_POLICY,
+  mkFullSkillsHome,
+  mkV1Repo,
+  REACHABLE_SHAPE,
+  renderRealLinearAdapterDoc,
+  rmSkillsHome,
+  rmV1Repo,
+  TRACKER_REACHABLE_QUESTION,
+} from "./v1repo";
 import {
   CANDIDATES_SHAPE,
   CANDIDATES_QUESTION,
@@ -193,7 +220,9 @@ const PHRASEBOOK_PATH = join(DIR, "phrasebook.md");
 
 // ───────────────────────────────────────────────────────────────── prompt
 
-const REACHABLE_SHAPE = `type ReachableAnswer = { result: "ok" } | { result: "unreachable"; why: string };`;
+// REACHABLE_SHAPE and its question now live in ./v1repo — bin/migrate.ts's
+// post-migration preflight check below asks the identical question, and
+// duplicating the shape here would fork what the two hosts test.
 
 const VERIFY_SHAPE = `type VerifyAnswer =
   | { result: "ok"; state: "unstarted" | "started" | "parked" | "done" | "canceled"; claimedBy: string | null }
@@ -246,6 +275,14 @@ type HarnessRecord = {
   openIssuesOk: boolean; // every open ticket listed, T-6/T-7 present with labels intact
   breakdownOk: boolean; // emptyQueueReport's breakdown matches a count taken directly from the fixture files
   phrasebookInlinedOk: boolean; // the phrasebook text is present, byte-identical, in the actual prompt sent
+  // slice 6: v1-to-v2 migration against a real copy of this repo's own v1
+  // stamp (conformance/v1repo.ts's mkV1Repo), migrated end to end. The PRD's
+  // L2 proof for this slice: "runs the post-migration preflight per harness."
+  migrateDetectV1Ok: boolean; // the fixture copy detects as legacy-v1 before migration
+  migrateApplyOk: boolean; // config.json + adapter doc marker on disk, detectStamp no longer legacy-v1 — all verified against the fixture's own files
+  migrateReachable: AskStatus;
+  migrateReachableOk: boolean; // answer.result === "ok"
+  migratePreflightGreenOk: boolean; // full preflight against the migrated copy is green at the current stamp version
   reasks: number;
   totalMs: number;
   pass: boolean;
@@ -268,8 +305,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   };
 
   // ── reachable
-  const reachableQuestion = "Can this project's tracker be reached right now?";
-  const reachablePrompt = buildPrompt(reachableQuestion, phrasebook, REACHABLE_SHAPE);
+  const reachablePrompt = buildPrompt(TRACKER_REACHABLE_QUESTION, phrasebook, REACHABLE_SHAPE);
   const reachableStart = performance.now();
   const reachableLog = askWithRetry(runner, { k: "tracker.reachable" }, reachablePrompt);
   const reachableMs = Math.round(performance.now() - reachableStart);
@@ -534,6 +570,91 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
   const phrasebookInlinedOk = lastPrompt.includes(phrasebook);
   console.log(`  prompt-inlined skill delivery: ${phrasebookInlinedOk ? "present, byte-identical" : "missing or altered"}`);
 
+  // ── slice 6: v1-to-v2 migration — a real copy of this repo's own v1 stamp
+  // (conformance/v1repo.ts's mkV1Repo), migrated end to end: detect v1, plan,
+  // apply (config.json + the adapter doc's adopt-theirs/retrofit offer), then
+  // a full preflight against the migrated copy. Reuses bin/migrate.ts's own
+  // shared material (v1repo.ts) — the rendered template, the chosen
+  // merge-policy/attack-surface answers, and the tracker-reachable question —
+  // rather than a second copy of any of them. Every claim is checked against
+  // the fixture's own files on disk, never trusted from a plan field.
+  const migrateRepo = mkV1Repo();
+  const migrateSkillsHome = mkFullSkillsHome();
+  let migrateDetectV1Ok = false;
+  let migrateApplyOk = false;
+  let migrateReachableStatus: AskStatus = "failed";
+  let migrateReachableOk = false;
+  let migratePreflightGreenOk = false;
+  const migrateStart = performance.now();
+  try {
+    const preState = detectStamp(gatherStampFacts(migrateRepo.root));
+    migrateDetectV1Ok = preState.k === "legacy-v1";
+
+    const repoVersion = repoVersionOf(preState);
+    const chain = repoVersion === null ? [] : pendingSteps(repoVersion, STAMP_VERSION);
+    const renderedAdapterDoc = renderRealLinearAdapterDoc();
+    const currentAdapterDoc = readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8");
+    const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc });
+
+    mkdirSync(join(migrateRepo.root, ".factory"), { recursive: true });
+    writeFileSync(
+      join(migrateRepo.root, CONFIG_PATH),
+      renderV1ToV2Config({
+        tracker: plan.detectedTracker ?? "linear",
+        merge: CHOSEN_MERGE_POLICY,
+        attackSurface: CHOSEN_ATTACK_SURFACE,
+      }),
+    );
+    // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
+    // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
+    // same as bin/migrate.ts. missing-sections keeps the ordinary retrofit.
+    if (plan.docDiff.k === "other-difference") {
+      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), renderedAdapterDoc);
+    } else if (plan.docDiff.k === "missing-sections" && plan.retrofittedDoc !== null) {
+      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
+    }
+
+    const configOnDisk = JSON.parse(readFileSync(join(migrateRepo.root, CONFIG_PATH), "utf8"));
+    const markerPresent = /<!--\s*factory:tracker\s+kind=linear\s*-->/.test(
+      readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8"),
+    );
+    const postState = detectStamp(gatherStampFacts(migrateRepo.root));
+    migrateApplyOk =
+      configOnDisk.stampVersion === STAMP_VERSION &&
+      configOnDisk.tracker.kind === "linear" &&
+      configOnDisk.merge.policy === CHOSEN_MERGE_POLICY &&
+      configOnDisk.attackSurface === CHOSEN_ATTACK_SURFACE &&
+      markerPresent &&
+      postState.k === "v2" &&
+      postState.version === STAMP_VERSION;
+
+    // trackerReachable — the same probe the reachable check above already
+    // asks against the same local markdown tracker fixture, cwd unchanged
+    // (this file's own directory, where tracker/tickets/ actually sits).
+    const migrateReachablePrompt = buildPrompt(TRACKER_REACHABLE_QUESTION, phrasebook, REACHABLE_SHAPE);
+    const migrateReachableLog = askWithRetry(runner, { k: "tracker.reachable" }, migrateReachablePrompt);
+    migrateReachableStatus = migrateReachableLog.status;
+    const trackerReachable =
+      migrateReachableLog.status !== "failed"
+        ? migrateReachableLog.answer
+        : { result: "unreachable" as const, why: `harness ask failed: ${migrateReachableLog.whys[1]}` };
+    migrateReachableOk = trackerReachable.result === "ok";
+
+    const preflightFacts = gatherPreflightFacts(migrateRepo.root, {
+      trackerReachable,
+      home: migrateSkillsHome.home,
+    });
+    const verdict = preflight(preflightFacts);
+    migratePreflightGreenOk = verdict.ok && preflightFacts.stampVersion.repo === STAMP_VERSION;
+    console.log(
+      `  migrate v1->v2: detect=${migrateDetectV1Ok ? "yes" : "no"} apply=${migrateApplyOk ? "yes" : "no"} reachable=${migrateReachableStatus} preflight=${verdict.ok ? "green" : "red"} (expected green: ${migratePreflightGreenOk ? "yes" : "no"})`,
+    );
+  } finally {
+    rmSkillsHome(migrateSkillsHome.home);
+    rmV1Repo(migrateRepo.root);
+  }
+  const migrateMs = Math.round(performance.now() - migrateStart);
+
   // ── slice 3: agent.implement — CLEAR_BRIEF on a fresh scratch code repo,
   // done + work verified against the branch the brief told the agent to
   // commit on (not trusted from the "done" reply)
@@ -608,7 +729,8 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     contentionLog,
     openIssuesLog,
   ];
-  const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
+  const reasks =
+    asks.filter((l) => l.status === "valid-after-reask").length + (migrateReachableStatus === "valid-after-reask" ? 1 : 0);
   const totalMs =
     reachableMs +
     verifyMs +
@@ -624,6 +746,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     garbleMs +
     contentionMs +
     openIssuesMs +
+    migrateMs +
     clearMs +
     vagueMs;
 
@@ -651,6 +774,9 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     openIssuesOk &&
     breakdownOk &&
     phrasebookInlinedOk &&
+    migrateDetectV1Ok &&
+    migrateApplyOk &&
+    migratePreflightGreenOk &&
     implementDoneOk &&
     workVerifiedOk &&
     implementQuestionOk;
@@ -700,6 +826,11 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     openIssuesOk,
     breakdownOk,
     phrasebookInlinedOk,
+    migrateDetectV1Ok,
+    migrateApplyOk,
+    migrateReachable: migrateReachableStatus,
+    migrateReachableOk,
+    migratePreflightGreenOk,
     reasks,
     totalMs,
     pass,
@@ -757,6 +888,14 @@ function printTable(records: HarnessRecord[]): void {
     "ok?",
     "phrasebook",
     "ok?",
+    "migrate v1",
+    "ok?",
+    "migrate apply",
+    "ok?",
+    "migrate reachable",
+    "ok?",
+    "migrate preflight",
+    "ok?",
     "re-asks",
     "total s",
     "pass",
@@ -809,6 +948,14 @@ function printTable(records: HarnessRecord[]): void {
     r.breakdownOk ? "yes" : "no",
     "checked",
     r.phrasebookInlinedOk ? "yes" : "no",
+    r.migrateDetectV1Ok ? "detected" : "not detected",
+    r.migrateDetectV1Ok ? "yes" : "no",
+    "checked",
+    r.migrateApplyOk ? "yes" : "no",
+    r.migrateReachable,
+    r.migrateReachableOk ? "yes" : "no",
+    r.migratePreflightGreenOk ? "green" : "red",
+    r.migratePreflightGreenOk ? "yes" : "no",
     String(r.reasks),
     (r.totalMs / 1000).toFixed(1),
     r.pass ? "PASS" : "FAIL",
