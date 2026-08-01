@@ -180,6 +180,9 @@ The Queue is the set of this Project's issues that are:
 - labeled `ready-for-agent`, and
 - in an unstarted state, and
 - in scope (see "Queue scope" below), and
+- outside the reserved planning namespace ("Wayfinder maps" below) — a
+  `wayfinder:` or `planning:` labeled issue never enters the Queue, even
+  one that also carries `ready-for-agent`, and
 - **unblocked**: nothing that blocks them is still unfinished.
 
 **Queue scope**, chosen once at Session start, narrows which issues count:
@@ -226,6 +229,10 @@ check, are in `docs/agents/issue-tracker.md`.
   against.
 
 The loop never invents work, scoped or not.
+
+An interactive Session's empty-Queue report ends by noting that a fresh
+session can plan more work — the loop does not start one itself. A
+headless run stops with no such note.
 
 ### 2. State mirroring (pickup)
 

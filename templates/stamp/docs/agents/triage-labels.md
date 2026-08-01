@@ -129,6 +129,12 @@ rather than fixed in the sweep. Planning
 Sessions file it alongside the milestone's other issues; an adoption sweep
 proposes it where missing.
 
+A sweep skips every issue in the reserved planning namespace above: a
+wayfinder map or a PRD never touches the attack surface, so a sweep never
+treats one as though it did. Findings a sweep files are ordinary issues
+labeled `needs-triage`, never planning artifacts — a sweep never mints a
+`wayfinder:` or `planning:` label.
+
 The maintainer may rule the Project fails the test, or decline sweeps
 outright — recorded in this Project's `CONTEXT.md` with this exact marker
 line:

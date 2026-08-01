@@ -111,17 +111,26 @@ bullet per row. A `/factory` Loop Session needs every one of them.
   <n-or-title>` afterwards. Read a milestone's completion with `gh api
   repos/{{REPO}}/milestones/<n>` and its `open_issues` / `closed_issues`
   counts — GitHub reports no percentage, so compute one from the pair.
-- **Milestone issue counts**: one listing per state label: `gh issue list
-  -R {{REPO}} --state open --milestone <n> --label <state-label> --limit
-  500 --json number --jq 'length'`, run once for `ready-for-human`, once
-  for `needs-info`, and once for `ready-for-agent`. `--jq` counts
-  client-side, over whatever the listing already fetched, so `--limit` is
-  the real ceiling on the count: leave it off and the default of 30 pins
-  every larger milestone at exactly 30, and the empty-Queue report states
-  a wrong number without any sign that it did. This is deliberately not a
-  re-count of the Queue, which sees only `ready-for-agent`. The blocked
-  figure is the `ready-for-agent` count narrowed to those with an
-  unfinished blocker, by the same per-issue check as **Blocking** above.
+- **Milestone issue counts**: `gh issue list -R {{REPO}} --state all
+  --milestone <n> --limit 500 --json number,labels,state,stateReason`,
+  bucketed by state: **done** is `state=CLOSED` with
+  `stateReason=COMPLETED`; **canceled** is `state=CLOSED` with
+  `stateReason=NOT_PLANNED`; **started** is `state=OPEN` carrying
+  `in-progress`; among the rest (`state=OPEN`, no `in-progress`), a
+  `needs-info` label makes the issue **parked**, its absence makes it
+  **unstarted**. `--limit` is not optional here either: leave it off and
+  the default of 30 pins every larger milestone at exactly 30, and the
+  empty-Queue report states a wrong number without any sign that it did.
+  This is deliberately not a re-count of the Queue, which sees only
+  `ready-for-agent`.
+- **Open issues**: `gh issue list -R {{REPO}} --state open --milestone
+  <n-or-title> --limit 500 --json
+  number,title,labels,milestone,createdAt,assignees,subIssuesSummary`.
+  Drop `--milestone` entirely for an unscoped call. Every open issue,
+  unfiltered by label, unlike Queue listing above. Full ticket facts per
+  issue: `state` derived as under **Milestone issue counts** above,
+  `blockedBy` from the same sub-issue and body check as **Blocking**
+  above, `claimedBy` from `assignees`.
 - **Read an issue**: `gh issue view <n> -R {{REPO}} --json
   title,body,labels,milestone,state,stateReason,comments` — one call.
   `comments` is a valid `--json` field and returns each comment's author,

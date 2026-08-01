@@ -67,10 +67,21 @@ bullet per row. A `/factory` Loop Session needs every one of them.
   `list_milestones` returned. Read a milestone's completion with
   `get_milestone`'s `progress`.
 - **Milestone issue counts**: a second `list_issues` filtered by
-  `project: "Factory"` with no `ready-for-agent` filter, scoped to
-  the milestone client-side on `projectMilestone` and to Linear's open
-  states (everything but **Done** and **Canceled**), then bucketed by the
-  triage label each issue carries.
+  `project: "Factory"`, scoped to the milestone client-side on
+  `projectMilestone`, with no `ready-for-agent` filter and no state filter
+  — every issue in the milestone, open or closed — bucketed by state:
+  **started** is Linear's own **In Progress**; **done** and **canceled**
+  are Linear's own **Done** and **Canceled**; among the rest (**Todo** or
+  **Backlog**), a `needs-info` label makes the issue **parked**, its
+  absence makes it **unstarted**.
+- **Open issues**: `list_issues` filtered by `project: "Factory"`
+  and Linear's open states (everything but **Done** and **Canceled**), with
+  no `ready-for-agent` filter, scoped to the milestone client-side on
+  `projectMilestone` where one is given — drop that filter entirely for an
+  unscoped call. Full ticket facts per issue, whatever labels it carries
+  and whether or not it is ready: `state` derived as under **Milestone
+  issue counts** above, `blockedBy` from the same per-issue `get_issue`
+  check as **Blocking**, `claimedBy` from `assignee`.
 - **Read an issue**: `get_issue` (accepts `SIDEPRO-123` identifiers)
   for the body, then `list_comments` for the discussion — `get_issue` does
   not return comments, so reading an issue in full is always both calls.
