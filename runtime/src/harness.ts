@@ -9,6 +9,8 @@
  * bun harness.ts claude|codex|pi   — smoke test
  */
 
+import { join } from "node:path";
+
 // ──────────────────────────────────────────────────────────────────── types
 
 export type HarnessName = "claude" | "codex" | "pi";
@@ -53,9 +55,14 @@ function runClaude(prompt: string, cwd: string): HarnessRun {
 
 // ───────────────────────────────────────────────────────────────────── codex
 
+// codex's workspace-write sandbox leaves the workspace's own .git read-only,
+// so a worker asked to branch and commit reports back that it cannot. Claude
+// and pi have no such restriction; granting .git explicitly is what gives the
+// three harnesses the same capability, not a per-harness prompt concession.
 function runCodex(prompt: string, cwd: string): HarnessRun {
+  const gitWritable = `sandbox_workspace_write.writable_roots=[${JSON.stringify(join(cwd, ".git"))}]`;
   const { stdout, stderr, exit, ms } = spawn(
-    ["codex", "exec", prompt, "--json", "--skip-git-repo-check", "--sandbox", "workspace-write"],
+    ["codex", "exec", prompt, "--json", "--skip-git-repo-check", "--sandbox", "workspace-write", "-c", gitWritable],
     cwd,
   );
   let raw: string | undefined;

@@ -1,5 +1,5 @@
 /**
- * L2 conformance sweep — reachable, verify, and slice 2's asks.
+ * L2 conformance sweep — reachable, verify, and slice 2's and slice 3's asks.
  *
  * For each harness (claude, codex, pi): reset the local markdown tracker
  * fixture (the committed default three plus a fourth ticket, T-4, blocked by
@@ -13,6 +13,18 @@
  * T-9 reads back missing) is asserted with the pure pick functions from
  * runtime/src/pick.ts, not a further harness call. Claim/setState/unclaim are
  * verified against the fixture's own file, not trusted from the ask reply.
+ *
+ * Then, slice 3's agent.implement asks against a fresh scratch code repo
+ * (runtime/conformance/coderepo.ts) each: CLEAR_BRIEF, expecting a "done"
+ * reply whose WORK is verified on the branch the brief told the agent to
+ * commit on (file content, `bun check.ts`'s exit, the commit itself) rather
+ * than trusted from the reply; VAGUE_BRIEF on a fresh repo, expecting the
+ * question variant with a non-empty question. Answers are validated with
+ * `checkAgent()` from runtime/src/agentwork.ts, and — unlike the tracker asks
+ * above — each dispatch gets exactly one run, with a malformed or thrown reply
+ * counting as failed (PRD §2). Each scratch repo is removed on every path,
+ * success or failure.
+ *
  * Prints an honest per-harness scoreboard and exits non-zero if any harness
  * fails any check.
  *
@@ -24,9 +36,20 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Answer, TicketFacts } from "../src/tracker";
-import { askWithRetry, buildPrompt, type AskStatus, type Runner } from "../src/askloop";
+import { askWithRetry, buildPrompt, extractJson, type AskStatus, type Runner } from "../src/askloop";
 import { runHarness, type HarnessName } from "../src/harness";
 import { applyInvariants, foldReads, resolveBlocking, type ReadResult } from "../src/pick";
+import { checkAgent, type AgentAsk, type ImplementResult } from "../src/agentwork";
+import {
+  CLEAR_BRIEF,
+  CLEAR_BRIEF_BRANCH,
+  CLEAR_BRIEF_COMMIT,
+  CLEAR_BRIEF_MARKER,
+  VAGUE_BRIEF,
+  implementPrompt,
+  mkCodeRepo,
+  rmCodeRepo,
+} from "./coderepo";
 import {
   CANDIDATES_SHAPE,
   CANDIDATES_QUESTION,
@@ -44,6 +67,77 @@ import {
   unclaimQuestion,
   up,
 } from "./fixture";
+
+// ─────────────────────────────────────────────────── agent.implement asking
+//
+// The one-re-ask rule askWithRetry (askloop.ts) implements belongs to the
+// tracker's Ask vocabulary. PRD §2 gives agent.* the opposite rule: each
+// dispatch is one top-level headless run, and any parse or validation failure
+// counts as failed. bin/implement.ts already dispatches that way. Re-asking
+// here would be worse than inconsistent — the brief mutates a repo, so a
+// second send lands in a repo the first send already changed, and an agent
+// that finds the work done replies "done" for work this run never verified.
+
+type ImplementOutcome =
+  | { status: "valid"; answer: ImplementResult }
+  | { status: "failed"; why: string };
+
+function askImplementOnce(
+  runner: Runner,
+  ask: Extract<AgentAsk, { k: "agent.implement" }>,
+  prompt: string,
+): ImplementOutcome {
+  let raw: string;
+  try {
+    raw = runner(prompt).raw;
+  } catch (e) {
+    return { status: "failed", why: `harness threw: ${(e as Error).message}` };
+  }
+  const parsed = extractJson(raw);
+  if (parsed === null) return { status: "failed", why: "could not extract JSON from response" };
+  const checked = checkAgent(ask, parsed);
+  if (!checked.ok) return { status: "failed", why: checked.why };
+  return { status: "valid", answer: checked.answer as ImplementResult };
+}
+
+// ─────────────────────────────────────────────────────────── git (coderepo)
+
+
+function gitOut(args: string[], cwd: string): { stdout: string; exit: number } {
+  const proc = Bun.spawnSync(["git", ...args], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  return { stdout: proc.stdout.toString(), exit: proc.exitCode };
+}
+
+/** Verifies the WORK, not the word: switches to the branch CLEAR_BRIEF told the
+ * agent to commit on, then checks greet.ts's content, `bun check.ts`'s exit,
+ * and the commit's presence on that branch — never trusting the "done" reply. */
+function verifyClearBriefWork(root: string): { workOk: boolean; note: string } {
+  const switchRes = gitOut(["switch", CLEAR_BRIEF_BRANCH], root);
+  if (switchRes.exit !== 0) return { workOk: false, note: `git switch ${CLEAR_BRIEF_BRANCH} failed` };
+
+  // An agent can claim "done" and leave no greet.ts (deleted, renamed, wrong
+  // branch) — exactly what this sweep exists to catch. An uncaught ENOENT here
+  // would kill the process before the scoreboard prints, turning one harness's
+  // FAIL into no scoreboard at all.
+  let greetOk: boolean;
+  try {
+    greetOk = readFileSync(join(root, "greet.ts"), "utf8").includes(CLEAR_BRIEF_MARKER);
+  } catch {
+    return { workOk: false, note: "greet.ts unreadable on the branch" };
+  }
+  const checkExit = Bun.spawnSync(["bun", "check.ts"], {
+    cwd: root,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  }).exitCode;
+  const checkOk = checkExit === 0;
+  const log = gitOut(["log", "--oneline", "-10"], root).stdout;
+  const commitOk = log.includes(CLEAR_BRIEF_COMMIT);
+
+  const workOk = greetOk && checkOk && commitOk;
+  return { workOk, note: workOk ? "verified" : `greet=${greetOk} check=${checkOk} commit=${commitOk}` };
+}
 
 const DIR = import.meta.dir;
 const PHRASEBOOK_PATH = join(DIR, "phrasebook.md");
@@ -80,6 +174,11 @@ type HarnessRecord = {
   unclaim: AskStatus;
   unclaimOk: boolean; // answer.result === "ok"
   unclaimFileOk: boolean; // T-1.md claimedBy === null
+  implementDone: ImplementOutcome["status"];
+  implementDoneOk: boolean; // answer.result === "done"
+  workVerifiedOk: boolean; // greet.ts + bun check.ts + commit, all on CLEAR_BRIEF_BRANCH
+  implementQuestion: ImplementOutcome["status"];
+  implementQuestionOk: boolean; // answer.result === "question" && question non-empty
   reasks: number;
   totalMs: number;
   pass: boolean;
@@ -210,9 +309,75 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     `  unclaim T-1: ${unclaimLog.status}${unclaimLog.status === "failed" ? ` — ${unclaimLog.whys[1]}` : ""} (expected ok: ${unclaimOk ? "yes" : "no"}; file claimedBy=${claimedByAfterFile})`,
   );
 
+  // ── slice 3: agent.implement — CLEAR_BRIEF on a fresh scratch code repo,
+  // done + work verified against the branch the brief told the agent to
+  // commit on (not trusted from the "done" reply)
+  const clearRepo = mkCodeRepo();
+  let clearLog: ImplementOutcome;
+  let workVerifiedOk = false;
+  const clearStart = performance.now();
+  try {
+    const clearRunner: Runner = (prompt) => runHarness(harness, prompt, clearRepo.root);
+    const implementAsk: Extract<AgentAsk, { k: "agent.implement" }> = {
+      k: "agent.implement",
+      issue: "42-test",
+      branch: CLEAR_BRIEF_BRANCH,
+      brief: CLEAR_BRIEF,
+    };
+    clearLog = askImplementOnce(clearRunner, implementAsk, implementPrompt(CLEAR_BRIEF));
+    if (clearLog.status !== "failed" && clearLog.answer.result === "done") {
+      workVerifiedOk = verifyClearBriefWork(clearRepo.root).workOk;
+    }
+  } finally {
+    rmCodeRepo(clearRepo.root);
+  }
+  const clearMs = Math.round(performance.now() - clearStart);
+  const implementDoneOk = clearLog.status !== "failed" && clearLog.answer.result === "done";
+  console.log(
+    `  implement CLEAR_BRIEF: ${clearLog.status}${clearLog.status === "failed" ? ` — ${clearLog.why}` : ""} (expected done: ${implementDoneOk ? "yes" : "no"}; work verified: ${workVerifiedOk ? "yes" : "no"})`,
+  );
+
+  // ── slice 3: agent.implement — VAGUE_BRIEF on a fresh scratch code repo,
+  // question variant with a non-empty question
+  const vagueRepo = mkCodeRepo();
+  let vagueLog: ImplementOutcome;
+  const vagueStart = performance.now();
+  try {
+    const vagueRunner: Runner = (prompt) => runHarness(harness, prompt, vagueRepo.root);
+    const vagueAsk: Extract<AgentAsk, { k: "agent.implement" }> = {
+      k: "agent.implement",
+      issue: "42-test-vague",
+      branch: CLEAR_BRIEF_BRANCH,
+      brief: VAGUE_BRIEF,
+    };
+    vagueLog = askImplementOnce(vagueRunner, vagueAsk, implementPrompt(VAGUE_BRIEF));
+  } finally {
+    rmCodeRepo(vagueRepo.root);
+  }
+  const vagueMs = Math.round(performance.now() - vagueStart);
+  const implementQuestionOk =
+    vagueLog.status !== "failed" &&
+    vagueLog.answer.result === "question" &&
+    vagueLog.answer.question.trim().length > 0;
+  console.log(
+    `  implement VAGUE_BRIEF: ${vagueLog.status}${vagueLog.status === "failed" ? ` — ${vagueLog.why}` : ""} (expected question: ${implementQuestionOk ? "yes" : "no"})`,
+  );
+
+  // Only the tracker asks can re-ask; the agent.implement dispatches get one
+  // run each (PRD §2), so they cannot contribute to this count.
   const asks = [reachableLog, verifyLog, candidatesLog, readT1Log, readT9Log, claimLog, startedLog, unclaimLog];
   const reasks = asks.filter((l) => l.status === "valid-after-reask").length;
-  const totalMs = reachableMs + verifyMs + candidatesMs + readT1Ms + readT9Ms + claimMs + startedMs + unclaimMs;
+  const totalMs =
+    reachableMs +
+    verifyMs +
+    candidatesMs +
+    readT1Ms +
+    readT9Ms +
+    claimMs +
+    startedMs +
+    unclaimMs +
+    clearMs +
+    vagueMs;
 
   const pass =
     reachableOk &&
@@ -226,7 +391,10 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     setStateOk &&
     setStateFileOk &&
     unclaimOk &&
-    unclaimFileOk;
+    unclaimFileOk &&
+    implementDoneOk &&
+    workVerifiedOk &&
+    implementQuestionOk;
 
   return {
     harness,
@@ -250,6 +418,11 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     unclaim: unclaimLog.status,
     unclaimOk,
     unclaimFileOk,
+    implementDone: clearLog.status,
+    implementDoneOk,
+    workVerifiedOk,
+    implementQuestion: vagueLog.status,
+    implementQuestionOk,
     reasks,
     totalMs,
     pass,
@@ -282,6 +455,11 @@ function printTable(records: HarnessRecord[]): void {
     "unclaim",
     "ok?",
     "file?",
+    "implement-done",
+    "ok?",
+    "work?",
+    "implement-question",
+    "ok?",
     "re-asks",
     "total s",
     "pass",
@@ -309,6 +487,11 @@ function printTable(records: HarnessRecord[]): void {
     r.unclaim,
     r.unclaimOk ? "yes" : "no",
     r.unclaimFileOk ? "yes" : "no",
+    r.implementDone,
+    r.implementDoneOk ? "yes" : "no",
+    r.workVerifiedOk ? "yes" : "no",
+    r.implementQuestion,
+    r.implementQuestionOk ? "yes" : "no",
     String(r.reasks),
     (r.totalMs / 1000).toFixed(1),
     r.pass ? "PASS" : "FAIL",
