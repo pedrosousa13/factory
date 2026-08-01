@@ -21,6 +21,7 @@ function ticket(overrides: Partial<TicketFacts>): TicketFacts {
     state: "started",
     claimedBy: ACTOR,
     blockedBy: [],
+    labels: [],
     ...overrides,
   };
 }
