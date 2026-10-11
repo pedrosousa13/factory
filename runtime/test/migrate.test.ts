@@ -207,7 +207,7 @@ const V2_TO_V3: MigrationStep[] = [{ k: "v2-to-v3", version: "3.0.0" }];
 
 // v2-to-v3 touches no template section in these tests, so the adapter doc
 // and its rendered template are identical — the only thing under test is
-// `renames`/`glossaryConflicts`.
+// `renames`/`glossaryBlocks`.
 const V2_INPUT = { adapterDoc: LINEAR_V1_DOC, renderedAdapterDoc: LINEAR_V1_DOC };
 
 test("v2-to-v3 asks no new questions, and still writes config", () => {
@@ -220,13 +220,15 @@ test("v2-to-v3 asks no new questions, and still writes config", () => {
   expect(plan.writesConfig).toBe(true);
 });
 
+// ───── the root pair: CONTEXT.md / GLOSSARY.md
+
 test("CONTEXT.md present, GLOSSARY.md absent: plans the rename", () => {
   const plan = planMigration(V2_TO_V3, {
     ...V2_INPUT,
     glossaryFiles: { contextMd: true, contextMapMd: false, glossaryMd: false, glossaryMapMd: false },
   });
   expect(plan.renames).toEqual([{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
-  expect(plan.glossaryConflicts).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([]);
 });
 
 test("GLOSSARY.md already present, CONTEXT.md absent: idempotent, no rename", () => {
@@ -235,7 +237,7 @@ test("GLOSSARY.md already present, CONTEXT.md absent: idempotent, no rename", ()
     glossaryFiles: { contextMd: false, contextMapMd: false, glossaryMd: true, glossaryMapMd: false },
   });
   expect(plan.renames).toEqual([]);
-  expect(plan.glossaryConflicts).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([]);
 });
 
 test("neither CONTEXT.md nor GLOSSARY.md present: no rename — the glossary is created lazily", () => {
@@ -244,46 +246,78 @@ test("neither CONTEXT.md nor GLOSSARY.md present: no rename — the glossary is 
     glossaryFiles: { contextMd: false, contextMapMd: false, glossaryMd: false, glossaryMapMd: false },
   });
   expect(plan.renames).toEqual([]);
-  expect(plan.glossaryConflicts).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([]);
 });
 
-test("both CONTEXT.md and GLOSSARY.md present: a conflict, never overwritten, never renamed", () => {
+test("both CONTEXT.md and GLOSSARY.md present: a conflict block, never overwritten, never renamed, config not written", () => {
   const plan = planMigration(V2_TO_V3, {
     ...V2_INPUT,
     glossaryFiles: { contextMd: true, contextMapMd: false, glossaryMd: true, glossaryMapMd: false },
   });
   expect(plan.renames).toEqual([]);
-  expect(plan.glossaryConflicts).toEqual([{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
+  expect(plan.glossaryBlocks).toEqual([{ k: "conflict", from: "CONTEXT.md", to: "GLOSSARY.md" }]);
+  expect(plan.writesConfig).toBe(false);
 });
 
-test("the CONTEXT-MAP.md / GLOSSARY-MAP.md pair follows the same three rules, independently of the glossary pair", () => {
-  const rename = planMigration(V2_TO_V3, {
+// ───── the map pair: a multi-context repo is never auto-migrated
+
+test("CONTEXT-MAP.md present: a multi-context block, nothing renamed for the map pair, config not written", () => {
+  const plan = planMigration(V2_TO_V3, {
     ...V2_INPUT,
     glossaryFiles: { contextMd: false, contextMapMd: true, glossaryMd: false, glossaryMapMd: false },
   });
-  expect(rename.renames).toEqual([{ from: "CONTEXT-MAP.md", to: "GLOSSARY-MAP.md" }]);
+  expect(plan.renames).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([{ k: "multi-context" }]);
+  expect(plan.writesConfig).toBe(false);
+});
 
-  const conflict = planMigration(V2_TO_V3, {
+test("CONTEXT-MAP.md present alongside GLOSSARY-MAP.md: still a multi-context block, not a conflict", () => {
+  const plan = planMigration(V2_TO_V3, {
     ...V2_INPUT,
     glossaryFiles: { contextMd: false, contextMapMd: true, glossaryMd: false, glossaryMapMd: true },
   });
-  expect(conflict.renames).toEqual([]);
-  expect(conflict.glossaryConflicts).toEqual([{ from: "CONTEXT-MAP.md", to: "GLOSSARY-MAP.md" }]);
+  expect(plan.renames).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([{ k: "multi-context" }]);
 });
 
-test("both pairs can resolve differently in the same plan: one renamed, the other a conflict", () => {
+test("only GLOSSARY-MAP.md present, no CONTEXT-MAP.md: nothing to do", () => {
   const plan = planMigration(V2_TO_V3, {
     ...V2_INPUT,
-    glossaryFiles: { contextMd: true, contextMapMd: true, glossaryMd: false, glossaryMapMd: true },
+    glossaryFiles: { contextMd: false, contextMapMd: false, glossaryMd: false, glossaryMapMd: true },
   });
-  expect(plan.renames).toEqual([{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
-  expect(plan.glossaryConflicts).toEqual([{ from: "CONTEXT-MAP.md", to: "GLOSSARY-MAP.md" }]);
+  expect(plan.renames).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([]);
+});
+
+// ───── the two pairs combine: the map's block withholds the root rename too
+
+test("CONTEXT.md alone (root renamable) plus CONTEXT-MAP.md (multi-context): the root rename is withheld, not applied on its own", () => {
+  const plan = planMigration(V2_TO_V3, {
+    ...V2_INPUT,
+    glossaryFiles: { contextMd: true, contextMapMd: true, glossaryMd: false, glossaryMapMd: false },
+  });
+  expect(plan.renames).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([{ k: "multi-context" }]);
+  expect(plan.writesConfig).toBe(false);
+});
+
+test("both pairs blocked at once: a root conflict and a multi-context repo, both reported, nothing renamed", () => {
+  const plan = planMigration(V2_TO_V3, {
+    ...V2_INPUT,
+    glossaryFiles: { contextMd: true, contextMapMd: true, glossaryMd: true, glossaryMapMd: false },
+  });
+  expect(plan.renames).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([
+    { k: "conflict", from: "CONTEXT.md", to: "GLOSSARY.md" },
+    { k: "multi-context" },
+  ]);
+  expect(plan.writesConfig).toBe(false);
 });
 
 test("omitting glossaryFiles entirely reads as neither name existing — harmless when no rename is wanted", () => {
   const plan = planMigration(V2_TO_V3, V2_INPUT);
   expect(plan.renames).toEqual([]);
-  expect(plan.glossaryConflicts).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([]);
 });
 
 test("a v1 repo's combined chain plans the glossary rename alongside the v1-to-v2 retrofit — one plan, one diff, one approval", () => {
@@ -300,6 +334,17 @@ test("a v1 repo's combined chain plans the glossary rename alongside the v1-to-v
   // v2-to-v3's rename rides along in the same plan.
   expect(plan.renames).toEqual([{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
   expect(plan.writesConfig).toBe(true);
+});
+
+test("a v1 repo whose glossary is blocked writes no config at all, even though v1-to-v2 has its own work ready", () => {
+  const plan = planMigration(pendingSteps("1.0.0", STAMP_VERSION), {
+    adapterDoc: LINEAR_V1_DOC_MISSING_CONVENTIONS,
+    renderedAdapterDoc: LINEAR_V1_DOC,
+    glossaryFiles: { contextMd: true, contextMapMd: false, glossaryMd: true, glossaryMapMd: false },
+  });
+  expect(plan.renames).toEqual([]);
+  expect(plan.glossaryBlocks).toEqual([{ k: "conflict", from: "CONTEXT.md", to: "GLOSSARY.md" }]);
+  expect(plan.writesConfig).toBe(false);
 });
 
 // ───── renderV1ToV2Config
@@ -385,6 +430,13 @@ test("renderStampBump preserves notifierCommand and keys it doesn't itself know 
   expect(parsed.stampVersion).toBe(STAMP_VERSION);
   expect(parsed.notifierCommand).toBe("notify-send");
   expect(parsed.somethingFutureFactoryAddedLater).toBe(42);
+});
+
+test("renderStampBump throws a clear error when the parsed JSON is not a plain object", () => {
+  expect(() => renderStampBump("[1, 2, 3]")).toThrow(/not a JSON object/);
+  expect(() => renderStampBump("null")).toThrow(/not a JSON object/);
+  expect(() => renderStampBump('"a string"')).toThrow(/not a JSON object/);
+  expect(() => renderStampBump("42")).toThrow(/not a JSON object/);
 });
 
 test("renderStampBump's output parses as a valid config", () => {

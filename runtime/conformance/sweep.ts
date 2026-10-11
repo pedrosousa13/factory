@@ -625,62 +625,74 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     const glossaryFiles = gatherGlossaryFacts(migrateRepo.root);
     const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc, glossaryFiles });
 
-    // Write order is load-bearing, not stylistic: documents FIRST (the
-    // adapter doc, the glossary rename), config.json LAST. config.json is
-    // the stamp, so writing it last makes it the step's single commit
-    // point — a crash before it leaves the repo at legacy-v1 and the whole
-    // step re-runs idempotently. The reverse order strands a repo stamped v2
-    // whose doc was never retrofitted, which no later run can detect (see
-    // src/migrate.ts's header). bin/migrate.ts writes in this same order.
-    //
-    // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
-    // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
-    // same as bin/migrate.ts. missing-sections keeps the ordinary retrofit.
-    if (plan.docDiff.k === "other-difference") {
-      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), renderedAdapterDoc);
-    } else if (plan.docDiff.k === "missing-sections" && plan.retrofittedDoc !== null) {
-      writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
+    // A glossaryBlock (a root conflict, or a multi-context repo) stops the
+    // whole step: planMigration already emptied `renames` and set
+    // `writesConfig` false for exactly this reason (src/migrate.ts). This
+    // host honors that by skipping every write — adapter doc, glossary
+    // rename, config.json alike — the same as bin/migrate.ts. mkV1Repo's
+    // fixture never carries a block, so reaching here is itself a failure,
+    // caught by migrateApplyOk staying false.
+    if (plan.glossaryBlocks.length > 0) {
+      console.log(
+        `  glossary block(s), no writes applied: ${plan.glossaryBlocks
+          .map((b) => (b.k === "conflict" ? `both ${b.from} and ${b.to} exist` : "multi-context repo"))
+          .join("; ")}`,
+      );
+    } else {
+      // Write order is load-bearing, not stylistic: documents FIRST (the
+      // adapter doc, the glossary rename), config.json LAST. config.json is
+      // the stamp, so writing it last makes it the step's single commit
+      // point — a crash before it leaves the repo at its old stamp and the
+      // whole step re-runs idempotently. The reverse order strands a repo
+      // stamped v2 whose doc was never retrofitted, which no later run can
+      // detect (see src/migrate.ts's header). bin/migrate.ts writes in this
+      // same order.
+      //
+      // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
+      // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
+      // same as bin/migrate.ts. missing-sections keeps the ordinary retrofit.
+      if (plan.docDiff.k === "other-difference") {
+        writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), renderedAdapterDoc);
+      } else if (plan.docDiff.k === "missing-sections" && plan.retrofittedDoc !== null) {
+        writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
+      }
+
+      // The glossary rename rides alongside the adapter doc write, still
+      // ahead of config.json.
+      applyGlossaryRenames(migrateRepo.root, plan.renames);
+
+      mkdirSync(join(migrateRepo.root, ".factory"), { recursive: true });
+      writeFileSync(
+        join(migrateRepo.root, CONFIG_PATH),
+        renderV1ToV2Config({
+          tracker: plan.detectedTracker ?? "linear",
+          merge: CHOSEN_MERGE_POLICY,
+          attackSurface: CHOSEN_ATTACK_SURFACE,
+        }),
+      );
+
+      const configOnDisk = JSON.parse(readFileSync(join(migrateRepo.root, CONFIG_PATH), "utf8"));
+      const configKeys = Object.keys(configOnDisk).sort().join(",");
+      const markerPresent = /<!--\s*factory:tracker\s+kind=linear\s*-->/.test(
+        readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8"),
+      );
+      const postState = detectStamp(gatherStampFacts(migrateRepo.root));
+      // v2-to-v3's own file-on-disk proof: this repo's real v1 fixture
+      // genuinely carries CONTEXT.md, so a correct migration leaves
+      // GLOSSARY.md behind and CONTEXT.md gone, with no block surfaced.
+      const glossaryRenamedOk =
+        existsSync(join(migrateRepo.root, "GLOSSARY.md")) && !existsSync(join(migrateRepo.root, "CONTEXT.md"));
+      migrateApplyOk =
+        configKeys === "attackSurface,merge,stampVersion,tracker" &&
+        configOnDisk.stampVersion === STAMP_VERSION &&
+        configOnDisk.tracker.kind === "linear" &&
+        configOnDisk.merge.policy === CHOSEN_MERGE_POLICY &&
+        configOnDisk.attackSurface === CHOSEN_ATTACK_SURFACE &&
+        markerPresent &&
+        postState.k === "v2" &&
+        postState.version === STAMP_VERSION &&
+        glossaryRenamedOk;
     }
-
-    // The glossary rename rides alongside the adapter doc write, still ahead
-    // of config.json. A conflict (both CONTEXT.md and GLOSSARY.md present)
-    // is never auto-resolved — plan.renames is empty in that case, so this
-    // call is a no-op and migrateApplyOk below catches the unresolved state.
-    applyGlossaryRenames(migrateRepo.root, plan.renames);
-
-    mkdirSync(join(migrateRepo.root, ".factory"), { recursive: true });
-    writeFileSync(
-      join(migrateRepo.root, CONFIG_PATH),
-      renderV1ToV2Config({
-        tracker: plan.detectedTracker ?? "linear",
-        merge: CHOSEN_MERGE_POLICY,
-        attackSurface: CHOSEN_ATTACK_SURFACE,
-      }),
-    );
-
-    const configOnDisk = JSON.parse(readFileSync(join(migrateRepo.root, CONFIG_PATH), "utf8"));
-    const configKeys = Object.keys(configOnDisk).sort().join(",");
-    const markerPresent = /<!--\s*factory:tracker\s+kind=linear\s*-->/.test(
-      readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8"),
-    );
-    const postState = detectStamp(gatherStampFacts(migrateRepo.root));
-    // v2-to-v3's own file-on-disk proof: this repo's real v1 fixture
-    // genuinely carries CONTEXT.md, so a correct migration leaves
-    // GLOSSARY.md behind and CONTEXT.md gone, with no conflict surfaced.
-    const glossaryRenamedOk =
-      plan.glossaryConflicts.length === 0 &&
-      existsSync(join(migrateRepo.root, "GLOSSARY.md")) &&
-      !existsSync(join(migrateRepo.root, "CONTEXT.md"));
-    migrateApplyOk =
-      configKeys === "attackSurface,merge,stampVersion,tracker" &&
-      configOnDisk.stampVersion === STAMP_VERSION &&
-      configOnDisk.tracker.kind === "linear" &&
-      configOnDisk.merge.policy === CHOSEN_MERGE_POLICY &&
-      configOnDisk.attackSurface === CHOSEN_ATTACK_SURFACE &&
-      markerPresent &&
-      postState.k === "v2" &&
-      postState.version === STAMP_VERSION &&
-      glossaryRenamedOk;
 
     // trackerReachable reuses the reachable check already run above (same
     // question, shape, runner, cwd, and fixture) rather than asking again: the

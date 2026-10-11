@@ -41,7 +41,7 @@ Run `/factory-adopt` inside the repo. It will:
 
 ## Already stamped, out of date
 
-Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — the legacy v1 stamp (an adapter doc with a `Factory loop operations` section, no `.factory/config.json`), or a v2 stamp below the plugin's current version — is migrated, not re-adopted. The skill detects the stamp, builds one combined plan for every pending step, shows one diff, and takes one approval. The v1-to-v2 step reads the tracker off the old adapter doc's title for one-tap confirmation and asks only what the old stamp cannot answer: merge policy and attack surface. Preflight names this skill whenever it finds a stale stamp, and `/factory` offers to run it at session start. `PROTOCOL.md`, "Migration", is the contract.
+Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — the legacy v1 stamp (an adapter doc with a `Factory loop operations` section, no `.factory/config.json`), or a v2 stamp below the plugin's current version — is migrated, not re-adopted. The skill detects the stamp, builds one combined plan for every pending step, shows one diff, and takes one approval. The v1-to-v2 step reads the tracker off the old adapter doc's title for one-tap confirmation and asks only what the old stamp cannot answer: merge policy and attack surface. The v2-to-v3 step renames `CONTEXT.md` to `GLOSSARY.md`, the name upstream skills now read, and asks nothing. Preflight names this skill whenever it finds a stale stamp. `/factory` routes into it in the same session, and the one-diff approval still applies. `PROTOCOL.md`, "Migration", is the contract.
 
 ## Conventions all projects share
 
@@ -59,7 +59,7 @@ What the Factory assumes on the machine:
 
 1. **Claude Code**, plus the **Linear MCP server** connected to the Side projects workspace for any Linear-backed Project.
 2. **`gh`** authenticated, git over SSH.
-3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, …) installed under `~/.claude/skills`, as editable copies via `npx skills@latest add mattpocock/skills` (update with `npx skills@latest update`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
+3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, …) installed under `~/.claude/skills` (`/pr` and `/retro` too, used at landing and at run-out when present), as editable copies via `npx skills@latest add mattpocock/skills -g` (update with `npx skills@latest update`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
 
    Install superpowers yourself — the Factory's manifest declares no
    dependency on it, on purpose. A manifest dependency names a marketplace

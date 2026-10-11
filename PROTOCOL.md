@@ -27,7 +27,7 @@ Each failure names what's missing, why the Factory needs it, and the exact
 fix — never a bare "preflight failed." Shape:
 
 > `/code-review` not found. The Landing gate cannot run without it. Install with
-> `/setup-matt-pocock-skills`.
+> `npx skills@latest add mattpocock/skills -g`.
 
 - **Issue tracker reachable.** Read `docs/agents/issue-tracker.md` and run
   the reachability check *that file documents* — never hardcode a tracker
@@ -43,14 +43,18 @@ fix — never a bare "preflight failed." Shape:
 - **Dependent skills present**: `/code-review`, `/handoff`, `/triage`,
   `/domain-modeling`, each of which must exist at `~/.claude/skills/<name>/`
   — that path, not the skill's source location, is what makes a skill
-  invocable in a session. `/setup-matt-pocock-skills` installs the four as
-  symlinks there, pointing at `~/.agents/skills/<name>/`; check the
+  invocable in a session. `npx skills@latest add mattpocock/skills -g`
+  installs the four as symlinks there, pointing at
+  `~/.agents/skills/<name>/`; check the
   `~/.claude/skills/` path itself; a missing or broken symlink there leaves
   the skill unavailable even if the `~/.agents/skills/` source exists.
   Failure, per missing skill: name it, name what it's for (`/code-review`
   gates Landing, `/handoff` bridges a Context Budget stop, `/triage` runs
-  Adoption's re-triage sweep and the loop's Triage pass, `/domain-modeling` maintains `GLOSSARY.md`), fix
-  with `/setup-matt-pocock-skills`.
+  Adoption's re-triage sweep and the loop's Triage pass, `/domain-modeling`
+  maintains `GLOSSARY.md`), fix with `npx skills@latest add
+  mattpocock/skills -g` (update an old install with `npx skills@latest
+  update -g`). `/setup-matt-pocock-skills` is per-repo configuration, not
+  this install.
 - **superpowers available**: `superpowers:subagent-driven-development` and
   `superpowers:test-driven-development`, both required by Implementation
   (below). This Preflight check is the *only* thing that guarantees them —
@@ -103,7 +107,8 @@ that is the Invocation section's business, below.
 `/factory` takes one optional argument, a Queue scope: a milestone name,
 `everything`, or `no-milestone`. A bare `/factory` means **Everything**. A
 name that matches no milestone is a question, not an error: ask with the
-Session start menu (step 3). The argument only sets the scope. It never
+Session start menu (step 3). In a Project with no milestones, say that the
+argument was ignored, and run the whole Queue. The argument only sets the scope. It never
 decides what the session does.
 
 The session finds the next step itself. It walks the routes below in order,
@@ -120,8 +125,8 @@ question `/factory` never asks.
 
 Routing into adopt or migrate does not skip their approval gates. Each
 still shows its plan and waits for the maintainer's approval: an adopt
-batch, a migrate diff. A headless run takes none of these routes. It reports
-the route it would have taken, and stops.
+batch, a migrate diff. A headless run never routes into adopt or migrate.
+It reports the route it would have taken, and stops.
 
 The loop then runs until it **runs out**: the Queue is empty after a Triage
 pass (below). In an interactive session, running out is not the end. The
@@ -137,8 +142,9 @@ in every skill: the loop, `/factory-new`, `/factory-adopt`,
 
 - **Structured.** Ask through the harness's structured-question tool. In
   Claude Code, that is `AskUserQuestion`. Batch the questions that do not
-  depend on each other into one call, up to four. A question that depends
-  on an open answer waits for a later call.
+  depend on each other, up to four per call; more than four take several
+  calls in a row. A question that depends on an open answer waits for a
+  later call.
 - **Researched recommendation first.** Before asking, find the facts
   yourself: the repo, the tracker, `GLOSSARY.md`, the ADRs, the upstream
   docs. Never ask the maintainer for a fact you can look up. Put the option
@@ -171,12 +177,16 @@ The loop triages when it needs to. It does not triage on a schedule.
 **When.** At exactly two points:
 
 1. **The Queue runs out.** Queue selection finds no issue. Before it
-   reports an empty Queue, run a Triage pass, then run Queue selection
-   again. Report the Queue as empty only when it is still empty after the
-   pass.
+   reports an empty Queue, run a full Triage pass, then run Queue selection
+   again. Run at most one pass per run-out: if the Queue is still empty
+   after it, go straight to the report.
 2. **An issue just landed that filed new reports.** For example, a security
-   sweep files its findings as `needs-triage`. Run the pass at that Issue
-   boundary, after the Context Budget check.
+   sweep files its findings as `needs-triage`. At that Issue boundary, run
+   a **quiet** pass, before the Context Budget check. A quiet pass applies
+   only what it may apply without asking, and asks nothing. A structured
+   question blocks the turn with no timeout, and mid-loop that would stall
+   the loop (see "Asking the maintainer"). The items that need an answer
+   stay at `needs-triage`. The next run-out pass asks about them.
 
 Nothing else starts a pass. A pass with nothing to do costs one listing:
 when no open issue carries `needs-triage`, and no open issue outside the
@@ -186,7 +196,10 @@ reserved planning namespace lacks a state label, skip it and say nothing.
 human-invoke-only. The session reads its SKILL.md and applies the
 instructions directly, the same as for `/handoff`. It uses this Project's
 `docs/agents/triage-labels.md` and Tracker adapter. Wayfinder issues are
-skipped, as by every sweep (see "Wayfinder maps").
+skipped, as by every sweep (see "Wayfinder maps"). The pass does not run
+the skill's interactive grilling step. An issue that needs grilling goes
+into the ask batch instead, with the open question as its recommendation's
+context.
 
 **What it applies without asking.** These are the calls the evidence
 settles: the category label, a milestone that the issue's own scope
@@ -197,10 +210,10 @@ and Park).
 **What it asks.** These are the calls that decide what gets built:
 promotion to `ready-for-agent` (with the agent brief written into the
 issue) or to `ready-for-human`, `wontfix`, and any milestone the evidence
-does not settle. Put them to the maintainer as one batch, in the shape of
-"Asking the maintainer". Each issue gets its own question with a
-recommended answer. A headless run applies only what it may apply without
-asking, and leaves the rest at `needs-triage`.
+does not settle. A full pass puts them to the maintainer in batches, in the
+shape of "Asking the maintainer". Each issue gets its own question with a
+recommended answer. A quiet pass, or a headless run, applies only what it
+may apply without asking, and leaves the rest at `needs-triage`.
 
 The Triage pass is how an issue enters the Queue mid-session. It never
 writes a new issue. Planning is still the only place that new work is
@@ -368,18 +381,25 @@ The loop never invents work, scoped or not.
 
 After the report, an interactive session goes on to the next step:
 planning. If the Context Budget is spent, write a Handoff and stop as
-usual. The next `/factory` resumes there. Otherwise, first run a
-retrospective, if this session landed or Parked at least one issue. The
-`/retro` skill (`~/.claude/skills/retro`) is human-invoke-only, so read its
-SKILL.md and apply it directly to this session. Its findings are changes to
-the agent's environment: checks, navigation pointers, coding standards.
-They become candidates for planning. The retrospective files nothing
-itself. Then open a Planning Session in this session. Start by asking what to plan, in the shape of
+usual. Note in it that the session ran out, and whether a retrospective is
+pending. The next `/factory` resumes there. Otherwise, first run a
+retrospective, if this session landed or Parked at least one issue, or the
+Handoff it consumed says one is pending. The `/retro` skill
+(`~/.claude/skills/retro`) is human-invoke-only, so read its SKILL.md and
+apply it directly to this session, and to the sessions the Handoff names.
+If it is not installed, skip it and say so. Its findings are changes to the
+agent's environment: checks, navigation pointers, coding standards. They
+become candidates for planning. The retrospective files nothing itself.
+Then open a Planning Session in this session. Start by asking what to plan, in the shape of
 "Asking the maintainer". Base the recommendation on the report you just
 made and on the tracker. Candidates are a scoped milestone's remaining
 non-agent work, the frontier of an open wayfinder map, the next milestone
-with no issues yet, and the retrospective's findings. The maintainer creates the work there. The
-loop does not create it. A headless run stops after the report.
+with no issues yet, and the retrospective's findings. The maintainer
+creates the work there. The loop does not create it. When the Planning
+Session ends, check the Context Budget. Over budget → write a Handoff and
+stop. Under → return to Queue selection, with a fresh run-out allowance:
+the issues the maintainer just made `ready-for-agent` are the Queue now. A
+headless run stops after the report.
 
 ### 2. State mirroring (pickup)
 
@@ -459,10 +479,11 @@ Overwrite the journal: `step: "issue-boundary"`.
 
 After each issue lands or is Parked:
 
-1. **Context Budget check**: above ~40% of the context window → write a
+1. **Quiet triage, if this issue filed reports.** If the issue that just
+   landed filed new `needs-triage` issues, run a quiet Triage pass (see
+   "Triage pass"). It asks nothing.
+2. **Context Budget check**: above ~40% of the context window → write a
    Handoff and stop (mechanics in the Handoff section below).
-2. **Triage, if this issue filed reports.** If the issue that just landed
-   filed new `needs-triage` issues, run a Triage pass (see "Triage pass").
 3. **If this issue was resumed from a Pause note at Session start**, and
    Session start step 2 has not run yet this session, run it now: consume
    the newest Handoff, if any (mechanics in the Handoff section below).
@@ -595,8 +616,9 @@ whenever it likes, not when the session chooses to check.
 How a Loop Session bridges to the next one when its Context Budget is spent:
 
 - **Issue boundaries only.** A Handoff is written after an issue lands or is
-  Parked, never mid-issue. The boundary guarantees the previous issue landed
-  or was Parked cleanly, so a Handoff never carries half-done work.
+  Parked, or when the loop runs out with no issue in flight, never
+  mid-issue. The boundary guarantees no issue is half-done, so a Handoff
+  never carries half-done work.
 - **Follow the `/handoff` skill** (machine-level, at
   `~/.claude/skills/handoff` — it is human-invoke-only, so the session
   reads its SKILL.md and applies the instructions directly), with two
@@ -608,7 +630,9 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
     The fixed-width prefix is what makes "newest" — last in lexicographic
     order, as Session start reads it — correct.
 - **Contents**: where the Queue stood, decisions made, and facts not
-  recoverable from the artifacts (issues, commits, PRs, docs). Reference,
+  recoverable from the artifacts (issues, commits, PRs, docs). A Handoff
+  written at run-out also says so, and whether a retrospective is pending
+  (see Queue selection, "Empty Queue"). Reference,
   don't duplicate, what the artifacts already hold — the skill's own rule.
 - **Then stop.** Send the maintainer a push notification (one line: Handoff
   written, fresh session needed) and stop cleanly. Resuming is just running
@@ -787,7 +811,7 @@ stamping skill fills their placeholders rather than hand-writing conventions.
 | Domain docs | `GLOSSARY.md` + `docs/adr/`, created lazily |
 | Scratch | `.scratch/` gitignored; Handoffs in `.scratch/handoffs/`, Pause note at `.scratch/pause-note.md` |
 | Git | Branch per issue → PR → merge on green; no direct commits to the default branch |
-| Config | `.factory/config.json`, committed; `stampVersion` current means stamped for v2 — see "## Prerequisites: a stamped Project repo" |
+| Config | `.factory/config.json`, committed; `stampVersion` current means stamped and current — see "## Prerequisites: a stamped Project repo" |
 
 ## Migration
 
@@ -829,14 +853,29 @@ silent default (see "Asking the maintainer"). Applying the step then writes `con
 retrofits the missing sections, and sets the stamp version.
 
 **The v2 to v3 step renames the glossary.** Upstream skills (`domain-modeling`, `triage`,
-`tdd`, and others) now read `GLOSSARY.md` and `GLOSSARY-MAP.md`, not `CONTEXT.md` and
-`CONTEXT-MAP.md`. The step renames each old file that exists with `git mv`, together with the
-documents and before `config.json`. It retrofits the templates that name the glossary, and
-it bumps `stampVersion`. Every other `config.json` field stays as it is. The step asks
-nothing. When neither file exists, there is nothing to rename: the glossary is created
-lazily. When both the old and the new name exist, the step renames neither and overwrites
-neither. The plan reports the conflict, and the maintainer merges the two by hand. A v1 repo
-takes both steps in one plan.
+`tdd`, and others) now read `GLOSSARY.md`, not `CONTEXT.md`. The step does three things, and
+asks nothing:
+
+- It renames `CONTEXT.md` to `GLOSSARY.md` with `git mv`. When neither exists, there is
+  nothing to rename: the glossary is created lazily.
+- In `AGENTS.md`, `docs/agents/domain.md`, and `docs/agents/triage-labels.md`, it replaces
+  the token `CONTEXT.md` with `GLOSSARY.md`, and `CONTEXT-MAP.md` with `GLOSSARY-MAP.md`.
+  That substitution is the whole v3 change to those files. It is not a template retrofit,
+  so it never raises the adopt section rules' keep-mine choice: a file that kept the old
+  name would point at a glossary the same run renamed away.
+- It bumps `stampVersion`. Every other `config.json` field stays as it is.
+
+Renames and substitutions land with the documents, before `config.json`. Two cases block
+the step instead. The plan reports them, the run writes nothing, and the stamp stays at its
+old version until a re-run finds them resolved:
+
+- **Both `CONTEXT.md` and `GLOSSARY.md` exist.** The step renames neither and overwrites
+  neither. The maintainer merges the two by hand.
+- **`CONTEXT-MAP.md` exists** (a multi-context repo). The map and the per-context
+  glossaries it lists, and the links between them, are the maintainer's to rename by hand.
+  The step does not automate them.
+
+A v1 repo takes both steps in one plan.
 
 **A stale stamp blocks autonomous execution only.** Preflight reports it as a failure that
 stops execution and not planning. Planning skills stay available, because they read the

@@ -571,6 +571,9 @@ sweep-specific rules.
 Once both phases are complete and verified, the project is loop-ready — tell
 the maintainer their next command is `/factory` there. Don't run it for
 them; starting the Loop Session is a separate, maintainer-initiated step.
+The one exception: when `/factory` routed here (`PROTOCOL.md`, "## Invocation:
+what `/factory` does next"), the maintainer already started it. Return to
+its re-check.
 
 ## Hard rules
 

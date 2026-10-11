@@ -78,14 +78,18 @@ function breakdownLine(b: OpenBreakdown): string {
   return `  ${b.open} open, ${b.readyForHuman} ready-for-human, ${b.needsInfo} needs-info, ${b.blocked} blocked`;
 }
 
-// PRD §4: an interactive run offers planning and ends; a headless run prints
-// the same report and stops, with no offer. Both are terminal — "the loop must
-// never create work. Ending makes that property structural, not a promise."
+// PROTOCOL.md "### 1. Queue selection": an interactive run goes on to run a
+// retrospective (when this session landed or Parked at least one issue) and
+// then open a Planning Session, in the same session, budget permitting — not
+// a fresh session, and not an end to the run. A headless run prints the same
+// report and stops, with no offer. The loop itself is still terminal either
+// way — "the loop must never create work. Ending makes that property
+// structural, not a promise" — it is only the session that carries on.
 function exitLines(mode: "interactive" | "headless"): { exit: QueueExit; lines: string[] } {
   if (mode === "headless") return { exit: { k: "stop" }, lines: ["  run ends here."] };
   return {
     exit: { k: "offer-planning" },
-    lines: ["  Nothing left to consume. To plan more work, start a fresh session.", "", "  run ends here."],
+    lines: ["  Nothing left to consume. Running a retrospective, then opening a Planning Session, in this session."],
   };
 }
 

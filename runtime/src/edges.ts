@@ -60,18 +60,51 @@ export function gatherGlossaryFacts(repoRoot: string): GlossaryFacts {
   };
 }
 
+// Whether `path` is tracked by git — decided up front, with its own call,
+// rather than by trying `git mv` and catching a failure: a bare catch there
+// cannot tell "untracked, fall back to a plain rename" apart from any other
+// failure (a corrupt index, an index.lock left behind by another process),
+// and silently falling back on the latter would turn a `git mv` that should
+// have thrown into an untracked, unstaged rename. `git ls-files
+// --error-unmatch` exits non-zero exactly when the path isn't in the index.
+function isTracked(repoRoot: string, path: string): boolean {
+  try {
+    execFileSync("git", ["ls-files", "--error-unmatch", path], {
+      cwd: repoRoot,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Performs migrate.ts's planned renames with `git mv`, so the rename itself
  * lands in the repo's history the same way a maintainer running it by hand
  * would. Falls back to a plain fs rename when the file isn't tracked yet
  * (a fresh fixture, or a maintainer who never `git add`ed the glossary) —
  * `git mv` refuses an untracked path outright rather than renaming it.
+ *
+ * Throws if the destination already exists: `renameSync` overwrites on
+ * POSIX, and `git mv` overwrites too with `-f`, which this call never
+ * passes, but checking first means the untracked, fs-rename branch below
+ * can't silently clobber a file either. migrate.ts's `glossaryRenames`
+ * never plans a rename onto an existing destination, so this is a guard
+ * against a caller that bypasses it, not a case this module expects to hit.
+ *
+ * `git mv` failing on a tracked path is left to throw — no catch around that
+ * call swallows it into the fs-rename fallback, which `isTracked` above
+ * exists precisely to make unnecessary.
  */
 export function applyGlossaryRenames(repoRoot: string, renames: GlossaryRename[]): void {
   for (const { from, to } of renames) {
-    try {
+    if (existsSync(join(repoRoot, to))) {
+      throw new Error(`applyGlossaryRenames: destination "${to}" already exists — refusing to overwrite it`);
+    }
+    if (isTracked(repoRoot, from)) {
       execFileSync("git", ["mv", from, to], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
-    } catch {
+    } else {
       renameSync(join(repoRoot, from), join(repoRoot, to));
     }
   }

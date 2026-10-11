@@ -119,9 +119,10 @@ function main(): void {
     const repoVersion = repoVersionOf(preState);
     const chain = repoVersion === null ? [] : pendingSteps(repoVersion, STAMP_VERSION);
     // A v1 repo's chain now carries both steps combined (v1-to-v2 AND
-    // v2-to-v3) into the one plan below — the Factory's own repo has never
-    // been migrated past v1, so this fixture is the real-world shape, not
-    // v1-to-v2 alone.
+    // v2-to-v3) into the one plan below — mkV1Repo's fixture copies this
+    // repo's own files as they stood before any migration shipped, so it is
+    // the real-world shape a genuine v1 repo presents today, not v1-to-v2
+    // alone.
     const chainOk =
       chain.length === 2 && chain.some((s) => s.k === "v1-to-v2") && chain.some((s) => s.k === "v2-to-v3");
     steps.push(step("pendingSteps", chain.map((s) => s.k).join(",") || "none", chainOk));
@@ -161,12 +162,40 @@ function main(): void {
       ),
     );
 
+    // A glossaryBlock (a root conflict, or a multi-context repo) stops the
+    // whole step: planMigration already emptied `renames` and set
+    // `writesConfig` false for exactly this reason (src/migrate.ts). This
+    // host honors that by skipping every write — adapter doc, glossary
+    // rename, config.json alike — rather than applying a partial step; it
+    // reports the blocks and stops, same as a maintainer would see, instead
+    // of running a preflight against a repo this run never touched.
+    if (plan.glossaryBlocks.length > 0) {
+      console.log(
+        `  glossary block(s), no writes applied: ${plan.glossaryBlocks
+          .map((b) => (b.k === "conflict" ? `both ${b.from} and ${b.to} exist` : "multi-context repo"))
+          .join("; ")}`,
+      );
+      steps.push(
+        step(
+          "glossary block — stop, no writes",
+          plan.glossaryBlocks.map((b) => b.k).join(","),
+          false,
+          "this fixture is never expected to carry a glossaryBlock — a block here is itself the failure",
+        ),
+      );
+      printSteps(steps);
+      console.log(`\noverall: FAIL`);
+      process.exitCode = 1;
+      return;
+    }
+
     // ── step 5: apply — the adapter doc FIRST, config.json LAST. The order
     // is load-bearing, not stylistic: config.json is the stamp, so writing it
     // last makes it this step's single commit point. A crash before it leaves
-    // the fixture at legacy-v1 and the whole step re-runs idempotently. The
-    // reverse order strands a repo stamped v2 whose doc was never retrofitted,
-    // which no later run can detect (see src/migrate.ts's header).
+    // the fixture at its old stamp and the whole step re-runs idempotently.
+    // The reverse order strands a repo stamped v2 whose doc was never
+    // retrofitted, which no later run can detect (see src/migrate.ts's
+    // header).
     let adapterAction: string;
     // The text this host means to leave on disk, whichever branch runs — the
     // row below is scored against the file, not against the branch taken.
@@ -205,18 +234,11 @@ function main(): void {
 
     // ── step 5b: the v2-to-v3 glossary rename — documents, so it lands
     // alongside the adapter doc write above and before config.json, same
-    // ordering rule (the renamed file is not the commit point either).
-    // CONFLICTS are never auto-resolved: a conflict here would mean this
-    // host wrote neither file, surfaced for the maintainer instead of
-    // silently overwriting one.
-    if (plan.glossaryConflicts.length > 0) {
-      console.log(
-        `  glossary conflict, not resolved: ${plan.glossaryConflicts.map((c) => `both ${c.from} and ${c.to} exist`).join("; ")}`,
-      );
-    }
+    // ordering rule (the renamed file is not the commit point either). A
+    // block (handled above, before this point is ever reached) would have
+    // stopped the whole step instead of landing here with an empty rename.
     applyGlossaryRenames(root, plan.renames);
     const glossaryRenamed =
-      plan.glossaryConflicts.length === 0 &&
       plan.renames.every(({ to }) => existsSync(join(root, to))) &&
       plan.renames.every(({ from }) => !existsSync(join(root, from)));
     steps.push(

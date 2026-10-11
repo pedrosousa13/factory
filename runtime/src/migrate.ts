@@ -16,7 +16,7 @@
 // That repair holds only if the host writes in one order: documents FIRST —
 // the adapter doc, and v2-to-v3's glossary `git mv` — config.json LAST.
 // config.json is the stamp, so it is the step's single commit point — a
-// crash before it leaves the repo at legacy-v1 and the whole step re-runs,
+// crash before it leaves the repo at its old stamp and the whole step re-runs,
 // and the retrofit is itself idempotent (a second diffDoc over an
 // already-retrofitted doc returns "matches", and a second rename plan over
 // an already-renamed glossary returns no renames — see `renamePair` below).
@@ -145,6 +145,13 @@ export function v1ToV2Questions(adapterDoc: string): V1ToV2Questions {
 /** One rename v2-to-v3 wants performed, old path to new path. */
 export type GlossaryRename = { from: string; to: string };
 
+/** A blocking item v2-to-v3 cannot auto-resolve (PROTOCOL.md "## Migration"): a
+ * root pair where both the old and new name exist — never overwritten, never
+ * silently renamed — or a multi-context repo, where a CONTEXT-MAP.md exists
+ * at all, whatever else exists alongside it. Either one stops the step: see
+ * `glossaryRenames` below for what that does to `renames`. */
+export type GlossaryBlock = { k: "conflict"; from: string; to: string } | { k: "multi-context" };
+
 /** Which of the four glossary file names exist on disk, gathered by the host
  * (bin/migrate.ts, conformance/sweep.ts) — this module stays pure and never
  * reads fs itself. */
@@ -172,22 +179,38 @@ const NO_GLOSSARY_FILES: GlossaryFacts = {
  */
 function renamePair(from: string, to: string, fromExists: boolean, toExists: boolean): {
   rename: GlossaryRename | null;
-  conflict: GlossaryRename | null;
+  block: GlossaryBlock | null;
 } {
-  if (fromExists && toExists) return { rename: null, conflict: { from, to } };
-  if (fromExists && !toExists) return { rename: { from, to }, conflict: null };
-  return { rename: null, conflict: null };
+  if (fromExists && toExists) return { rename: null, block: { k: "conflict", from, to } };
+  if (fromExists && !toExists) return { rename: { from, to }, block: null };
+  return { rename: null, block: null };
 }
 
-function glossaryRenames(facts: GlossaryFacts): { renames: GlossaryRename[]; conflicts: GlossaryRename[] } {
-  const pairs = [
-    renamePair("CONTEXT.md", "GLOSSARY.md", facts.contextMd, facts.glossaryMd),
-    renamePair("CONTEXT-MAP.md", "GLOSSARY-MAP.md", facts.contextMapMd, facts.glossaryMapMd),
-  ];
-  return {
-    renames: pairs.map((p) => p.rename).filter((r): r is GlossaryRename => r !== null),
-    conflicts: pairs.map((p) => p.conflict).filter((c): c is GlossaryRename => c !== null),
-  };
+/**
+ * v2-to-v3's full rename decision (PROTOCOL.md "## Migration"). The root pair
+ * (CONTEXT.md / GLOSSARY.md) follows `renamePair`'s three-way rule above. The
+ * map pair is not symmetric with it: a CONTEXT-MAP.md present at all means a
+ * multi-context repo, which this module never auto-migrates — the map, every
+ * per-context CONTEXT.md it points at, and its own links all need a human's
+ * judgment, not a blind `git mv`. Only GLOSSARY-MAP.md existing (no
+ * CONTEXT-MAP.md) needs nothing. The root pair's handling is independent of
+ * the map's either way.
+ *
+ * A block — the root conflict, the multi-context block, or both — empties
+ * `renames` entirely, even a root rename that would otherwise be safe on its
+ * own: a run that is about to report a block and stop must not also leave a
+ * partial rename behind for the maintainer to discover later. A re-run after
+ * the manual fix sees no more blocks and completes the step, so idempotency
+ * still holds.
+ */
+function glossaryRenames(facts: GlossaryFacts): { renames: GlossaryRename[]; blocks: GlossaryBlock[] } {
+  const root = renamePair("CONTEXT.md", "GLOSSARY.md", facts.contextMd, facts.glossaryMd);
+  const blocks: GlossaryBlock[] = [];
+  if (root.block !== null) blocks.push(root.block);
+  if (facts.contextMapMd) blocks.push({ k: "multi-context" });
+
+  if (blocks.length > 0) return { renames: [], blocks };
+  return { renames: root.rename !== null ? [root.rename] : [], blocks: [] };
 }
 
 // ───── planning
@@ -195,9 +218,16 @@ function glossaryRenames(facts: GlossaryFacts): { renames: GlossaryRename[]; con
 export interface MigrationPlanInput {
   /** Current text of docs/agents/issue-tracker.md.
    *
-   * One doc, one template: a v1-to-v2-shaped signature. A second step that
-   * touches a different template file, or several, forces this pair open into
-   * a per-file collection. Left as is until a second step exists to shape it. */
+   * One doc, one template: a v1-to-v2-shaped signature. v2-to-v3 is the
+   * second step, and the single-doc shape still fits it: the documents it
+   * touches change by plain token substitution (every `CONTEXT.md` /
+   * `CONTEXT-MAP.md` mention rewritten to `GLOSSARY.md` / `GLOSSARY-MAP.md`),
+   * which the factory-migrate skill applies directly across those files
+   * rather than through a diff/retrofit this module would need a second
+   * field for; the one file-level change it makes is a rename, which is
+   * `glossaryFiles` below, not a second adapter-doc shape. A future step that
+   * needed its own diff/retrofit over a different template is what would
+   * force this field open into a per-file collection. */
   adapterDoc: string;
   /** The v2 template for the same tracker, placeholders already filled by
    * the caller — this module does no rendering of its own. */
@@ -220,16 +250,22 @@ export interface MigrationPlan {
   retrofittedDoc: string | null;
   questions: MigrationQuestion[];
   detectedTracker: TrackerKind | null;
-  /** Whether a pending step needs config.json written. */
+  /** Whether a pending step needs config.json written. False when nothing is
+   * pending, and also false — even with a pending step — whenever
+   * `glossaryBlocks` is non-empty: a blocked run reports and stops, writing
+   * nothing, so a re-run after the manual fix is what completes the step. */
   writesConfig: boolean;
   /** v2-to-v3's `git mv` plan: empty when no v2-to-v3 step is pending, when
-   * neither old name exists, or when the maintainer already finished the
-   * rename on a previous run. */
+   * neither old name exists, when the maintainer already finished the rename
+   * on a previous run, or whenever `glossaryBlocks` is non-empty — a blocked
+   * run applies no rename at all, not even one from an unblocked pair. */
   renames: GlossaryRename[];
-  /** v2-to-v3 pairs where both the old and new name exist — never
-   * auto-resolved, surfaced here as a blocking item instead. Empty in every
-   * other case. */
-  glossaryConflicts: GlossaryRename[];
+  /** v2-to-v3 items this module refuses to auto-resolve: a root pair
+   * (CONTEXT.md / GLOSSARY.md) where both names exist, or a multi-context
+   * repo (a CONTEXT-MAP.md present at all). Non-empty here forces
+   * `writesConfig` false and `renames` empty — see both above. Empty in
+   * every other case. */
+  glossaryBlocks: GlossaryBlock[];
 }
 
 // `docDiff: "matches"` here is asserted, not computed: with no pending step
@@ -245,7 +281,7 @@ const NOTHING_PENDING: MigrationPlan = {
   detectedTracker: null,
   writesConfig: false,
   renames: [],
-  glossaryConflicts: [],
+  glossaryBlocks: [],
 };
 
 /**
@@ -293,18 +329,24 @@ export function planMigration(steps: MigrationStep[], input: MigrationPlanInput)
     ? v1ToV2Questions(input.adapterDoc)
     : { detectedTracker: null, questions: [] };
 
-  const { renames, conflicts } = hasV2ToV3
+  const { renames, blocks } = hasV2ToV3
     ? glossaryRenames(input.glossaryFiles ?? NO_GLOSSARY_FILES)
-    : { renames: [], conflicts: [] };
+    : { renames: [], blocks: [] };
 
+  // A block stops the whole combined step, not just v2-to-v3's own slice of
+  // it: config.json is the step's single commit point (see this file's
+  // header), so a v1 repo whose chain carries both steps must not write
+  // config.json — and therefore must not apply the v1-to-v2 retrofit either,
+  // since that write is meant to land before the same commit point — while a
+  // glossary block holds it back.
   return {
     docDiff,
     retrofittedDoc,
     questions,
     detectedTracker,
-    writesConfig: true,
+    writesConfig: blocks.length === 0,
     renames,
-    glossaryConflicts: conflicts,
+    glossaryBlocks: blocks,
   };
 }
 
@@ -358,9 +400,19 @@ export function renderV1ToV2Config(answers: V1ToV2Answers): string {
  * unknown is exactly what this function promises instead. Reassigning an
  * existing key's value keeps its position in `JSON.stringify`'s output, so
  * the rest of the file's field order survives untouched.
+ *
+ * Throws when the parsed JSON isn't a plain object — an array, a string, a
+ * number, `null`, or any other shape `config.stampVersion = ...` would
+ * either silently fail on or corrupt. A v2 repo's config.json is always an
+ * object; anything else on disk is a caller error this function must not
+ * paper over by writing something back anyway.
  */
 export function renderStampBump(existingConfigText: string): string {
-  const config = JSON.parse(existingConfigText) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(existingConfigText);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("renderStampBump: existing config.json is not a JSON object");
+  }
+  const config = parsed as Record<string, unknown>;
   config.stampVersion = STAMP_VERSION;
   return JSON.stringify(config, null, 2) + "\n";
 }

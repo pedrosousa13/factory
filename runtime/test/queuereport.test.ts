@@ -148,7 +148,10 @@ test("an interactive run offers planning and ends", () => {
     mode: "interactive",
   });
   expect(got.exit).toEqual({ k: "offer-planning" });
-  expect(got.lines.join("\n")).toContain("fresh session");
+  const text = got.lines.join("\n");
+  expect(text).toContain("Planning Session");
+  expect(text).not.toContain("fresh session");
+  expect(text).not.toContain("run ends here");
 });
 
 test("a headless run prints the same report and stops with no offer", () => {

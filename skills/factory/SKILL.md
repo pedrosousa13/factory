@@ -55,10 +55,11 @@ It is the source of truth; this file only bootstraps it.
 - Every question to the maintainer is structured (`AskUserQuestion`), with
   the researched recommendation first — see "## Asking the maintainer". The
   one exception is a mid-loop Ping, which stays push + timer + Park.
-- Triage when you need to: when the Queue runs out, and after an issue that
-  filed new `needs-triage` reports. Apply what the evidence settles. Ask, in
-  one batch, about anything that would promote work into the Queue or drop
-  it — see "## Triage pass".
+- Triage when you need to. When the Queue runs out: one full pass that
+  applies what the evidence settles and asks, in batches, about anything
+  that would promote work into the Queue or drop it. After an issue that
+  filed new `needs-triage` reports: a quiet pass that asks nothing, because
+  a question would stall the loop. See "## Triage pass".
 - Subagents implement; you orchestrate. Inline work only for genuine
   one-liners, as ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md defines them.
 - A question only the maintainer can answer → ping and run a ~15 minute

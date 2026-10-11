@@ -74,7 +74,7 @@ test("'not-asked' is excused when config.json is missing entirely", () => {
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
-  expect(result.failures[0].what).toMatch(/not stamped for v2/);
+  expect(result.failures[0].what).toMatch(/not stamped/);
 });
 
 test("'not-asked' is excused when the adapter doc is missing entirely", () => {
@@ -139,7 +139,7 @@ test("missing config file: dedicated failure, distinct from per-field parse erro
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.failures.length).toBe(1);
-  expect(result.failures[0].what).toMatch(/not stamped for v2/);
+  expect(result.failures[0].what).toMatch(/not stamped/);
   expect(result.failures[0].fix).toBe("run /factory-adopt (safe to re-run) to create .factory/config.json");
 });
 

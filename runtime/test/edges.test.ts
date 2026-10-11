@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,7 @@ import {
   gatherPreflightFacts,
   gatherStampFacts,
 } from "../src/edges";
+import { pendingSteps, planMigration, renderStampBump } from "../src/migrate";
 import { STAMP_VERSION } from "../src/version";
 
 // ───── isolation from the host's own git identity
@@ -407,6 +408,149 @@ describe("applyGlossaryRenames", () => {
     const dir = scratchRepo();
     try {
       expect(() => applyGlossaryRenames(dir, [])).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("throws, never overwrites, when the destination already exists", () => {
+    const dir = scratchRepo();
+    try {
+      writeFileSync(join(dir, "CONTEXT.md"), "old glossary\n");
+      writeFileSync(join(dir, "GLOSSARY.md"), "a maintainer's own glossary — must survive\n");
+
+      expect(() => applyGlossaryRenames(dir, [{ from: "CONTEXT.md", to: "GLOSSARY.md" }])).toThrow(
+        /already exists/,
+      );
+      // Neither renameSync nor `git mv -f` ran: both files are untouched.
+      expect(existsSync(join(dir, "CONTEXT.md"))).toBe(true);
+      expect(readFileSync(join(dir, "GLOSSARY.md"), "utf8")).toBe(
+        "a maintainer's own glossary — must survive\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("a tracked file whose `git mv` fails throws, rather than silently falling back to an unstaged rename", () => {
+    const dir = scratchRepo();
+    try {
+      writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
+      execFileSync("git", ["add", "CONTEXT.md"], { cwd: dir });
+
+      // A stale index.lock forces every git command that touches the index
+      // (git mv included) to fail — exactly the kind of failure a bare catch
+      // around `git mv` would previously have swallowed into a plain fs
+      // rename, landing an untracked, unstaged GLOSSARY.md instead of
+      // throwing.
+      writeFileSync(join(dir, ".git", "index.lock"), "");
+
+      expect(() => applyGlossaryRenames(dir, [{ from: "CONTEXT.md", to: "GLOSSARY.md" }])).toThrow();
+      expect(existsSync(join(dir, "CONTEXT.md"))).toBe(true);
+      expect(existsSync(join(dir, "GLOSSARY.md"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+// ───── v2-to-v3 end to end: pendingSteps -> planMigration -> applyGlossaryRenames
+// -> renderStampBump, against a real 2.0.0 repo (migrate.ts's header: write the
+// documents — here, the glossary rename — first, config.json last).
+
+// docDiff/retrofittedDoc play no part in this slice, so the adapter doc and its
+// rendered template are kept identical and unexamined.
+const SAME_ADAPTER_DOC = "# Issue tracker: GitHub\n\nSome prose.\n";
+
+function writeV2Config(repoRoot: string, stampVersion: string): void {
+  mkdirSync(join(repoRoot, ".factory"), { recursive: true });
+  writeFileSync(
+    join(repoRoot, ".factory", "config.json"),
+    JSON.stringify(
+      {
+        stampVersion,
+        tracker: { kind: "github", repo: "owner/name" },
+        merge: { policy: "human", method: "rebase" },
+        attackSurface: true,
+        notifierCommand: "notify-send",
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+}
+
+describe("v2-to-v3 end to end", () => {
+  test("a real 2.0.0 repo: GLOSSARY.md lands as a staged git rename, CONTEXT.md is gone, the stamp bumps, merge.method and notifierCommand survive", () => {
+    const dir = scratchRepo();
+    try {
+      writeV2Config(dir, "2.0.0");
+      writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
+      execFileSync("git", ["add", "-A"], { cwd: dir });
+      execFileSync("git", ["commit", "-q", "-m", "v2 repo", "--author", "T <t@t.t>"], { cwd: dir });
+
+      const chain = pendingSteps("2.0.0", STAMP_VERSION);
+      const glossaryFiles = gatherGlossaryFacts(dir);
+      const plan = planMigration(chain, {
+        adapterDoc: SAME_ADAPTER_DOC,
+        renderedAdapterDoc: SAME_ADAPTER_DOC,
+        glossaryFiles,
+      });
+      expect(plan.glossaryBlocks).toEqual([]);
+      expect(plan.renames).toEqual([{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
+      expect(plan.writesConfig).toBe(true);
+
+      // Documents FIRST...
+      applyGlossaryRenames(dir, plan.renames);
+      // ...config.json LAST.
+      const configPath = join(dir, ".factory", "config.json");
+      writeFileSync(configPath, renderStampBump(readFileSync(configPath, "utf8")));
+
+      expect(existsSync(join(dir, "GLOSSARY.md"))).toBe(true);
+      expect(existsSync(join(dir, "CONTEXT.md"))).toBe(false);
+      // Staged as a rename, not an untracked add plus a deletion.
+      const status = execFileSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" });
+      expect(status).toMatch(/^R {2}CONTEXT\.md -> GLOSSARY\.md/m);
+
+      const configOnDisk = JSON.parse(readFileSync(configPath, "utf8"));
+      expect(configOnDisk.stampVersion).toBe(STAMP_VERSION);
+      expect(configOnDisk.merge).toEqual({ policy: "human", method: "rebase" });
+      expect(configOnDisk.notifierCommand).toBe("notify-send");
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("the conflict path: both CONTEXT.md and GLOSSARY.md exist — nothing renamed, config.json untouched", () => {
+    const dir = scratchRepo();
+    try {
+      writeV2Config(dir, "2.0.0");
+      writeFileSync(join(dir, "CONTEXT.md"), "old glossary\n");
+      writeFileSync(join(dir, "GLOSSARY.md"), "a maintainer's own glossary\n");
+      execFileSync("git", ["add", "-A"], { cwd: dir });
+      execFileSync("git", ["commit", "-q", "-m", "v2 repo with a glossary conflict", "--author", "T <t@t.t>"], {
+        cwd: dir,
+      });
+
+      const chain = pendingSteps("2.0.0", STAMP_VERSION);
+      const glossaryFiles = gatherGlossaryFacts(dir);
+      const plan = planMigration(chain, {
+        adapterDoc: SAME_ADAPTER_DOC,
+        renderedAdapterDoc: SAME_ADAPTER_DOC,
+        glossaryFiles,
+      });
+      expect(plan.renames).toEqual([]);
+      expect(plan.glossaryBlocks).toEqual([{ k: "conflict", from: "CONTEXT.md", to: "GLOSSARY.md" }]);
+      expect(plan.writesConfig).toBe(false);
+
+      // A blocked plan: the host applies nothing — `plan.renames` is already
+      // empty, so this is a no-op, and config.json is never touched at all.
+      applyGlossaryRenames(dir, plan.renames);
+
+      expect(existsSync(join(dir, "CONTEXT.md"))).toBe(true);
+      expect(existsSync(join(dir, "GLOSSARY.md"))).toBe(true);
+      const configOnDisk = JSON.parse(readFileSync(join(dir, ".factory", "config.json"), "utf8"));
+      expect(configOnDisk.stampVersion).toBe("2.0.0");
     } finally {
       rmSync(dir, { recursive: true });
     }
