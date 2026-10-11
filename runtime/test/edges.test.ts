@@ -355,7 +355,7 @@ describe("applyGlossaryRenames", () => {
     try {
       writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
       execFileSync("git", ["add", "CONTEXT.md"], { cwd: dir });
-      execFileSync("git", ["commit", "-q", "-m", "add glossary", "--author", "T <t@t.t>"], { cwd: dir });
+      execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@t.t", "commit", "-q", "-m", "add glossary", "--author", "T <t@t.t>"], { cwd: dir });
 
       applyGlossaryRenames(dir, [{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
 
@@ -487,7 +487,7 @@ describe("v2-to-v3 end to end", () => {
       writeV2Config(dir, "2.0.0");
       writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
       execFileSync("git", ["add", "-A"], { cwd: dir });
-      execFileSync("git", ["commit", "-q", "-m", "v2 repo", "--author", "T <t@t.t>"], { cwd: dir });
+      execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@t.t", "commit", "-q", "-m", "v2 repo", "--author", "T <t@t.t>"], { cwd: dir });
 
       const chain = pendingSteps("2.0.0", STAMP_VERSION);
       const glossaryFiles = gatherGlossaryFacts(dir);
@@ -528,7 +528,7 @@ describe("v2-to-v3 end to end", () => {
       writeFileSync(join(dir, "CONTEXT.md"), "old glossary\n");
       writeFileSync(join(dir, "GLOSSARY.md"), "a maintainer's own glossary\n");
       execFileSync("git", ["add", "-A"], { cwd: dir });
-      execFileSync("git", ["commit", "-q", "-m", "v2 repo with a glossary conflict", "--author", "T <t@t.t>"], {
+      execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@t.t", "commit", "-q", "-m", "v2 repo with a glossary conflict", "--author", "T <t@t.t>"], {
         cwd: dir,
       });
 
