@@ -42,7 +42,16 @@ const REPO_ROOT = join(import.meta.dir, "../..");
 // legacy heading) and the ones the v1-to-v2 step's docs/agents rules touch —
 // not the whole repo, and never .git, node_modules, .superpowers, or runtime/
 // (the fixture needs the stamp, not this repo's own history or tooling).
-const COPIED_PATHS = ["docs/agents", "AGENTS.md", "CONTEXT.md", ".gitignore"];
+// Each entry is [source in this repo, destination in the fixture]. The
+// glossary is the one pair that differs: this repo now carries GLOSSARY.md
+// (stamp v3), but a v1 repo predates that rename and carries CONTEXT.md —
+// the file the v2-to-v3 step must find and rename.
+const COPIED_PATHS: [string, string][] = [
+  ["docs/agents", "docs/agents"],
+  ["AGENTS.md", "AGENTS.md"],
+  ["GLOSSARY.md", "CONTEXT.md"],
+  [".gitignore", ".gitignore"],
+];
 
 // ──────────────────────────────────────────────────────────────────── git
 
@@ -73,9 +82,9 @@ export function mkV1Repo(): { root: string } {
   const root = mkdtempSync(join(tmpdir(), "factory-v1repo-"));
 
   try {
-    for (const rel of COPIED_PATHS) {
-      const src = join(REPO_ROOT, rel);
-      if (existsSync(src)) cpSync(src, join(root, rel), { recursive: true });
+    for (const [from, to] of COPIED_PATHS) {
+      const src = join(REPO_ROOT, from);
+      if (existsSync(src)) cpSync(src, join(root, to), { recursive: true });
     }
 
     // The fixture's v1-ness must not depend on this repo's own current
@@ -87,7 +96,7 @@ export function mkV1Repo(): { root: string } {
     git(["init", "-b", "main"], root);
     git(["config", "user.email", "v1repo@factory.local"], root);
     git(["config", "user.name", "Factory V1Repo Fixture"], root);
-    git(["add", ...COPIED_PATHS.filter((rel) => existsSync(join(root, rel)))], root);
+    git(["add", ...COPIED_PATHS.map(([, to]) => to).filter((rel) => existsSync(join(root, rel)))], root);
     git(["commit", "-m", "Initial commit"], root);
 
     // A local bare remote, nested inside root (never `git add`ed, so it never

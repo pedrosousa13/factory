@@ -12,7 +12,7 @@ Canonical label names, as repo labels on pedrosousa13/factory — plus `in-progr
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Dev loop
 

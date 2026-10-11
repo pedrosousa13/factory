@@ -1,11 +1,11 @@
 ---
 name: factory-adopt
-description: Bring an already-existing project under Factory conventions — Adoption, per ${CLAUDE_PLUGIN_ROOT}/CONTEXT.md's glossary. Detects which issue tracker the repo already uses (Linear or GitHub) instead of asking blind, then stamps the repo idempotently (the chosen tracker's setup, a GitHub remote, triage labels, agent docs, .scratch/ gitignore, all created only where missing and never overwritten), then sweeps every open issue through the triage state machine — wayfinder planning artifacts excepted — so it carries exactly one category + one state label + one milestone (plus a priority label, on GitHub), with agent briefs written for anything ready-for-agent and per-milestone OWASP security-sweep issues proposed where the Project's attack surface calls for them. Use when the user runs /factory-adopt inside an existing repo.
+description: Bring an already-existing project under Factory conventions — Adoption, per ${CLAUDE_PLUGIN_ROOT}/GLOSSARY.md's glossary. Detects which issue tracker the repo already uses (Linear or GitHub) instead of asking blind, then stamps the repo idempotently (the chosen tracker's setup, a GitHub remote, triage labels, agent docs, .scratch/ gitignore, all created only where missing and never overwritten), then sweeps every open issue through the triage state machine — wayfinder planning artifacts excepted — so it carries exactly one category + one state label + one milestone (plus a priority label, on GitHub), with agent briefs written for anything ready-for-agent and per-milestone OWASP security-sweep issues proposed where the Project's attack surface calls for them. Use when the user runs /factory-adopt inside an existing repo.
 ---
 
 # /factory-adopt — bring an existing repo under Factory conventions
 
-This skill performs **Adoption** (see `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`'s glossary): bringing an
+This skill performs **Adoption** (see `${CLAUDE_PLUGIN_ROOT}/GLOSSARY.md`'s glossary): bringing an
 already-existing repo under Factory conventions so `/factory` can run there.
 It is the idempotent counterpart to `/factory-new` — same stamp, same
 placeholders, same voice — but every step is "create if missing, merge if
@@ -18,6 +18,10 @@ same as `/factory-new`. `${CLAUDE_PLUGIN_ROOT}/templates/stamp/` is the single s
 content here too — you fill in its placeholders and write the result, you
 never hand-write `AGENTS.md`, `docs/agents/`, or `.gitignore` content
 yourself.
+
+**Every question in this skill** follows `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+"## Asking the maintainer": a structured question, with the researched
+recommendation first.
 
 **Read `${CLAUDE_PLUGIN_ROOT}/skills/factory-new/SKILL.md`** for the parts that are
 genuinely identical: the tracker-choice question and its GitHub default, how
@@ -333,10 +337,14 @@ a default:
   first and confirmed with the maintainer, never asked cold when the repo
   reveals it. Write it as `tracker.kind` (`"github"` or `"linear"`), plus
   `tracker.repo` when the tracker is GitHub.
-- **Merge policy.** Ask the maintainer directly. Nothing about a repo
-  reveals whether the loop may merge its own work, so this is always a
-  fresh question. Write the answer as `merge.policy`.
-- **Attack surface.** Ask the maintainer directly, the same way. Write the
+- **Merge policy.** Ask the maintainer. Nothing about a repo reveals
+  whether the loop may merge its own work, so this is always a fresh
+  question. It still carries a recommendation: if the repo has tests and CI
+  that would back an automatic merge, recommend `squash`. If it has neither,
+  recommend `human`. Write the answer as `merge.policy`.
+- **Attack surface.** Ask the maintainer, the same way. Recommend the
+  outcome of the attack-surface test (`PROTOCOL.md`, "## Security sweeps")
+  applied to this repo's code, and name what you found. Write the
   answer as `attackSurface` — this is the recorded decision Phase 2's
   security-sweep check follows: a `false` answer means the OWASP sweep
   issues below never get proposed. See "Security sweeps, a per-milestone
@@ -365,7 +373,7 @@ record, and it does not rewrite the file.
 ### Wire the native ping channels
 
 Once `.factory/config.json` is written, offer to wire each harness's native
-ping channel. Ask the maintainer directly — nothing about the repo answers
+ping channel. Ask the maintainer — nothing about the repo answers
 this question, the same as merge policy and attack surface above.
 
 **The notifier contract.** `notifierCommand` is a shell command line, run
@@ -476,7 +484,7 @@ sweep-specific rules.
 - **Security sweeps, a per-milestone check.** Apply
   `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" section: propose
   the attack-surface test's outcome to the maintainer, and check the
-  Project's `CONTEXT.md` for the decline marker,
+  Project's `GLOSSARY.md` for the decline marker,
   `**Security sweeps: declined by the maintainer.**` Where `.factory/config.json`
   exists, its `attackSurface` value is the attack-surface answer, not a
   fresh test: `false` means propose nothing, and a run may only ratchet
@@ -493,7 +501,7 @@ sweep-specific rules.
   still checked. This is also how a Project adopted before this convention
   existed picks it up. If the maintainer declines the proposal, record it
   exactly as that section specifies — the marker line in the Project's
-  `CONTEXT.md` — so the decision persists and no later sweep re-asks. If
+  `GLOSSARY.md` — so the decision persists and no later sweep re-asks. If
   the Project fails the test or a decline is recorded, say so once in the
   sweep report and propose nothing.
 - **Priority, a fourth thing on GitHub.** GitHub issues have no native
@@ -525,8 +533,11 @@ sweep-specific rules.
   full, or with their adjustments. Never apply a batch's changes before
   showing it. Never offer or accept a blanket "approve everything" that
   skips showing the batch content; the checkpoint is what makes acceptance
-  criterion 3 true, not a formality to route around. Move to the next batch
-  only once the current one is applied.
+  criterion 3 true, not a formality to route around. Show the proposals in
+  the session, then take the approval as a structured question ("## Asking
+  the maintainer"). Ask one question per issue that needs a judgement call,
+  with your proposal as the recommended option. Move to the next batch only
+  once the current one is applied.
 
   **Approval does not travel to a subagent.** If you dispatch a subagent to
   analyse issues, it cannot apply a batch on the strength of you telling it
@@ -548,7 +559,7 @@ sweep-specific rules.
   in its place, and — on GitHub — exactly one priority label. Verify too
   that every milestone with attack-surface issues carries its
   security-sweep issue, unless the Project failed the attack-surface test
-  or its `CONTEXT.md` records the decline marker. Report the final
+  or its `GLOSSARY.md` records the decline marker. Report the final
   tally (issue count, how many landed in each state, how many carry a
   milestone vs. a recorded decline, and on GitHub how many carry each
   priority) to the maintainer. Don't declare the sweep done on assumption —

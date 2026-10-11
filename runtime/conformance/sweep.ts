@@ -81,7 +81,14 @@ import { checkAgent, mergeDecision, type AgentAsk, type ImplementResult } from "
 import { effective, parseConfig } from "../src/config";
 import { readJournal } from "../src/journalfile";
 import { parkCommentText, type ParkReason } from "../src/park";
-import { ADAPTER_DOC_PATH, CONFIG_PATH, gatherPreflightFacts, gatherStampFacts } from "../src/edges";
+import {
+  ADAPTER_DOC_PATH,
+  applyGlossaryRenames,
+  CONFIG_PATH,
+  gatherGlossaryFacts,
+  gatherPreflightFacts,
+  gatherStampFacts,
+} from "../src/edges";
 import { pendingSteps, planMigration, renderV1ToV2Config, repoVersionOf } from "../src/migrate";
 import { preflight } from "../src/preflight";
 import { detectStamp } from "../src/stamp";
@@ -612,15 +619,19 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     const chain = repoVersion === null ? [] : pendingSteps(repoVersion, STAMP_VERSION);
     const renderedAdapterDoc = renderRealLinearAdapterDoc();
     const currentAdapterDoc = readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8");
-    const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc });
+    // glossaryFiles: the v2-to-v3 step's own input — which of the four
+    // glossary names mkV1Repo's copy of this repo actually carries
+    // (CONTEXT.md, genuinely, per its COPIED_PATHS).
+    const glossaryFiles = gatherGlossaryFacts(migrateRepo.root);
+    const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc, glossaryFiles });
 
-    // Write order is load-bearing, not stylistic: the adapter doc FIRST,
-    // config.json LAST. config.json is the stamp, so writing it last makes it
-    // the step's single commit point — a crash before it leaves the repo at
-    // legacy-v1 and the whole step re-runs idempotently. The reverse order
-    // strands a repo stamped v2 whose doc was never retrofitted, which no
-    // later run can detect (see src/migrate.ts's header). bin/migrate.ts
-    // writes in this same order.
+    // Write order is load-bearing, not stylistic: documents FIRST (the
+    // adapter doc, the glossary rename), config.json LAST. config.json is
+    // the stamp, so writing it last makes it the step's single commit
+    // point — a crash before it leaves the repo at legacy-v1 and the whole
+    // step re-runs idempotently. The reverse order strands a repo stamped v2
+    // whose doc was never retrofitted, which no later run can detect (see
+    // src/migrate.ts's header). bin/migrate.ts writes in this same order.
     //
     // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
     // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
@@ -630,6 +641,12 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
     } else if (plan.docDiff.k === "missing-sections" && plan.retrofittedDoc !== null) {
       writeFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), plan.retrofittedDoc);
     }
+
+    // The glossary rename rides alongside the adapter doc write, still ahead
+    // of config.json. A conflict (both CONTEXT.md and GLOSSARY.md present)
+    // is never auto-resolved — plan.renames is empty in that case, so this
+    // call is a no-op and migrateApplyOk below catches the unresolved state.
+    applyGlossaryRenames(migrateRepo.root, plan.renames);
 
     mkdirSync(join(migrateRepo.root, ".factory"), { recursive: true });
     writeFileSync(
@@ -647,6 +664,13 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
       readFileSync(join(migrateRepo.root, ADAPTER_DOC_PATH), "utf8"),
     );
     const postState = detectStamp(gatherStampFacts(migrateRepo.root));
+    // v2-to-v3's own file-on-disk proof: this repo's real v1 fixture
+    // genuinely carries CONTEXT.md, so a correct migration leaves
+    // GLOSSARY.md behind and CONTEXT.md gone, with no conflict surfaced.
+    const glossaryRenamedOk =
+      plan.glossaryConflicts.length === 0 &&
+      existsSync(join(migrateRepo.root, "GLOSSARY.md")) &&
+      !existsSync(join(migrateRepo.root, "CONTEXT.md"));
     migrateApplyOk =
       configKeys === "attackSurface,merge,stampVersion,tracker" &&
       configOnDisk.stampVersion === STAMP_VERSION &&
@@ -655,7 +679,8 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
       configOnDisk.attackSurface === CHOSEN_ATTACK_SURFACE &&
       markerPresent &&
       postState.k === "v2" &&
-      postState.version === STAMP_VERSION;
+      postState.version === STAMP_VERSION &&
+      glossaryRenamedOk;
 
     // trackerReachable reuses the reachable check already run above (same
     // question, shape, runner, cwd, and fixture) rather than asking again: the

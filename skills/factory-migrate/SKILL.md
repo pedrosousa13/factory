@@ -1,6 +1,6 @@
 ---
 name: factory-migrate
-description: Carry a repo already stamped for the Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's current version — to the plugin's current `stampVersion`, per `PROTOCOL.md`'s "## Migration" section. Detects the stamp without changing anything, builds one combined plan for every pending step (the v1-to-v2 step detects the issue tracker from the legacy adapter doc's H1 and offers it for one-tap confirmation, then asks merge policy and attack surface fresh with no defaults), shows one diff — every drifted template-mapped file, the adapter document among them, plus the `config.json` it will write (the four stamp fields, carrying an existing `notifierCommand` forward) — for one approval, then writes the documents first and `config.json` last, and verifies them against disk with a full preflight run. Use when the user runs /factory-migrate inside a repo whose stamp is legacy v1 or an older v2 version.
+description: Carry a repo already stamped for the Factory loop — a legacy v1 stamp, or a v2 stamp older than the plugin's current version — to the plugin's current `stampVersion`, per `PROTOCOL.md`'s "## Migration" section. Detects the stamp without changing anything, builds one combined plan for every pending step (the v1-to-v2 step detects the issue tracker from the legacy adapter doc's H1 and offers it for one-tap confirmation, then asks merge policy and attack surface fresh with a researched recommendation but no silent default; the v2-to-v3 step renames CONTEXT.md to GLOSSARY.md and asks nothing), shows one diff — every drifted template-mapped file, the adapter document among them, plus the `config.json` it will write (the four stamp fields, carrying an existing `notifierCommand` forward) — for one approval, then writes the documents first and `config.json` last, and verifies them against disk with a full preflight run. Use when the user runs /factory-migrate inside a repo whose stamp is legacy v1 or an older v2 version.
 ---
 
 # /factory-migrate — carry a stamped repo to the current version
@@ -17,6 +17,9 @@ it. `${CLAUDE_PLUGIN_ROOT}/runtime/src/stamp.ts`, `sections.ts`, and
 (a skill has Read/Write/Bash, not a way to shell out to the plugin's own
 runtime), but they're the precise reference if a step below reads
 ambiguous.
+
+**Every question in this skill** follows `PROTOCOL.md`'s "## Asking the
+maintainer": a structured question, with the researched recommendation first.
 
 **When to use this skill.** Follow the routing rule in `PROTOCOL.md`'s
 "## Prerequisites: a stamped Project repo".
@@ -63,17 +66,18 @@ changes.
 ## Build the combined plan
 
 Take every pending step found above, oldest first, and build one plan
-that covers all of them — never a separate plan per step. Today only one
-step is registered, v1-to-v2; a future step (v2-to-v3 and beyond) folds
-into the same combined plan and the same single diff below without
-changing this shape.
+that covers all of them — never a separate plan per step. Two steps are
+registered: v1-to-v2 (version 2.0.0) and v2-to-v3 (version 3.0.0). A step
+is pending when its version is newer than the repo's and no newer than the
+plugin's. A legacy v1 repo counts as 1.0.0, so it takes both steps. A
+2.0.0 repo takes v2-to-v3 only. Both steps fold into the same single diff
+below.
 
 **The v1-to-v2 step asks only what the old stamp cannot answer**
-(`PROTOCOL.md`'s "## Migration"). It runs the same way on a legacy v1 repo (no
-`config.json` at all) and on a stale v2 repo (a `config.json` that
-already exists, just below the plugin's current `stampVersion`): either
-way, the step asks all three answers fresh and never reads an existing
-`config.json` for them. Writing the plan's `config.json` later replaces
+(`PROTOCOL.md`'s "## Migration"). It runs only on a legacy v1 repo, which
+has no `config.json` at all. It asks all three answers fresh. If a stray
+`config.json` exists anyway, the step never reads it for them. Writing the
+plan's `config.json` later replaces
 the file wholesale rather than merging into it, so a stale v2 repo's
 existing `merge.method`, or any other field this step does not write, does
 not survive. `notifierCommand` is the single exception, and the paragraph
@@ -88,9 +92,14 @@ fresh, every time:
   before its H1, or names the tracker only in its body, does not count
   as a detection. If the H1 matches neither name, ask the maintainer
   which tracker the repo uses.
-- **Merge policy.** Ask the maintainer directly. Take no default.
-- **Attack surface.** Ask the maintainer directly, the same way. Take no
-  default.
+- **Merge policy.** Ask the maintainer. Take no silent default, but
+  recommend one from the evidence. If the repo has tests and CI that would
+  back an automatic merge, recommend `squash`. If it has neither, recommend
+  `human`.
+- **Attack surface.** Ask the maintainer, the same way. Recommend the
+  outcome of `PROTOCOL.md`'s attack-surface test ("## Security sweeps"),
+  applied to the code as it stands, and name what you found: an HTTP
+  server, auth, user data, a third-party call.
 
 Ask merge policy and attack surface fresh every run, whether or not the
 tracker was detected, and regardless of what an existing `config.json`
@@ -120,6 +129,27 @@ cross-referenced in `PROTOCOL.md`'s "## Migration") — this skill does not rest
 those rules, only applies them here to a legacy or stale-v2 document
 instead of a freshly-adopted one.
 
+**The v2-to-v3 step renames the glossary, and asks nothing**
+(`PROTOCOL.md`'s "## Migration"). For each pair, `CONTEXT.md` →
+`GLOSSARY.md` and `CONTEXT-MAP.md` → `GLOSSARY-MAP.md`, check which names
+exist at the repo root:
+
+- only the old name → the plan renames it with `git mv`;
+- only the new name, or neither → nothing to do for that pair;
+- both → a conflict. The plan renames neither and overwrites neither. Show
+  both files in the diff, and tell the maintainer to merge them by hand and
+  delete the old one.
+
+In a multi-context repo, `GLOSSARY-MAP.md` points at one glossary per
+context. Rename each per-context `CONTEXT.md` that the map lists, by the
+same rules.
+
+On a 2.0.0 repo, this step's `config.json` is the existing one, with
+`stampVersion` bumped to the current version. Every other field stays as it
+is, `merge.method` and `notifierCommand` included. Nothing is asked fresh:
+the v2 config already answers everything. When v1-to-v2 runs in the same
+plan, its freshly written config simply carries the current version.
+
 **The adapter document is not the only stamp file.** `templates/README.md`'s
 file mapping also maps `AGENTS.md`, `docs/agents/triage-labels.md`, and
 `.gitignore` into the repo, and an old stamp drifts on those exactly as it
@@ -146,7 +176,11 @@ never one approval per step:
   whole from the template, or unchanged if it already matches;
 - every other template-mapped file the classification above found drifted,
   each in the same three shapes, plus the `.gitignore` lines to append;
-- the four-field `config.json` this run will write, in the shape
+- every glossary rename the v2-to-v3 step found, and any conflict it
+  reports;
+- the `config.json` this run will write. When only v2-to-v3 is pending,
+  that is the existing config with only `stampVersion` changed. Otherwise
+  it is the four-field config, in the shape
   `/factory-adopt`'s own config-write step states
   (`skills/factory-adopt/SKILL.md:325-349`): `stampVersion` and
   `attackSurface` as plain values, but `tracker` and `merge` as objects —
@@ -189,8 +223,8 @@ the adapter document, never to `config.json`:
 
 ## Apply, in the load-bearing order
 
-Write in this order, and no other: the adapter document first,
-`config.json` last. `PROTOCOL.md` states why:
+Write in this order, and no other: the documents and the glossary renames
+first, `config.json` last. `PROTOCOL.md` states why:
 
 > config.json carries the stamp, so writing it last makes it the single
 > commit point. A crash before it leaves the repo at its old stamp, and
@@ -212,7 +246,13 @@ A reply of done is not evidence — the files are. After writing:
    `grep -rn '{{' docs/agents/issue-tracker.md` and confirm it returns
    nothing — a surviving `{{...}}` means a template value was never
    filled in.
-2. Re-read `.factory/config.json` from disk. Confirm it parses, and that
+2. If v2-to-v3 ran, confirm each rename landed: the new name exists, and
+   the old name is gone, unless the plan reported a conflict for that pair.
+   When only v2-to-v3 ran, confirm `.factory/config.json` parses, carries
+   the current `stampVersion`, and is otherwise byte-identical to the
+   config before the run. Then skip the four-field check below. The
+   four-field check is the v1-to-v2 step's contract.
+   Otherwise, re-read `.factory/config.json` from disk. Confirm it parses, and that
    it carries the four top-level fields — `stampVersion`, `tracker`,
    `merge`, `attackSurface` — and at most one more, `notifierCommand`,
    present only if the old config carried it. Any other fifth field, or a
@@ -226,7 +266,8 @@ A reply of done is not evidence — the files are. After writing:
 3. Re-read every other template-mapped file this run wrote — `AGENTS.md`,
    `docs/agents/triage-labels.md`, `.gitignore` — and confirm each carries
    what the approved diff said it would, unless the maintainer chose
-   keep-mine or merge-by-hand for it. Widen the placeholder grep to cover
+   keep-mine or merge-by-hand for it. That includes `docs/agents/domain.md`,
+   which v2-to-v3's glossary rename changes. Widen the placeholder grep to cover
    them: run `grep -rn '{{' AGENTS.md docs/agents/` and confirm it returns
    nothing.
 4. Run `PROTOCOL.md`'s full Preflight, and show the maintainer the

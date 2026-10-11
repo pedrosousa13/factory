@@ -78,7 +78,7 @@ list and how each piece fits into the loop.
 
 ## Created lazily, not templated
 
-Domain docs (`CONTEXT.md`, `docs/adr/`) are part of the Factory stamp — see
+Domain docs (`GLOSSARY.md`, `docs/adr/`) are part of the Factory stamp — see
 `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "The stamp" table — but have no template
 in this directory.
 They're created lazily, by `/domain-modeling`, once terms and decisions

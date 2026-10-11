@@ -21,7 +21,7 @@ A long-lived interactive Claude Code session that works through a Project's read
 _Avoid_: run, agent loop, daemon
 
 **Planning Session**:
-An interactive session where the maintainer turns an idea into ready-for-agent issues (grilling → PRD → issue slices). The only place new work is created. Issues filed outside one — a security sweep's findings, a stray report — arrive as needs-triage reports and become work only through triage.
+An interactive session where the maintainer turns an idea into ready-for-agent issues (grilling → spec → tickets). The only place new work is created. Issues filed outside one — a security sweep's findings, a stray report — arrive as needs-triage reports and become work only through triage. When a Loop Session runs out of work, it opens one itself, interactively.
 _Avoid_: intake, brainstorm session
 
 **Queue**:

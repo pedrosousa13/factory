@@ -246,22 +246,22 @@ function main(): void {
       ),
     );
 
-    // ── step 5: role resolution — a fixture skills tree with "to-prd"
+    // ── step 5: role resolution — a fixture skills tree with "to-spec"
     // (write-spec's preferred implementation) removed, so write-spec has to
-    // fall back to "to-spec". Pure: no harness call.
-    const skillsHome = mkSkillsHome("to-prd");
+    // fall back to "to-prd". Pure: no harness call.
+    const skillsHome = mkSkillsHome("to-spec");
     try {
       const resolution = resolveRoles(skillsHome.available);
       const writeSpec = resolution.resolved.find((r) => r.role === "write-spec");
       const fallbackOk =
         resolution.failures.length === 0 &&
         writeSpec !== undefined &&
-        writeSpec.selected === "to-spec" &&
+        writeSpec.selected === "to-prd" &&
         writeSpec.via === "fallback";
       steps.push(
         step(
           "resolveRoles: fallback exercised",
-          fallbackOk ? "fell back to to-spec" : "did not fall back as expected",
+          fallbackOk ? "fell back to to-prd" : "did not fall back as expected",
           fallbackOk,
           JSON.stringify({ writeSpec, failures: resolution.failures.length }),
         ),

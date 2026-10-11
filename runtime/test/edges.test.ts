@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectActor, gatherAvailableRoles, gatherPreflightFacts, gatherStampFacts } from "../src/edges";
+import {
+  applyGlossaryRenames,
+  detectActor,
+  gatherAvailableRoles,
+  gatherGlossaryFacts,
+  gatherPreflightFacts,
+  gatherStampFacts,
+} from "../src/edges";
 import { STAMP_VERSION } from "../src/version";
 
 // ───── isolation from the host's own git identity
@@ -206,11 +213,11 @@ describe("gatherAvailableRoles", () => {
     const home = scratchHome();
     try {
       mkSkill(home, "grilling");
-      mkSkill(home, "to-spec");
+      mkSkill(home, "to-prd");
       const found = gatherAvailableRoles(home);
       expect(found).toContain("grilling");
-      expect(found).toContain("to-spec");
-      expect(found).not.toContain("to-prd");
+      expect(found).toContain("to-prd");
+      expect(found).not.toContain("to-tickets");
       expect(found).not.toContain("wayfinder");
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -301,6 +308,105 @@ describe("gatherStampFacts", () => {
     const dir = scratchRepo();
     try {
       expect(gatherStampFacts(dir)).toEqual({ configVersion: null, adapterDoc: null });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+// ───── gatherGlossaryFacts / applyGlossaryRenames (migrate.ts's v2-to-v3 step)
+
+describe("gatherGlossaryFacts", () => {
+  test("none of the four names present reads as all false", () => {
+    const dir = scratchRepo();
+    try {
+      expect(gatherGlossaryFacts(dir)).toEqual({
+        contextMd: false,
+        contextMapMd: false,
+        glossaryMd: false,
+        glossaryMapMd: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("reports exactly the names present on disk, old and new independently", () => {
+    const dir = scratchRepo();
+    try {
+      writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
+      writeFileSync(join(dir, "GLOSSARY-MAP.md"), "map content\n");
+      expect(gatherGlossaryFacts(dir)).toEqual({
+        contextMd: true,
+        contextMapMd: false,
+        glossaryMd: false,
+        glossaryMapMd: true,
+      });
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+describe("applyGlossaryRenames", () => {
+  test("renames a git-tracked file with `git mv`, landing the rename in the index", () => {
+    const dir = scratchRepo();
+    try {
+      writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
+      execFileSync("git", ["add", "CONTEXT.md"], { cwd: dir });
+      execFileSync("git", ["commit", "-q", "-m", "add glossary", "--author", "T <t@t.t>"], { cwd: dir });
+
+      applyGlossaryRenames(dir, [{ from: "CONTEXT.md", to: "GLOSSARY.md" }]);
+
+      expect(existsSync(join(dir, "CONTEXT.md"))).toBe(false);
+      expect(existsSync(join(dir, "GLOSSARY.md"))).toBe(true);
+      // git mv stages the rename — git status shows it as a rename, not an
+      // untracked new file plus a deletion.
+      const status = execFileSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" });
+      expect(status).toMatch(/^R {2}CONTEXT\.md -> GLOSSARY\.md/m);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("falls back to a plain fs rename when the file isn't tracked by git", () => {
+    const dir = scratchRepo();
+    try {
+      // Never `git add`ed — `git mv` refuses an untracked path outright, so
+      // this exercises the catch-and-fall-back branch for real.
+      writeFileSync(join(dir, "CONTEXT-MAP.md"), "map content\n");
+
+      applyGlossaryRenames(dir, [{ from: "CONTEXT-MAP.md", to: "GLOSSARY-MAP.md" }]);
+
+      expect(existsSync(join(dir, "CONTEXT-MAP.md"))).toBe(false);
+      expect(existsSync(join(dir, "GLOSSARY-MAP.md"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("applies several renames in order", () => {
+    const dir = scratchRepo();
+    try {
+      writeFileSync(join(dir, "CONTEXT.md"), "glossary content\n");
+      writeFileSync(join(dir, "CONTEXT-MAP.md"), "map content\n");
+
+      applyGlossaryRenames(dir, [
+        { from: "CONTEXT.md", to: "GLOSSARY.md" },
+        { from: "CONTEXT-MAP.md", to: "GLOSSARY-MAP.md" },
+      ]);
+
+      expect(existsSync(join(dir, "GLOSSARY.md"))).toBe(true);
+      expect(existsSync(join(dir, "GLOSSARY-MAP.md"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("an empty rename list is a no-op", () => {
+    const dir = scratchRepo();
+    try {
+      expect(() => applyGlossaryRenames(dir, [])).not.toThrow();
     } finally {
       rmSync(dir, { recursive: true });
     }

@@ -54,8 +54,8 @@ export const ROLE_TABLE: RoleSpec[] = [
   { role: "interrogate", label: "Interrogate", preferred: skill("grilling"), fallback: null },
   { role: "model-domain", label: "Model the domain", preferred: skill("domain-modeling"), fallback: null },
   { role: "chart-map", label: "Chart a map", preferred: skill("wayfinder"), fallback: null },
-  { role: "write-spec", label: "Write the spec", preferred: skill("to-prd"), fallback: skill("to-spec") },
-  { role: "slice-issues", label: "Slice into issues", preferred: skill("to-issues"), fallback: skill("to-tickets") },
+  { role: "write-spec", label: "Write the spec", preferred: skill("to-spec"), fallback: skill("to-prd") },
+  { role: "slice-issues", label: "Slice into issues", preferred: skill("to-tickets"), fallback: skill("to-issues") },
   { role: "triage", label: "Triage", preferred: skill("triage"), fallback: null },
   {
     role: "implement",

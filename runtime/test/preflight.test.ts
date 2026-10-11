@@ -6,11 +6,12 @@ import type { PreflightFacts } from "../src/preflight";
 import type { FactoryConfig } from "../src/config";
 import { ROLE_TABLE } from "../src/roles";
 import { LOOP_SECTION_HEADING } from "../src/stamp";
+import { STAMP_VERSION } from "../src/version";
 
 // ───── shared fixtures
 
 const goodConfig: FactoryConfig = {
-  stampVersion: "2.0.0",
+  stampVersion: STAMP_VERSION,
   tracker: { kind: "github", repo: "owner/name" },
   merge: { policy: "human" },
   attackSurface: true,
@@ -22,8 +23,8 @@ function greenFacts(): PreflightFacts {
     adapterMarker: { kind: "github" },
     trackerReachable: { result: "ok" },
     pushCheck: { ok: true, detail: "push ok" },
-    stampVersion: { repo: "2.0.0", plugin: "2.0.0" },
-    stampFacts: { configVersion: "2.0.0", adapterDoc: null },
+    stampVersion: { repo: STAMP_VERSION, plugin: STAMP_VERSION },
+    stampFacts: { configVersion: STAMP_VERSION, adapterDoc: null },
     availableRoles: ROLE_TABLE.map((r) => r.preferred.name),
   };
 }
@@ -221,7 +222,7 @@ test("config bad AND tracker unreachable AND push fail all collect in one report
 
 test("repo stamp older than plugin: migration pending, blocks execution only", () => {
   const facts = greenFacts();
-  facts.stampVersion = { repo: "1.0.0", plugin: "2.0.0" };
+  facts.stampVersion = { repo: "1.0.0", plugin: STAMP_VERSION };
   const result = preflight(facts);
 
   expect(result.ok).toBe(false);
@@ -233,7 +234,7 @@ test("repo stamp older than plugin: migration pending, blocks execution only", (
 
 test("repo stamp newer than plugin: update-the-plugin failure, also blocksExecutionOnly", () => {
   const facts = greenFacts();
-  facts.stampVersion = { repo: "3.0.0", plugin: "2.0.0" };
+  facts.stampVersion = { repo: "99.0.0", plugin: STAMP_VERSION };
   const result = preflight(facts);
 
   expect(result.ok).toBe(false);
@@ -246,7 +247,7 @@ test("repo stamp newer than plugin: update-the-plugin failure, also blocksExecut
 
 test("unstamped repo (no config, no legacy adapter doc): treated as older than the plugin; fix names /factory-adopt", () => {
   const facts = greenFacts();
-  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampVersion = { repo: null, plugin: STAMP_VERSION };
   facts.stampFacts = { configVersion: null, adapterDoc: null };
   const result = preflight(facts);
 
@@ -261,7 +262,7 @@ test("unstamped repo (no config, no legacy adapter doc): treated as older than t
 
 test("legacy v1 repo (no config, adapter doc carries the loop section): fix names /factory-migrate and says the repo is legacy v1", () => {
   const facts = greenFacts();
-  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampVersion = { repo: null, plugin: STAMP_VERSION };
   facts.stampFacts = {
     configVersion: null,
     adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
@@ -286,7 +287,7 @@ test("a legacy v1 repo's three failures: config and marker name factory-adopt, t
   const facts = greenFacts();
   facts.config = "missing-file";
   facts.adapterMarker = "missing-marker";
-  facts.stampVersion = { repo: null, plugin: "2.0.0" };
+  facts.stampVersion = { repo: null, plugin: STAMP_VERSION };
   facts.stampFacts = {
     configVersion: null,
     adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
@@ -311,13 +312,13 @@ test("every Factory entry point a fix names is one the plugin ships", () => {
   const cases: (() => PreflightFacts)[] = [
     () => {
       const f = greenFacts();
-      f.stampVersion = { repo: "1.0.0", plugin: "2.0.0" };
+      f.stampVersion = { repo: "1.0.0", plugin: STAMP_VERSION };
       f.stampFacts = { configVersion: "1.0.0", adapterDoc: null };
       return f;
     },
     () => {
       const f = greenFacts();
-      f.stampVersion = { repo: null, plugin: "2.0.0" };
+      f.stampVersion = { repo: null, plugin: STAMP_VERSION };
       f.stampFacts = {
         configVersion: null,
         adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
@@ -328,7 +329,7 @@ test("every Factory entry point a fix names is one the plugin ships", () => {
       const f = greenFacts();
       f.config = "missing-file";
       f.adapterMarker = "missing-marker";
-      f.stampVersion = { repo: null, plugin: "2.0.0" };
+      f.stampVersion = { repo: null, plugin: STAMP_VERSION };
       f.stampFacts = {
         configVersion: null,
         adapterDoc: `# Issue tracker\n\n${LOOP_SECTION_HEADING}\n\nlegacy loop content\n`,
@@ -357,14 +358,14 @@ test("every Factory entry point a fix names is one the plugin ships", () => {
 
 test("both stale and newer stamp failures carry blocksExecutionOnly; push-check failure does not", () => {
   const staleFacts = greenFacts();
-  staleFacts.stampVersion = { repo: "1.0.0", plugin: "2.0.0" };
+  staleFacts.stampVersion = { repo: "1.0.0", plugin: STAMP_VERSION };
   const stale = preflight(staleFacts);
   expect(stale.ok).toBe(false);
   if (stale.ok) return;
   expect(stale.failures[0].blocksExecutionOnly).toBe(true);
 
   const newerFacts = greenFacts();
-  newerFacts.stampVersion = { repo: "3.0.0", plugin: "2.0.0" };
+  newerFacts.stampVersion = { repo: "99.0.0", plugin: STAMP_VERSION };
   const newer = preflight(newerFacts);
   expect(newer.ok).toBe(false);
   if (newer.ok) return;
@@ -443,7 +444,7 @@ test("role failures join the other preflight failures rather than replacing them
 });
 
 test("a role resolving to its fallback does not fail preflight", () => {
-  const available = ROLE_TABLE.map((r) => r.preferred.name).filter((p) => p !== "to-prd").concat("to-spec");
+  const available = ROLE_TABLE.map((r) => r.preferred.name).filter((p) => p !== "to-spec").concat("to-prd");
   const got = preflight(facts({ availableRoles: available }));
   expect(got.ok).toBe(true);
 });
