@@ -136,7 +136,7 @@ labeled `needs-triage`, never planning artifacts — a sweep never mints a
 `wayfinder:` or `planning:` label.
 
 The maintainer may rule the Project fails the test, or decline sweeps
-outright — recorded in this Project's `CONTEXT.md` with this exact marker
+outright — recorded in this Project's `GLOSSARY.md` with this exact marker
 line:
 
 **Security sweeps: declined by the maintainer.**

@@ -140,7 +140,7 @@ test("a (No milestone) empty Queue reports the breakdown with no progress figure
 
 // ───── the planning exit
 
-test("an interactive run offers planning and ends", () => {
+test("an interactive run offers planning instead of ending the session", () => {
   const got = emptyQueueReport({
     scope: { k: "everything" },
     openIssues: [],
@@ -148,7 +148,10 @@ test("an interactive run offers planning and ends", () => {
     mode: "interactive",
   });
   expect(got.exit).toEqual({ k: "offer-planning" });
-  expect(got.lines.join("\n")).toContain("fresh session");
+  const text = got.lines.join("\n");
+  expect(text).toContain("Planning Session");
+  expect(text).not.toContain("fresh session");
+  expect(text).not.toContain("run ends here");
 });
 
 test("a headless run prints the same report and stops with no offer", () => {
@@ -162,7 +165,7 @@ test("a headless run prints the same report and stops with no offer", () => {
   expect(interactive.lines.join("\n")).not.toContain("fresh session");
 });
 
-test("both exits are terminal — neither returns to work", () => {
+test("both exits stop consuming the Queue — offer planning or stop", () => {
   for (const mode of ["interactive", "headless"] as const) {
     const got = emptyQueueReport({ scope: { k: "everything" }, openIssues: [], counts: null, mode });
     expect(["offer-planning", "stop"]).toContain(got.exit.k);

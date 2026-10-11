@@ -2,22 +2,23 @@
 
 The control plane for running AI-driven software development in a loop. This repo defines the workflow — preferences, loop protocol, conventions. Software gets built in separate project repos under `~/apps/`, each with its own issue tracker.
 
-The maintainer plans interactively; an AI Loop Session consumes the queue and only pings when it has a question. See `CONTEXT.md` for the glossary and `docs/adr/` for foundational decisions.
+The maintainer plans interactively; an AI Loop Session consumes the queue and only pings when it has a question. See `GLOSSARY.md` for the glossary and `docs/adr/` for foundational decisions.
 
 ## The loop at a glance
 
-1. **Plan** (you, interactive): `/grilling` → `/to-prd` → `/to-issues` files tracer-bullet issues to the project's issue tracker, labeled `ready-for-agent`. An effort too big or foggy for one session gets charted first with `/wayfinder` — a map of decision tickets on the same tracker, resolved one per session until a spec is in reach; the loop never sees them (`PROTOCOL.md`, "Wayfinder maps").
+1. **Plan** (you, interactive): `/grilling` → `/to-spec` → `/to-tickets` files tracer-bullet issues to the project's issue tracker, labeled `ready-for-agent`. An effort too big or foggy for one session gets charted first with `/wayfinder` — a map of decision tickets on the same tracker, resolved one per session until a spec is in reach; the loop never sees them (`PROTOCOL.md`, "Wayfinder maps").
 2. **Run** (AI, autonomous): `/factory` in the project repo starts a Loop Session:
    - reads the newest handoff in `.scratch/handoffs/`, if any
    - picks the next unblocked `ready-for-agent` issue — priority first, then oldest — and moves it to a started state
-   - implements subagent-driven (superpowers TDD subagents; the session only orchestrates), gated by `/review`
-   - lands it: branch per issue → PR → auto-merge when tests, typecheck, and review are green → issue completed
+   - implements subagent-driven (superpowers TDD subagents; the session only orchestrates), gated by `/code-review`
+   - lands it: branch per issue → PR (body by `/pr`) → auto-merge when tests, typecheck, and review are green → issue completed
    - questions: push notification + block ~15 min; unanswered → question posted to the issue, `needs-info`, work stays on its branch, loop continues
    - at each issue boundary: context above ~40% → `/handoff` to `.scratch/handoffs/` and stop
-   - empty queue → notify and stop; the loop never invents work
+   - queue runs out → triages any `needs-triage` reports, notifies you, runs `/retro` on the session, and opens a Planning Session with you. The loop never invents work.
+   - every question comes as a structured prompt, with a researched recommendation first
 3. **Steer** (you, from anywhere): set priorities and answer `needs-info` questions in the tracker.
 
-Resuming after a handoff, a reboot, or a week away is always the same command: `/factory`.
+Resuming after a handoff, a reboot, or a week away is always the same command: `/factory`. With no argument, it works out the next step itself: it adopts an unstamped repo, migrates an old stamp, or works the whole Queue. `/factory <milestone>` scopes the Queue to one milestone.
 
 `PROTOCOL.md` is the full Loop Session spec; the `/factory` skill executes it (source in `skills/factory/`, shipped as part of the Factory plugin).
 
@@ -40,14 +41,14 @@ Run `/factory-adopt` inside the repo. It will:
 
 ## Already stamped, out of date
 
-Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — the legacy v1 stamp (an adapter doc with a `Factory loop operations` section, no `.factory/config.json`), or a v2 stamp below the plugin's current version — is migrated, not re-adopted. The skill detects the stamp, builds one combined plan for every pending step, shows one diff, and takes one approval. The v1-to-v2 step reads the tracker off the old adapter doc's title for one-tap confirmation and asks only what the old stamp cannot answer: merge policy and attack surface. Preflight names this skill whenever it finds a stale stamp, and `/factory` offers to run it at session start. `PROTOCOL.md`, "Migration", is the contract.
+Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — the legacy v1 stamp (an adapter doc with a `Factory loop operations` section, no `.factory/config.json`), or a v2 stamp below the plugin's current version — is migrated, not re-adopted. The skill detects the stamp, builds one combined plan for every pending step, shows one diff, and takes one approval. The v1-to-v2 step reads the tracker off the old adapter doc's title for one-tap confirmation and asks only what the old stamp cannot answer: merge policy and attack surface. The v2-to-v3 step renames `CONTEXT.md` to `GLOSSARY.md`, the name upstream skills now read, and asks nothing. Preflight names this skill whenever it finds a stale stamp. `/factory` routes into it in the same session, and the one-diff approval still applies. `PROTOCOL.md`, "Migration", is the contract.
 
 ## Conventions all projects share
 
 - **Issue tracker**: GitHub Issues by default, Linear supported; one tracker per repo. See `docs/agents/issue-tracker.md` for the tool conventions.
 - **Triage labels**: the five canonical states, 1:1 names. See `docs/agents/triage-labels.md`.
-- **Domain docs**: single-context `CONTEXT.md` + `docs/adr/` per repo, created lazily. See `docs/agents/domain.md`.
-- **Security sweeps**: a Project with an attack surface carries an OWASP Top 10 sweep issue in every milestone that touches it; declines are recorded in its `CONTEXT.md`. See `PROTOCOL.md`, "Security sweeps".
+- **Domain docs**: single-context `GLOSSARY.md` + `docs/adr/` per repo, created lazily. See `docs/agents/domain.md`.
+- **Security sweeps**: a Project with an attack surface carries an OWASP Top 10 sweep issue in every milestone that touches it; declines are recorded in its `GLOSSARY.md`. See `PROTOCOL.md`, "Security sweeps".
 - **Git**: branch per issue, PR, auto-merge on green. No half-done work on main — parked issues live on their branch.
 - **Context discipline**: Loop Sessions stay under ~40% context; superpowers subagents do the implementation; `/handoff` bridges sessions.
 - **Notifications**: an optional `notifierCommand` in `.factory/config.json` is the push channel — the plugin's Claude Code `Notification` hook and the runtime's own ping both run it with the message in `FACTORY_NOTIFY_MESSAGE`. Offered during adopt/migrate, declinable. See `PROTOCOL.md`, "Ping and Park".
@@ -58,7 +59,7 @@ What the Factory assumes on the machine:
 
 1. **Claude Code**, plus the **Linear MCP server** connected to the Side projects workspace for any Linear-backed Project.
 2. **`gh`** authenticated, git over SSH.
-3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/review`, `/handoff`, `/grilling`, …) installed under `~/.claude/skills`. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
+3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, …) installed under `~/.claude/skills` (`/pr` and `/retro` too, used at landing and at run-out when present), as editable copies via `npx skills@latest add mattpocock/skills -g` (update with `npx skills@latest update -g`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
 
    Install superpowers yourself — the Factory's manifest declares no
    dependency on it, on purpose. A manifest dependency names a marketplace

@@ -12,4 +12,4 @@ Canonical label names, as team labels on {{TEAM_NAME}}. See `docs/agents/triage-
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

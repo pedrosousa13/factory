@@ -12,4 +12,4 @@ Canonical label names, as repo labels on {{REPO}} — plus `in-progress` and `P0
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

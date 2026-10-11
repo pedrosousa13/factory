@@ -15,7 +15,7 @@
 //
 // THROWAWAY: no tests, no error handling beyond what keeps it runnable.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { down, up } from "../conformance/fixture";
 import {
@@ -29,7 +29,14 @@ import {
   rmV1Repo,
   TRACKER_REACHABLE_QUESTION,
 } from "../conformance/v1repo";
-import { ADAPTER_DOC_PATH, CONFIG_PATH, gatherPreflightFacts, gatherStampFacts } from "../src/edges";
+import {
+  ADAPTER_DOC_PATH,
+  applyGlossaryRenames,
+  CONFIG_PATH,
+  gatherGlossaryFacts,
+  gatherPreflightFacts,
+  gatherStampFacts,
+} from "../src/edges";
 import { runHarness, type HarnessName } from "../src/harness";
 import { askWithRetry, buildPrompt, type Runner } from "../src/askloop";
 import { detectStamp } from "../src/stamp";
@@ -111,14 +118,23 @@ function main(): void {
 
     const repoVersion = repoVersionOf(preState);
     const chain = repoVersion === null ? [] : pendingSteps(repoVersion, STAMP_VERSION);
-    const chainOk = chain.length === 1 && chain[0].k === "v1-to-v2";
+    // A v1 repo's chain now carries both steps combined (v1-to-v2 AND
+    // v2-to-v3) into the one plan below — mkV1Repo's fixture copies this
+    // repo's own files as they stood before any migration shipped, so it is
+    // the real-world shape a genuine v1 repo presents today, not v1-to-v2
+    // alone.
+    const chainOk =
+      chain.length === 2 && chain.some((s) => s.k === "v1-to-v2") && chain.some((s) => s.k === "v2-to-v3");
     steps.push(step("pendingSteps", chain.map((s) => s.k).join(",") || "none", chainOk));
 
     // ── step 2: plan the migration — this repo's own template, rendered with
-    // its real values, against the fixture's current adapter doc.
+    // its real values, against the fixture's current adapter doc, plus the
+    // v2-to-v3 step's own input: which glossary file names the fixture
+    // actually carries (mkV1Repo copies this repo's real CONTEXT.md).
     const renderedAdapterDoc = renderRealLinearAdapterDoc();
     const currentAdapterDoc = readFileSync(join(root, ADAPTER_DOC_PATH), "utf8");
-    const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc });
+    const glossaryFiles = gatherGlossaryFacts(root);
+    const plan = planMigration(chain, { adapterDoc: currentAdapterDoc, renderedAdapterDoc, glossaryFiles });
 
     // ── step 3: confirm the detected tracker — expected "linear" (a stale
     // adapter doc relative to the real world, see GitHub #52, but correct for
@@ -146,18 +162,46 @@ function main(): void {
       ),
     );
 
+    // A glossaryBlock (a root conflict, or a multi-context repo) stops the
+    // whole step: planMigration already emptied `renames` and set
+    // `writesConfig` false for exactly this reason (src/migrate.ts). This
+    // host honors that by skipping every write — adapter doc, glossary
+    // rename, config.json alike — rather than applying a partial step; it
+    // reports the blocks and stops, same as a maintainer would see, instead
+    // of running a preflight against a repo this run never touched.
+    if (plan.glossaryBlocks.length > 0) {
+      console.log(
+        `  glossary block(s), no writes applied: ${plan.glossaryBlocks
+          .map((b) => (b.k === "conflict" ? `both ${b.from} and ${b.to} exist` : "multi-context repo"))
+          .join("; ")}`,
+      );
+      steps.push(
+        step(
+          "glossary block — stop, no writes",
+          plan.glossaryBlocks.map((b) => b.k).join(","),
+          false,
+          "this fixture is never expected to carry a glossaryBlock — a block here is itself the failure",
+        ),
+      );
+      printSteps(steps);
+      console.log(`\noverall: FAIL`);
+      process.exitCode = 1;
+      return;
+    }
+
     // ── step 5: apply — the adapter doc FIRST, config.json LAST. The order
     // is load-bearing, not stylistic: config.json is the stamp, so writing it
     // last makes it this step's single commit point. A crash before it leaves
-    // the fixture at legacy-v1 and the whole step re-runs idempotently. The
-    // reverse order strands a repo stamped v2 whose doc was never retrofitted,
-    // which no later run can detect (see src/migrate.ts's header).
+    // the fixture at its old stamp and the whole step re-runs idempotently.
+    // The reverse order strands a repo stamped v2 whose doc was never
+    // retrofitted, which no later run can detect (see src/migrate.ts's
+    // header).
     let adapterAction: string;
     // The text this host means to leave on disk, whichever branch runs — the
     // row below is scored against the file, not against the branch taken.
     let adapterWanted: string;
     if (plan.docDiff.k === "other-difference") {
-      // The maintainer's three offers on a genuine drift (SKILL.md:254-256)
+      // The maintainer's three offers on a genuine drift (adopt "### docs/agents/*")
       // are adopt-theirs / keep-mine / merge-by-hand. Shown, not silent: this
       // is the exact offer a maintainer would see before approving it. This
       // host plays maintainer and takes adopt-theirs.
@@ -185,6 +229,24 @@ function main(): void {
         `${plan.docDiff.k} -> ${adapterAction}`,
         adapterApplied,
         adapterApplied ? undefined : "adapter doc on disk does not match what this host wrote",
+      ),
+    );
+
+    // ── step 5b: the v2-to-v3 glossary rename — documents, so it lands
+    // alongside the adapter doc write above and before config.json, same
+    // ordering rule (the renamed file is not the commit point either). A
+    // block (handled above, before this point is ever reached) would have
+    // stopped the whole step instead of landing here with an empty rename.
+    applyGlossaryRenames(root, plan.renames);
+    const glossaryRenamed =
+      plan.renames.every(({ to }) => existsSync(join(root, to))) &&
+      plan.renames.every(({ from }) => !existsSync(join(root, from)));
+    steps.push(
+      step(
+        "apply glossary rename",
+        plan.renames.map((r) => `${r.from} -> ${r.to}`).join(", ") || "none",
+        glossaryRenamed,
+        glossaryRenamed ? undefined : "glossary file(s) on disk do not match the planned rename",
       ),
     );
 
@@ -230,6 +292,12 @@ function main(): void {
     const adapterDocOnDisk = readFileSync(join(root, ADAPTER_DOC_PATH), "utf8");
     const markerPresent = /<!--\s*factory:tracker\s+kind=linear\s*-->/.test(adapterDocOnDisk);
     steps.push(step("verify file: adapter doc marker", markerPresent ? "present" : "missing", markerPresent));
+
+    // v2-to-v3's own file-on-disk proof: this repo's real v1 fixture genuinely
+    // carries CONTEXT.md (mkV1Repo's COPIED_PATHS), so a correct migration
+    // leaves GLOSSARY.md behind and CONTEXT.md gone.
+    const glossaryOnDisk = existsSync(join(root, "GLOSSARY.md")) && !existsSync(join(root, "CONTEXT.md"));
+    steps.push(step("verify file: GLOSSARY.md", glossaryOnDisk ? "renamed" : "not renamed", glossaryOnDisk));
 
     const postState = detectStamp(gatherStampFacts(root));
     const noLongerLegacy = postState.k === "v2" && postState.version === STAMP_VERSION;

@@ -18,9 +18,13 @@ known at the point you need it, stop rather than improvise one.
 This skill creates exactly one repo, one tracker project where the chosen
 tracker needs a separate one (Linear; GitHub has none — the repo is the
 tracker), and (where missing) labels. It creates zero issues. It ends by
-moving the maintainer into a Planning Session — grilling → PRD → issue
-slices — because that is the only place new work gets created (see
-`${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`).
+moving the maintainer into a Planning Session — grilling → spec → tickets
+(`to-spec`, `to-tickets`) — because that is the only place new work gets created (see
+`${CLAUDE_PLUGIN_ROOT}/GLOSSARY.md`).
+
+**Every question in this skill** follows `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+"## Asking the maintainer": a structured question, with the researched
+recommendation first.
 
 ## Preflight — fail loudly, change nothing
 
@@ -156,7 +160,7 @@ steps 2, 3, and 6 branch.
    matching the tracker chosen above — never both. Note:
    `${CLAUDE_PLUGIN_ROOT}/templates/stamp/gitignore` has no leading dot
    in the templates tree on purpose — write its contents to `.gitignore` in
-   the new repo, not `gitignore`. Domain docs (`CONTEXT.md`, `docs/adr/`) are
+   the new repo, not `gitignore`. Domain docs (`GLOSSARY.md`, `docs/adr/`) are
    created lazily by later work, not by this skill — do not create them here.
 
 5. **Initial commit**: stage everything and commit. No AI attribution in the
@@ -195,10 +199,14 @@ steps 2, 3, and 6 branch.
      GitHub. A brand-new repo has nothing to detect the tracker from, so
      this is simply the answer already given — with GitHub as the
      suggested default — not a fresh detection.
-   - **Merge policy.** Ask the maintainer directly. Nothing about a
-     brand-new repo reveals whether the loop may merge its own work, so
-     this is always a fresh question. Write the answer as `merge.policy`.
-   - **Attack surface.** Ask the maintainer directly, the same way. Write
+   - **Merge policy.** Ask the maintainer. Nothing about a brand-new repo
+     reveals whether the loop may merge its own work, so this is always a
+     fresh question. Recommend `squash` only if the maintainer has already
+     described tests or CI for this Project. Otherwise recommend `human`.
+     Write the answer as `merge.policy`.
+   - **Attack surface.** Ask the maintainer, the same way. Base the
+     recommendation on the attack-surface test (`PROTOCOL.md`, "## Security
+     sweeps") applied to what the maintainer said the Project will be. Write
      the answer as `attackSurface`.
 
    Write `stampVersion` as `STAMP_VERSION` in
@@ -229,7 +237,7 @@ A wayfinder map or a PRD in the reserved planning namespace never counts as
 an issue that makes its milestone touch the attack surface — the same skip
 `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s "Security sweeps" section applies
 everywhere else. If the maintainer declines, record it exactly as that
-section specifies — the marker line in the Project's `CONTEXT.md`. Tell the
+section specifies — the marker line in the Project's `GLOSSARY.md`. Tell the
 maintainer that once the Queue has issues, their next command is
 `/factory`.
 
@@ -243,10 +251,10 @@ maintainer that once the Queue has issues, their next command is
   Never hand-write AGENTS.md, docs/agents/ files, or .gitignore inline.
 - No AI attribution anywhere — not in commits, not in the PR (there is no PR
   here, but the rule still applies to the initial commit), not in the repo.
-- Domain docs (`CONTEXT.md`, `docs/adr/`) are created lazily by later work
+- Domain docs (`GLOSSARY.md`, `docs/adr/`) are created lazily by later work
   (`/domain-modeling`), never by this skill. One exception: recording a
   security-sweeps decline, which `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
-  "Security sweeps" section directs into `CONTEXT.md`, creating the file if
+  "Security sweeps" section directs into `GLOSSARY.md`, creating the file if
   it must.
 - This skill creates zero issues, on either tracker. Full stop.
 

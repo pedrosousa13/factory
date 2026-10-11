@@ -22,11 +22,11 @@ test("every role resolves to its preferred implementation when all are installed
 });
 
 test("a role with a fallback resolves to it when the preferred one is absent", () => {
-  const available = ALL_PREFERRED.filter((p) => p !== "to-prd").concat("to-spec");
+  const available = ALL_PREFERRED.filter((p) => p !== "to-spec").concat("to-prd");
   const got = resolveRoles(available);
   expect(got.failures).toEqual([]);
   const spec = got.resolved.find((s) => s.role === "write-spec");
-  expect(spec).toEqual({ role: "write-spec", selected: "to-spec", via: "fallback" });
+  expect(spec).toEqual({ role: "write-spec", selected: "to-prd", via: "fallback" });
 });
 
 test("a role with no fallback fails preflight when its preferred implementation is absent", () => {
@@ -37,10 +37,10 @@ test("a role with no fallback fails preflight when its preferred implementation 
 });
 
 test("a role whose preferred and fallback are both absent fails preflight", () => {
-  const got = resolveRoles(ALL_PREFERRED.filter((p) => p !== "to-prd"));
+  const got = resolveRoles(ALL_PREFERRED.filter((p) => p !== "to-spec"));
   expect(got.failures.length).toBe(1);
   expect(got.failures[0].what).toContain("Write the spec");
-  expect(got.failures[0].why).toContain("to-spec");
+  expect(got.failures[0].why).toContain("to-prd");
 });
 
 test("the implement role's failure blocks execution only — a missing TDD skill must not stop planning", () => {
@@ -74,8 +74,8 @@ test("the run reports which implementation it selected for every role", () => {
 });
 
 test("the report marks a fallback selection as a fallback", () => {
-  const available = ALL_PREFERRED.filter((p) => p !== "to-issues").concat("to-tickets");
+  const available = ALL_PREFERRED.filter((p) => p !== "to-tickets").concat("to-issues");
   const report = roleReport(resolveRoles(available).resolved);
-  expect(report).toContain("to-tickets");
+  expect(report).toContain("to-issues");
   expect(report).toContain("fallback");
 });

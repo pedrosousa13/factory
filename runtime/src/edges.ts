@@ -3,7 +3,7 @@
 // to the pure modules (config.ts, marker.ts, preflight.ts) that decide what
 // they mean.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { parseConfig, type ParseResult } from "./config";
@@ -13,6 +13,7 @@ import { CONFIG_PATH } from "./paths";
 import { ROLE_TABLE } from "./roles";
 import type { AdapterMarker, PreflightFacts, PushCheck, StampVersion, TrackerReachable } from "./preflight";
 import type { StampFacts } from "./stamp";
+import type { GlossaryFacts, GlossaryRename } from "./migrate";
 
 export { CONFIG_PATH };
 export const ADAPTER_DOC_PATH = "docs/agents/issue-tracker.md";
@@ -37,6 +38,76 @@ function readAdapterDoc(repoRoot: string): string | null {
 function gatherAdapterMarker(repoRoot: string): AdapterMarker {
   const doc = readAdapterDoc(repoRoot);
   return doc === null ? "missing-file" : readMarker(doc);
+}
+
+// ───── glossary files (migrate.ts's v2-to-v3 step: the rename input and the
+// rename itself)
+
+const CONTEXT_MD_PATH = "CONTEXT.md";
+const CONTEXT_MAP_MD_PATH = "CONTEXT-MAP.md";
+const GLOSSARY_MD_PATH = "GLOSSARY.md";
+const GLOSSARY_MAP_MD_PATH = "GLOSSARY-MAP.md";
+
+/** Which of the four glossary file names exist on disk — migrate.ts's
+ * planMigration decides what, if anything, to do with these; this function
+ * only reads. */
+export function gatherGlossaryFacts(repoRoot: string): GlossaryFacts {
+  return {
+    contextMd: existsSync(join(repoRoot, CONTEXT_MD_PATH)),
+    contextMapMd: existsSync(join(repoRoot, CONTEXT_MAP_MD_PATH)),
+    glossaryMd: existsSync(join(repoRoot, GLOSSARY_MD_PATH)),
+    glossaryMapMd: existsSync(join(repoRoot, GLOSSARY_MAP_MD_PATH)),
+  };
+}
+
+// Whether `path` is tracked by git — decided up front, with its own call,
+// rather than by trying `git mv` and catching a failure: a bare catch there
+// cannot tell "untracked, fall back to a plain rename" apart from any other
+// failure (a corrupt index, an index.lock left behind by another process),
+// and silently falling back on the latter would turn a `git mv` that should
+// have thrown into an untracked, unstaged rename. `git ls-files
+// --error-unmatch` exits non-zero exactly when the path isn't in the index.
+function isTracked(repoRoot: string, path: string): boolean {
+  try {
+    execFileSync("git", ["ls-files", "--error-unmatch", path], {
+      cwd: repoRoot,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Performs migrate.ts's planned renames with `git mv`, so the rename itself
+ * lands in the repo's history the same way a maintainer running it by hand
+ * would. Falls back to a plain fs rename when the file isn't tracked yet
+ * (a fresh fixture, or a maintainer who never `git add`ed the glossary) —
+ * `git mv` refuses an untracked path outright rather than renaming it.
+ *
+ * Throws if the destination already exists: `renameSync` overwrites on
+ * POSIX, and `git mv` overwrites too with `-f`, which this call never
+ * passes, but checking first means the untracked, fs-rename branch below
+ * can't silently clobber a file either. migrate.ts's `glossaryRenames`
+ * never plans a rename onto an existing destination, so this is a guard
+ * against a caller that bypasses it, not a case this module expects to hit.
+ *
+ * `git mv` failing on a tracked path is left to throw — no catch around that
+ * call swallows it into the fs-rename fallback, which `isTracked` above
+ * exists precisely to make unnecessary.
+ */
+export function applyGlossaryRenames(repoRoot: string, renames: GlossaryRename[]): void {
+  for (const { from, to } of renames) {
+    if (existsSync(join(repoRoot, to))) {
+      throw new Error(`applyGlossaryRenames: destination "${to}" already exists — refusing to overwrite it`);
+    }
+    if (isTracked(repoRoot, from)) {
+      execFileSync("git", ["mv", from, to], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
+    } else {
+      renameSync(join(repoRoot, from), join(repoRoot, to));
+    }
+  }
 }
 
 // ───── push check ("push, not transport": only that a non-interactive push

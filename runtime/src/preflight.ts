@@ -115,7 +115,7 @@ export function preflight(facts: PreflightFacts): PreflightResult {
   // errors keep the generic per-error wrapper.
   if (facts.config === "missing-file") {
     failures.push({
-      what: ".factory/config.json is missing — repo is not stamped for v2",
+      what: ".factory/config.json is missing — repo is not stamped",
       why: "the runtime reads .factory/config.json to resolve the tracker, merge policy, and attack-surface settings before any work starts",
       fix: adopt("create .factory/config.json"),
     });
