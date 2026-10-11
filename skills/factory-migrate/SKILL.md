@@ -63,6 +63,12 @@ Report the detected state to the maintainer before proceeding — what's on
 disk, and therefore what this run intends to change, before anything
 changes.
 
+**Check the v2-to-v3 blocks here, before any question.** When v2-to-v3 is
+pending (cases 2 and 3 above both include it), check the two cases that
+block it — described under "Build the combined plan" below. If either
+holds, report it with what the maintainer must do, write nothing, and stop,
+before asking anything a blocked run would throw away.
+
 ## Build the combined plan
 
 Take every pending step found above, oldest first, and build one plan
@@ -124,8 +130,8 @@ restate those rules, only applies them here to a legacy document instead
 of a freshly-adopted one.
 
 **The v2-to-v3 step renames the glossary, and asks nothing**
-(`PROTOCOL.md`'s "## Migration"). First check for the two cases that block
-it:
+(`PROTOCOL.md`'s "## Migration"). Two cases block it; "Detect, change
+nothing" checks them before anything else:
 
 - **`CONTEXT.md` and `GLOSSARY.md` both exist** at the repo root. Rename
   neither, overwrite neither.
@@ -133,10 +139,9 @@ it:
   per-context glossaries it lists, and the links between them are the
   maintainer's to rename by hand.
 
-If either holds, report it with what the maintainer must do, write
-nothing, and stop. The stamp stays at its old version, so a re-run after
-the fix finds the step still pending and completes it. Otherwise the step
-plans three things:
+Blocked, the run writes nothing. The stamp stays at its old version, so a
+re-run after the fix finds the step still pending and completes it.
+Otherwise the step plans three things:
 
 - `git mv CONTEXT.md GLOSSARY.md`, when `CONTEXT.md` exists. When neither
   exists, there is nothing to rename: the glossary is created lazily.
@@ -146,6 +151,12 @@ plans three things:
   substitution is the whole v3 change to those files. It is not a template
   retrofit, so it never offers keep-mine: a file that kept the old name
   would point at a glossary this run renames away.
+  On a v1 repo, apply the substitution to the working copy *before* the
+  v1-to-v2 classification below. The templates already say `GLOSSARY.md`,
+  so a v1 file that differed only by the old token now matches, and never
+  reaches the keep-mine choice over it. The substitution also applies to a
+  file the maintainer keeps or merges by hand: it is v3's, not the
+  template's.
 - On a 2.0.0 repo, `config.json` is the existing one with `stampVersion`
   bumped to the current version. Every other field stays as it is,
   `merge.method` and `notifierCommand` included. When v1-to-v2 runs in the

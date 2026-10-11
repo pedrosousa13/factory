@@ -31,8 +31,10 @@ It is the source of truth; this file only bootstraps it.
    every one collected, with its fix, and stop. Unstamped → follow
    `skills/factory-adopt/SKILL.md` in this session. Old stamp → follow
    `skills/factory-migrate/SKILL.md` in this session. After either one,
-   re-run the checks above. Only a green result begins Session start. Their
-   own approval gates still apply.
+   re-run the checks above. Only a green result begins Session start. Route
+   at most once per session: a re-check that is still not green (a blocked
+   migration, a declined diff) reports and stops. Their own approval gates
+   still apply.
 3. Read `docs/agents/issue-tracker.md` — the Project's Tracker adapter. It
    names where this Project's issues live and what tooling reaches them;
    load that tooling as it directs, via ToolSearch first if it names
@@ -44,8 +46,9 @@ It is the source of truth; this file only bootstraps it.
 
 - The Queue is the only source of work. Never invent work. Run out (empty
   after a Triage pass) → push notification and report. An interactive
-  session then runs `/retro` over the session and opens a Planning Session,
-  budget permitting. A headless run stops.
+  session then runs `/retro` if one is due, opens a Planning Session, and
+  returns to Queue selection after it — budget permitting, see "Empty
+  Queue". A headless run stops.
 - A bare `/factory` never asks what to do: it routes itself, and its Queue
   scope is Everything. `/factory <milestone>` (or `everything`,
   `no-milestone`) sets the scope. Ask only when the argument names no

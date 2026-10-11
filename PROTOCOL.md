@@ -123,7 +123,10 @@ question `/factory` never asks.
 | Stamp newer than the plugin | Stop: "update the Factory plugin." |
 | Stamped and current | Session start, then the loop. |
 
-Routing into adopt or migrate does not skip their approval gates. Each
+Route into adopt or migrate at most once per session. If the re-check
+after it is still not green — a migration blocked, a diff declined — report
+the route's result and stop. Routing into adopt or migrate does not skip
+their approval gates. Each
 still shows its plan and waits for the maintainer's approval: an adopt
 batch, a migrate diff. A headless run never routes into adopt or migrate.
 It reports the route it would have taken, and stops.
@@ -383,8 +386,8 @@ After the report, an interactive session goes on to the next step:
 planning. If the Context Budget is spent, write a Handoff and stop as
 usual. Note in it that the session ran out, and whether a retrospective is
 pending. The next `/factory` resumes there. Otherwise, first run a
-retrospective, if this session landed or Parked at least one issue, or the
-Handoff it consumed says one is pending. The `/retro` skill
+retrospective, if this session landed or Parked at least one issue since
+its last retrospective, or the Handoff it consumed says one is pending. The `/retro` skill
 (`~/.claude/skills/retro`) is human-invoke-only, so read its SKILL.md and
 apply it directly to this session, and to the sessions the Handoff names.
 If it is not installed, skip it and say so. Its findings are changes to the
@@ -631,8 +634,8 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
     order, as Session start reads it — correct.
 - **Contents**: where the Queue stood, decisions made, and facts not
   recoverable from the artifacts (issues, commits, PRs, docs). A Handoff
-  written at run-out also says so, and whether a retrospective is pending
-  (see Queue selection, "Empty Queue"). Reference,
+  written at run-out also says so, whether a retrospective is pending, and
+  which sessions it should cover (see Queue selection, "Empty Queue"). Reference,
   don't duplicate, what the artifacts already hold — the skill's own rule.
 - **Then stop.** Send the maintainer a push notification (one line: Handoff
   written, fresh session needed) and stop cleanly. Resuming is just running

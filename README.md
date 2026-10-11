@@ -59,7 +59,7 @@ What the Factory assumes on the machine:
 
 1. **Claude Code**, plus the **Linear MCP server** connected to the Side projects workspace for any Linear-backed Project.
 2. **`gh`** authenticated, git over SSH.
-3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, …) installed under `~/.claude/skills` (`/pr` and `/retro` too, used at landing and at run-out when present), as editable copies via `npx skills@latest add mattpocock/skills -g` (update with `npx skills@latest update`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
+3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, …) installed under `~/.claude/skills` (`/pr` and `/retro` too, used at landing and at run-out when present), as editable copies via `npx skills@latest add mattpocock/skills -g` (update with `npx skills@latest update -g`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
 
    Install superpowers yourself — the Factory's manifest declares no
    dependency on it, on purpose. A manifest dependency names a marketplace

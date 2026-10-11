@@ -41,7 +41,7 @@ The single file (`.scratch/pause-note.md`) a Loop Session writes on picking up a
 _Avoid_: handoff, pause file, checkpoint
 
 **Context Budget**:
-The ceiling (~40% of the context window) a Loop Session may consume before it must hand off. Checked at issue boundaries.
+The ceiling (~40% of the context window) a Loop Session may consume before it must hand off. Checked at issue boundaries, at run-out, and after an in-session Planning Session.
 _Avoid_: token limit
 
 **Park**:

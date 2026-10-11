@@ -648,7 +648,7 @@ function runOne(harness: HarnessName, phrasebook: string): HarnessRecord {
       // detect (see src/migrate.ts's header). bin/migrate.ts writes in this
       // same order.
       //
-      // The maintainer's offer on a genuine drift (SKILL.md:254-256) is
+      // The maintainer's offer on a genuine drift (adopt "### docs/agents/*") is
       // adopt-theirs / keep-mine / merge-by-hand — this host takes adopt-theirs,
       // same as bin/migrate.ts. missing-sections keeps the ordinary retrofit.
       if (plan.docDiff.k === "other-difference") {

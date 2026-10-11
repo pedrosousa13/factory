@@ -178,7 +178,7 @@ test("inserting the missing marker puts it immediately after the H1", () => {
   expect(applyMissing(current, got.missing)).toBe(TEMPLATE);
 });
 
-// ───── the marker is the only sub-section retrofit (SKILL.md:244, :249-253)
+// ───── the marker is the only sub-section retrofit (adopt "### docs/agents/*")
 
 test("a line the maintainer deleted from a section they still have is an other-difference", () => {
   // Not an omission an older stamp left behind — a deletion they chose, so they

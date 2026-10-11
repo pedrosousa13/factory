@@ -201,7 +201,7 @@ function main(): void {
     // row below is scored against the file, not against the branch taken.
     let adapterWanted: string;
     if (plan.docDiff.k === "other-difference") {
-      // The maintainer's three offers on a genuine drift (SKILL.md:254-256)
+      // The maintainer's three offers on a genuine drift (adopt "### docs/agents/*")
       // are adopt-theirs / keep-mine / merge-by-hand. Shown, not silent: this
       // is the exact offer a maintainer would see before approving it. This
       // host plays maintainer and takes adopt-theirs.

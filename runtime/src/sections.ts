@@ -1,4 +1,4 @@
-// Pure section module (skills/factory-adopt/SKILL.md:229-257): classifies one
+// Pure section module (skills/factory-adopt/SKILL.md, "### docs/agents/*"): classifies one
 // already-stamped document against the rendered template it came from, so
 // migration can retrofit conventions added since the stamp without
 // re-litigating a file the maintainer already accepted. Three outcomes —
@@ -6,7 +6,7 @@
 // only the maintainer can judge. No fs, no process, no clock: callers pass in
 // the two texts they already have.
 //
-// Position is load-bearing. SKILL.md:236-241 requires an approved insertion to
+// Position is load-bearing. adopt "### docs/agents/*" requires an approved insertion to
 // leave the file byte-identical to the rendered template, so the next run lands
 // in the "matches" case and the migration stops nagging. Appending at the end
 // would reorder sections and re-surface a whole-file diff on every later run.
@@ -31,7 +31,7 @@ export type Section = {
  *
  * - `insert` — the document lacks this section entirely; applying adds it.
  * - `replace` — the document has this section but lacks the tracker marker
- *   inside it (SKILL.md:249-253); applying swaps the template's version in for
+ *   inside it (adopt "### docs/agents/*"); applying swaps the template's version in for
  *   the one already there. A consumer that splices sections itself must drop the
  *   section being replaced, or it emits the heading twice.
  */
@@ -103,7 +103,7 @@ function closesFence(line: string, fence: string): boolean {
 /**
  * Compares a stamped document against its rendered template.
  *
- * `missing-sections` is the narrow case SKILL.md:235-253 describes: the current
+ * `missing-sections` is the narrow case adopt "### docs/agents/*" describes: the current
  * document's headings are a subsequence of the template's, and every shared
  * section either matches or lacks nothing but the tracker marker — the signature
  * of a repo stamped by an older Factory. Anything else is an `other-difference`:
@@ -111,7 +111,7 @@ function closesFence(line: string, fence: string): boolean {
  *
  * An `other-difference`'s `detail` names every section that differs, and then
  * every section that merely lacks the tracker marker. The maintainer's three
- * offers (SKILL.md:254-256) apply to the whole document, so a `detail` that
+ * offers (adopt "### docs/agents/*") apply to the whole document, so a `detail` that
  * named one section would hide the rest behind whichever choice they made. A
  * document whose headings do not line up at all returns earlier and names the
  * stray section instead: with no mapping there is nothing to compare section
@@ -131,7 +131,7 @@ export function diffDoc(current: string, rendered: string): DocDiff {
   const mapped = lined.mapped;
 
   // Template indices whose current counterpart is there but lacks the tracker
-  // marker — the one sub-section retrofit SKILL.md:249-253 licenses by name.
+  // marker — the one sub-section retrofit adopt "### docs/agents/*" licenses by name.
   const markerless = new Set<number>();
   // Every section the maintainer has to judge, and every section that merely
   // lacks the marker. The loop runs to the end rather than returning on the
@@ -152,7 +152,7 @@ export function diffDoc(current: string, rendered: string): DocDiff {
     differing.push(`${label(want)} differs from the template`);
   }
   // Classification is unchanged: one genuine difference is what makes this an
-  // other-difference (SKILL.md:244). A document whose only finding is a
+  // other-difference (adopt "### docs/agents/*"). A document whose only finding is a
   // missing marker still takes the `replace` retrofit below. The marker notes
   // ride along in `detail` only when some other section already sent the
   // document here.
@@ -208,15 +208,15 @@ const TRACKER_MARKER_LINE = /^<!--\s*factory:tracker\s+kind=[\w-]+\s*-->$/;
 /**
  * True when the only thing the body lacks is the tracker marker.
  *
- * This is deliberately narrow. SKILL.md:235 scopes the middle case to "lacking
- * whole sections the template carries" and SKILL.md:244 sends "any difference
- * beyond cleanly missing sections" to the general case. SKILL.md:249-253 carves
+ * This is deliberately narrow. adopt "### docs/agents/*" scopes the middle case to "lacking
+ * whole sections the template carries" and adopt "### docs/agents/*" sends "any difference
+ * beyond cleanly missing sections" to the general case. adopt "### docs/agents/*" carves
  * out exactly one sub-section exception, by name and by size — the tracker
  * marker, "rather than falling through to the whole-file diff below over one
  * absent line". A maintainer who deleted a label row, a bullet, or a paragraph
  * from a section they still have is not missing that section: calling it missing
  * would mislabel their edit as an omission and offer only add-or-not, when
- * SKILL.md:254-256 grants them adopt, keep theirs, or merge by hand.
+ * adopt "### docs/agents/*" grants them adopt, keep theirs, or merge by hand.
  */
 function lacksOnlyMarker(body: string, want: string): boolean {
   const absent = absentLines(contentLines(body), contentLines(want));
@@ -257,7 +257,7 @@ function contentLines(text: string): string[] {
  * from `missing` where the template supplies it and from the current document
  * everywhere else. Rebuilding rather than splicing is what makes the result
  * byte-identical to the rendered template, so a second `diffDoc` returns
- * `matches` and the run converges (SKILL.md:236-241).
+ * `matches` and the run converges (adopt "### docs/agents/*").
  *
  * Precondition: `missing` is the whole list `diffDoc` returned for this same
  * document, since the indices are positions in the finished document and only

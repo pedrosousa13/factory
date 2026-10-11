@@ -1,8 +1,8 @@
 // Pure empty-Queue report module (PROTOCOL.md "### 1. Queue selection"; closes S10).
 // Three
 // scopes report differently, the breakdown covers every still-open issue
-// rather than the Queue candidates, and the run ends here either way — the
-// loop never invents work. No fs, no process, no clock reads.
+// rather than the Queue candidates, and the loop stops consuming here — it
+// never invents work. Only an interactive session carries on, into planning. No fs, no process, no clock reads.
 
 import type { IssueState, QueueScope, TicketFacts } from "./tracker";
 import { isPlanningArtifact } from "./planning";
@@ -78,18 +78,18 @@ function breakdownLine(b: OpenBreakdown): string {
   return `  ${b.open} open, ${b.readyForHuman} ready-for-human, ${b.needsInfo} needs-info, ${b.blocked} blocked`;
 }
 
-// PROTOCOL.md "### 1. Queue selection": an interactive run goes on to run a
-// retrospective (when this session landed or Parked at least one issue) and
-// then open a Planning Session, in the same session, budget permitting — not
-// a fresh session, and not an end to the run. A headless run prints the same
-// report and stops, with no offer. The loop itself is still terminal either
-// way — "the loop must never create work. Ending makes that property
-// structural, not a promise" — it is only the session that carries on.
+// PROTOCOL.md "### 1. Queue selection": an interactive run goes on to
+// planning, budget permitting — a retrospective first when one is due (an
+// issue landed or Parked since the last one, or a consumed Handoff says one
+// is pending), then a Planning Session in the same session, then back to
+// Queue selection. A spent budget writes a Handoff instead. A headless run
+// prints the same report and stops, with no offer. Either way this report
+// creates no work: only the maintainer does, in the Planning Session.
 function exitLines(mode: "interactive" | "headless"): { exit: QueueExit; lines: string[] } {
   if (mode === "headless") return { exit: { k: "stop" }, lines: ["  run ends here."] };
   return {
     exit: { k: "offer-planning" },
-    lines: ["  Nothing left to consume. Running a retrospective, then opening a Planning Session, in this session."],
+    lines: ["  Nothing left to consume. Next, budget permitting: a retrospective if one is due, then a Planning Session."],
   };
 }
 
