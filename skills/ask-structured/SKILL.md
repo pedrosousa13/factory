@@ -11,6 +11,8 @@ Finding _facts_ is your job, never the user's. Before asking, look up what the q
 
 Ask only what is genuinely the user's to decide: intent, preference, priority, a tradeoff with no clear winner, an outward-facing or hard-to-reverse action. A choice with a conventional default isn't one; take the default and say so.
 
+**Mid-loop in a Factory Loop Session (from pickup until the Queue runs out), don't ask through the tool.** A structured question blocks with no timeout and would stall the loop. Ping instead, per `PROTOCOL.md`'s "Ping and Park", with the options and recommendation in the text format below. The Triage pass at an issue boundary asks nothing at all.
+
 Every recommendation rests on that research. A recommendation you can't back with evidence is a guess; say so in its description.
 
 ## Ask through the structured-question tool
@@ -20,6 +22,7 @@ In Claude Code, that is `AskUserQuestion`. Batch the questions that don't depend
 - **Header**: a short chip label, 12 characters or fewer.
 - **Options**: 2–4, mutually exclusive. Each description says what the option means and what it costs.
 - **Recommended option first**, its label ending in `(Recommended)`. Its description gives the reason and names the evidence: a file and line, a doc, an issue.
+  On a multiSelect question, label each option you recommend.
 - **No "Other" option.** The tool adds its own free-text escape.
 - **Previews** only when the user must compare concrete artifacts side by side (code shapes, layouts, configs), and only on single-select questions.
 - **multiSelect** only when the choices are genuinely not exclusive.

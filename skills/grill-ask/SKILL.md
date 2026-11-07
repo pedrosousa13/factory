@@ -17,11 +17,12 @@ Every recommendation rests on that research. A recommendation you can't back wit
 
 ## Ask through the structured-question tool
 
-In Claude Code, that is `AskUserQuestion`. One call holds up to four questions; a frontier of more than four takes several calls in a row. For each question:
+In Claude Code, that is `AskUserQuestion`. One call holds up to four questions; a frontier of more than four takes several calls in a row. Before each later call in a round, drop the questions earlier answers settled; questions those answers newly unblock wait for the next round. For each question:
 
 - **Header**: a short chip label, 12 characters or fewer.
 - **Options**: 2–4, mutually exclusive. Each description says what the option means and what it costs.
 - **Recommended option first**, its label ending in `(Recommended)`. Its description gives the reason and names the evidence: a file and line, a doc, an issue.
+  On a multiSelect question, label each option you recommend.
 - **No "Other" option.** The tool adds its own free-text escape.
 - **Previews** only when the user must compare concrete artifacts side by side (code shapes, layouts, configs), and only on single-select questions.
 - **multiSelect** only when the choices are genuinely not exclusive.

@@ -4,4 +4,4 @@ description: A relentless interview in structured questions with researched reco
 disable-model-invocation: true
 ---
 
-Call the Skill tool twice, for "grill-ask" and "domain-modeling".
+Call the Skill tool twice, for "factory:grill-ask" and "domain-modeling".
