@@ -1,0 +1,5 @@
+interface:
+  display_name: "Grill Ask with Docs"
+  short_description: "Grill a design in structured questions and write its docs"
+policy:
+  allow_implicit_invocation: false
