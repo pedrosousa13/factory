@@ -165,7 +165,6 @@ function askAndJournal(
     openQuestion: { text: question, askedAt },
     workers: [],
   });
-
 }
 
 // ───────────────────────────────────────────────────────────────── scoreboard

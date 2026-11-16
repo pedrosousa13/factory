@@ -692,9 +692,9 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
   don't duplicate, what the artifacts already hold — the skill's own rule.
 - **Then stop.** Send the maintainer a push notification (in Claude Code, the
   `PushNotification` tool; one line: Handoff written, fresh session needed)
-  and stop cleanly. Resuming is just running
-  `/factory` in a fresh session — its Session start consumes the Handoff and
-  archives it to `.scratch/handoffs/archive/` (consume-once).
+  and stop cleanly. Resuming is just running `/factory` in a fresh session —
+  its Session start consumes the Handoff and archives it to
+  `.scratch/handoffs/archive/` (consume-once).
 
 ## Milestones
 
