@@ -349,16 +349,19 @@ Overwrite the journal: `step: "queue-selection"`.
 
 **First, close out PRs waiting on the maintainer** (merge policy `human`;
 see Landing gate). For each open issue in a started state whose branch has
-an open or closed PR from the loop:
+a PR from the loop, look at the newest such PR:
 
 - **Approved, with green required checks** → merge it with the resolved
   method, delete the branch, and mirror completion in the tracker.
 - **Merged by the maintainer** → mirror completion in the tracker.
-- **Changes requested, or a red required check** → the issue goes back to
-  the Queue: move it to an unstarted state with `ready-for-agent` kept, and
-  comment the review or failure (with the AI disclaimer). Whoever picks it
-  up reuses its branch and PR (Implementation), and the review comments
-  are part of its brief.
+- **Changes requested, or a red required check, newer than the branch's
+  last push** → the issue goes back to the Queue: move it to an unstarted
+  state with `ready-for-agent` kept, and comment the review or failure
+  (with the AI disclaimer). Whoever picks it up reuses its branch and PR
+  (Implementation), and the review comments are part of its brief. A
+  review or failure older than the last push is already answered: leave
+  the PR for the maintainer. Sent back once already (the loop's earlier
+  comment says so) → Park it instead, by the other trigger (Ping and Park).
 - **Closed without merging** → the maintainer declined it: move it to an
   unstarted state, swap `ready-for-agent` for `needs-triage`, and comment
   the PR link (with the AI disclaimer). The next full Triage pass asks
@@ -366,9 +369,10 @@ an open or closed PR from the loop:
 - **Still open, no review** → leave it. It stays out of the Queue, because
   the issue is started.
 
-The tracker calls are the adapter's: State: completed for completion, and
-Park's state move back to unstarted, with the state label set as above
-instead of `needs-info`.
+The tracker calls are the adapter's. Completion is State: completed. The
+move back to unstarted is the adapter's Park call with one change: put the
+state label named above where Park puts `needs-info`, or, where
+`ready-for-agent` is kept, leave the labels as they are.
 
 The Queue is the set of this Project's issues that are:
 
@@ -537,7 +541,9 @@ confirm they work, and add the section in this issue's PR. Do this at
 Implementation, before dispatching, so the implementer gets the commands.
 Run them on the freshly pulled default branch: a command that fails there
 is broken before this issue touched anything, so Park the issue with its
-output as the reason rather than record or land over it. Found nothing →
+output as the reason rather than record or land over it. If an open PR
+from the loop already adds the section (merge policy `human` leaves PRs
+waiting), take its commands and do not add it again. Found nothing →
 write `none`, so the next session does not search again. A Project with
 `none` for both lands on `/code-review` alone, and says so in the PR body.
 
