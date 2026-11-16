@@ -99,7 +99,7 @@ that is the Invocation section's business, below.
 `/factory` takes one optional argument, a Queue scope: a milestone name,
 `everything`, or `no-milestone`. A bare `/factory` means **Everything**. A
 name that matches no milestone is a question, not an error: ask with the
-Session start menu (step 3). In a Project with no milestones, say that the
+Session start menu (step 4). In a Project with no milestones, say that the
 argument was ignored, and run the whole Queue. The argument only sets the scope. It never
 decides what the session does.
 
@@ -297,7 +297,17 @@ ordered cannot run the loop.
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
    Handoffs is specified in the Handoff section below.
-3. **Settle the Queue scope.** The invocation usually settles it already:
+3. **Close out PRs that waited on the maintainer** (merge policy `human`).
+   For each open issue in a started state whose branch has a Factory PR:
+   - **PR merged** → mirror completion (comment with the PR link, move the
+     issue to a completed state) and delete the branch.
+   - **PR closed without merging** → the maintainer declined it. Return the
+     issue to an unstarted state, swap `ready-for-agent` for
+     `needs-triage`, and comment with the PR link (with the AI disclaimer).
+     The next full Triage pass asks what to do with it.
+   - **PR still open** → leave it. It is not in the Queue, because the
+     issue is started.
+4. **Settle the Queue scope.** The invocation usually settles it already:
    a bare `/factory` means **Everything**, and an argument names the scope
    (see "Invocation"). Ask only when an argument named no milestone that
    exists. List the Project's milestones.
@@ -319,7 +329,7 @@ ordered cannot run the loop.
      be picked and the loop stops immediately.
    - Record the answer as this session's **Queue scope** (used by Queue
      selection below).
-4. Enter the loop below.
+5. Enter the loop below.
 
 ## The loop
 
@@ -460,7 +470,8 @@ Overwrite the journal: `step: "implementation"`.
   - **One implementer per issue**, on the issue branch, in the session's
     working tree. Never two at once on one branch.
   - **The prompt carries pointers, not copies**: the issue reference, the
-    branch, the seams to test, and the Project's check commands.
+    branch, the seams to test, and the Project's check commands (`AGENTS.md`
+    `## Checks`, see Landing gate).
   - **The session pre-agrees the seams.** `/tdd` writes no test at a seam
     the user has not confirmed, and a subagent has no user to ask. The
     session confirms them instead: it derives the seams from the brief (its
@@ -491,8 +502,8 @@ Overwrite the journal: `step: "landing-gate"`.
 
 An issue lands only when all of these pass:
 
-1. **Tests** green, if the Project has a test command.
-2. **Typecheck** green, if the Project has one.
+1. **Tests** green, run with the test command in `AGENTS.md`'s `## Checks`.
+2. **Typecheck** green, run with the typecheck command there.
 3. **`/code-review`** (Standards + Spec), given both inputs so it asks
    nothing: the fixed point is the merge-base with the default branch, and
    the spec is the issue, named in the skill's arguments and referenced by
@@ -501,6 +512,14 @@ An issue lands only when all of these pass:
    declined, with the reason in the PR body. After any fix, re-run 1 and
    2. At most two review rounds: a finding still open after the second
    Parks the issue.
+
+**`## Checks`** in `AGENTS.md` names the Project's test and typecheck
+commands, one line each, or `none` for either. The section is created
+lazily, like `GLOSSARY.md`. When it is missing, find the commands (the CI
+workflow, the package manifest, a Makefile, the README), run them once to
+confirm they work, and add the section in this issue's PR. Found nothing →
+write `none`, so the next session does not search again. A Project with
+`none` for both lands on `/code-review` alone, and says so in the PR body.
 
 The merge method follows `.factory/config.json`'s `merge` setting
 (`config.ts`'s `effective()`, `agentwork.ts`'s `mergeDecision`, pinned by
@@ -516,11 +535,19 @@ Then land it:
   (the gate's test runs, before and after), and Merge Danger. Add a link to
   the issue. If `pr` is not installed, write a plain summary that links the
   issue. No AI attribution in the commits or the PR.
-- If the repo has required checks, enable auto-merge and wait for green. If it
-  has none, the Landing gate above *is* the green signal — merge immediately
-  using the resolved method, delete the branch.
+- **Under an auto policy**: if the repo has required checks, enable
+  auto-merge and wait for green. If it has none, the Landing gate above
+  *is* the green signal — merge immediately using the resolved method,
+  delete the branch. A required check that goes red gets one fix attempt
+  on the branch; still red → Park the issue, by the other trigger (Ping and
+  Park).
+- **Under `human`**: do not wait for approval, which would stall the loop.
+  Comment the PR link on the issue, leave the issue in its started state,
+  delete the Pause note, and go to the Issue boundary. For the loop, the
+  open PR is this issue's landing; the tracker completes it later, when
+  Session start finds the PR merged (step 3).
 - Mirror completion in the tracker: comment with the PR link, move the issue
-  to a **completed** state.
+  to a **completed** state. Under `human`, this waits for the merge.
 - Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
   boundary that closes it.
 

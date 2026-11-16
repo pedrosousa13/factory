@@ -73,8 +73,10 @@ It is the source of truth; this file only bootstraps it.
 - A question only the maintainer can answer → ping and run a ~15 minute
   deadline timer without ending the turn. Unanswered → Park the issue and
   continue with the next one. Never guess.
-- Nothing lands without the Landing gate (tests + typecheck where they exist,
-  plus `/code-review`, at most two rounds, then Park).
+- Nothing lands without the Landing gate (tests + typecheck from
+  `AGENTS.md`'s `## Checks`, created lazily, plus `/code-review`, at most
+  two rounds, then Park). Under merge policy `human`, open the PR and move
+  on; Session start completes the issue once its PR merges.
 - Mirror every transition in the tracker: pickup comment with branch name,
   completion comment with PR link, State: started → State: completed.
 - At every issue boundary, consume a deferred Handoff first, then check the
