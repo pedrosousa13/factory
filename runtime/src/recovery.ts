@@ -78,9 +78,9 @@ export function reconcileClaims(input: RecoveryInput): RecoveryDecision[] {
     // and the only Park reason that survives a crash is the journaled
     // openQuestion: the ping's question, or the reason a gate-failure Park
     // writes there itself (PROTOCOL.md "Ping and Park", the other trigger).
-    // With no recoverable reason there is nothing to say in the
-    // comment, so the interrupted Park is reversed instead: the run simply
-    // resumes the work on its branch. Inventing a reason would be worse than
+    // With no recoverable reason there is nothing to say in the comment, so
+    // the interrupted Park is reversed instead: the run simply resumes the
+    // work on its branch. Inventing a reason would be worse than
     // either option.
     const parkInterrupted =
       input.journal !== null &&

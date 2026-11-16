@@ -342,7 +342,7 @@ vocabularies. A session that writes only the five leaves recovery blind:
 other value carries that.
 
 A claim always writes `openQuestion: null` — a question never survives a new
-claim. The ping is the one write that sets it (see "Ping and Park").
+claim. Only the ping and a Park without one set it (see "Ping and Park").
 
 ### 1. Queue selection
 
@@ -532,7 +532,7 @@ An issue lands only when all of these pass:
    violation is fixed. A baseline smell is a judgement call and may be
    declined, with the reason in the PR body. After any fix, re-run 1 and
    2. At most two review rounds: a finding still open after the second
-   Parks the issue.
+   Parks the issue, by the other trigger (Ping and Park).
 
 **`## Checks`** in `AGENTS.md` names the Project's test and typecheck
 commands, one line each, or `none` for either. The section is created
@@ -541,8 +541,9 @@ workflow, the package manifest, a Makefile, the README), run them once to
 confirm they work, and add the section in this issue's PR. Do this at
 Implementation, before dispatching, so the implementer gets the commands.
 Run them on the freshly pulled default branch: a command that fails there
-is broken before this issue touched anything, so Park the issue with its
-output as the reason rather than record or land over it. If an open PR
+is broken before this issue touched anything, so Park the issue by the
+other trigger (Ping and Park), with its output as the reason, rather than
+record or land over it. If an open PR
 from the loop already adds the section (merge policy `human` leaves PRs
 waiting), take its commands and do not add it again. Found nothing →
 write `none`, so the next session does not search again. A Project with
@@ -662,13 +663,18 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   "Triage pass"), and it re-enters the Queue like any other issue. The
   session that picks it up finds its work waiting on the branch
   (Implementation).
-- **The other trigger**: a Landing gate that fails with no fix forthcoming
-  Parks the issue too, by the same four steps — with the gate failure and what
-  it would take to clear it posted in place of the question. There was no
-  ping, so the Park writes the reason itself: overwrite the journal with
-  `step: "park"` and `openQuestion` set to `{text, askedAt}`, the failure and
-  what clears it, and the current time. Without it, a crash mid-Park leaves
-  recovery no reason to post, and the Park is reversed instead of finished.
+- **The other trigger**: a Park with no question behind it. A Landing gate
+  that fails with no fix forthcoming is the main case; every rule elsewhere
+  that Parks "by the other trigger" is another (a second failed dispatch, a
+  broken check command, a red required check, the review cap, a PR sent
+  back twice). It runs the same four steps, with the failure and what it
+  would take to clear it posted in place of the question. There was no
+  ping, so the Park journals the reason itself: overwrite the journal with
+  `step: "park"` and `openQuestion` set to `{text, askedAt}`, where `text`
+  is the comment's reason line (`Landing gate(s) failed: … To clear: …`)
+  and `askedAt` is when the Park began. Without it, a crash mid-Park leaves
+  recovery no reason to post, and the Park is reversed instead of
+  finished.
 
 ## Pause note
 
