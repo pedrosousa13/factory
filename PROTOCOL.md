@@ -347,6 +347,33 @@ claim. The ping is the one write that sets it (see "Ping and Park").
 
 Overwrite the journal: `step: "queue-selection"`.
 
+**First, close out PRs waiting on the maintainer** (merge policy `human`;
+see Landing gate). For each open issue in a started state whose branch has
+a PR from the loop, look at the newest such PR:
+
+- **Approved, with green required checks** → merge it with the resolved
+  method, delete the branch, and mirror completion in the tracker.
+- **Merged by the maintainer** → mirror completion in the tracker.
+- **Changes requested, or a red required check, newer than the branch's
+  last push** → the issue goes back to the Queue: move it to an unstarted
+  state with `ready-for-agent` kept, and comment the review or failure
+  (with the AI disclaimer). Whoever picks it up reuses its branch and PR
+  (Implementation), and the review comments are part of its brief. A
+  review or failure older than the last push is already answered: leave
+  the PR for the maintainer. Sent back once already (the loop's earlier
+  comment says so) → Park it instead, by the other trigger (Ping and Park).
+- **Closed without merging** → the maintainer declined it: move it to an
+  unstarted state, swap `ready-for-agent` for `needs-triage`, and comment
+  the PR link (with the AI disclaimer). The next full Triage pass asks
+  what to do with it.
+- **Still open, no review** → leave it. It stays out of the Queue, because
+  the issue is started.
+
+The tracker calls are the adapter's. Completion is State: completed. The
+move back to unstarted is the adapter's Park call with one change: put the
+state label named above where Park puts `needs-info`, or, where
+`ready-for-agent` is kept, leave the labels as they are.
+
 The Queue is the set of this Project's issues that are:
 
 - labeled `ready-for-agent`, and
@@ -378,6 +405,8 @@ Queue selection again. If the pass moved an issue into the Queue, carry on
 with that issue. If the Queue is still empty, the session has run out. Stop
 the loop cleanly. What to report depends on scope:
 
+- **Waiting PRs.** Whatever the scope, the report also lists the PRs still
+  waiting on the maintainer's review (merge policy `human`).
 - **Unscoped** (Everything, or no milestones in the Project) → notify the
   maintainer with a push notification (one-line status; in Claude Code, the
   `PushNotification` tool), as before.
@@ -451,8 +480,9 @@ Overwrite the journal: `step: "implementation"`.
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
   the tracker's per-issue branch name (`docs/agents/issue-tracker.md`). If
-  that branch already exists on origin (a Parked issue re-entering), check
-  it out and merge the freshly pulled default branch into it instead.
+  that branch already exists on origin (a Parked issue re-entering, or a PR
+  sent back for changes), check it out and merge the freshly pulled default
+  branch into it instead. A PR already open for it stays the PR.
 - The issue brief is the spec. Read the issue and its comments in full before
   writing anything.
 - **The Loop Session orchestrates; subagents implement.** The session keeps
@@ -460,7 +490,8 @@ Overwrite the journal: `step: "implementation"`.
   - **One implementer per issue**, on the issue branch, in the session's
     working tree. Never two at once on one branch.
   - **The prompt carries pointers, not copies**: the issue reference, the
-    branch, the seams to test, and the Project's check commands.
+    branch, the seams to test, and the Project's check commands (`AGENTS.md`
+    `## Checks`, established first if missing; see Landing gate).
   - **The session pre-agrees the seams.** `/tdd` writes no test at a seam
     the user has not confirmed, and a subagent has no user to ask. The
     session confirms them instead: it derives the seams from the brief (its
@@ -491,8 +522,8 @@ Overwrite the journal: `step: "landing-gate"`.
 
 An issue lands only when all of these pass:
 
-1. **Tests** green, if the Project has a test command.
-2. **Typecheck** green, if the Project has one.
+1. **Tests** green, run with the test command in `AGENTS.md`'s `## Checks`.
+2. **Typecheck** green, run with the typecheck command there.
 3. **`/code-review`** (Standards + Spec), given both inputs so it asks
    nothing: the fixed point is the merge-base with the default branch, and
    the spec is the issue, named in the skill's arguments and referenced by
@@ -502,12 +533,28 @@ An issue lands only when all of these pass:
    2. At most two review rounds: a finding still open after the second
    Parks the issue.
 
+**`## Checks`** in `AGENTS.md` names the Project's test and typecheck
+commands, one line each, or `none` for either. The section is created
+lazily, like `GLOSSARY.md`. When it is missing, find the commands (the CI
+workflow, the package manifest, a Makefile, the README), run them once to
+confirm they work, and add the section in this issue's PR. Do this at
+Implementation, before dispatching, so the implementer gets the commands.
+Run them on the freshly pulled default branch: a command that fails there
+is broken before this issue touched anything, so Park the issue with its
+output as the reason rather than record or land over it. If an open PR
+from the loop already adds the section (merge policy `human` leaves PRs
+waiting), take its commands and do not add it again. Found nothing →
+write `none`, so the next session does not search again. A Project with
+`none` for both lands on `/code-review` alone, and says so in the PR body.
+
 The merge method follows `.factory/config.json`'s `merge` setting
 (`config.ts`'s `effective()`, `agentwork.ts`'s `mergeDecision`, pinned by
 `runtime/test/config.test.ts:623-701`). An explicit `merge.method` wins. An
 absent method under an auto policy — `squash`, `merge`, or `rebase` — takes
 the policy itself as the method. An absent method under the `human` policy
-defaults to `squash`. Under `human`, approval also gates the merge.
+defaults to `squash`. Under `human`, approval also gates the merge: the
+maintainer approves the PR, and the loop merges it at its next Queue
+selection.
 
 Then land it:
 
@@ -516,11 +563,19 @@ Then land it:
   (the gate's test runs, before and after), and Merge Danger. Add a link to
   the issue. If `pr` is not installed, write a plain summary that links the
   issue. No AI attribution in the commits or the PR.
-- If the repo has required checks, enable auto-merge and wait for green. If it
-  has none, the Landing gate above *is* the green signal — merge immediately
-  using the resolved method, delete the branch.
-- Mirror completion in the tracker: comment with the PR link, move the issue
-  to a **completed** state.
+- **Under an auto policy**: if the repo has required checks, enable
+  auto-merge and wait for green. If it has none, the Landing gate above
+  *is* the green signal — merge immediately using the resolved method,
+  delete the branch. Once merged, mirror completion in the tracker: comment
+  with the PR link, move the issue to a **completed** state. A required
+  check that goes red gets one fix attempt on the branch; still red → the
+  Landing gate has failed, so Park the issue by the other trigger (Ping and
+  Park). Its branch is already pushed.
+- **Under `human`**: do not wait for approval, which would stall the loop.
+  Comment the PR link on the issue, leave the issue in its started state,
+  and go to the Issue boundary. For the loop, the open PR is this issue's
+  landing. Queue selection merges it once it is approved, and completes
+  the issue then.
 - Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
   boundary that closes it.
 
