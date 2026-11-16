@@ -273,7 +273,8 @@ ordered cannot run the loop.
    anything else. Go through the Park steps (Ping and Park) in order. For
    each, check origin and the tracker for whether it already landed (the
    comment may already be posted), and run the ones that did not, using
-   the journaled question as the comment's text. The journal is a hint,
+   the journaled text (a question, or a gate failure's reason) as the
+   comment's text. The journal is a hint,
    not truth: what origin and the tracker show wins. The Park's re-label
    step deletes its Pause note, so the check below finds none for that
    issue. Any other journal content needs nothing here.
@@ -624,11 +625,12 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   tracker comment remains the durable record.
 - **Journal the ask** as the ping goes out: overwrite `.factory/journal.json`
   with `step: "ask"` and `openQuestion` set to `{text, askedAt}` — the
-  question, and the ISO 8601 time it was posted. This is the only write that
-  sets `openQuestion`, and Park below keeps it while it runs. Recovery reads
-  the pair: a journal carrying `step: "park"` and a non-null `openQuestion`
-  is a Park that crashed halfway, and the journaled question is the only
-  copy of the reason its comment still needs.
+  question, and the ISO 8601 time it was posted. This write and the other
+  trigger's Park (below) are the only ones that set `openQuestion`, and Park
+  keeps it while it runs. Recovery reads the pair: a journal carrying
+  `step: "park"` and a non-null `openQuestion` is a Park that crashed
+  halfway, and the journaled text is the only copy of the reason its
+  comment still needs.
 - **Answered before the timer** → stop the timer, continue the issue with
   context intact. No Park, no state change. The answer is a maintainer
   decision: refresh the Pause note with it (mechanics below).
@@ -662,7 +664,11 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   (Implementation).
 - **The other trigger**: a Landing gate that fails with no fix forthcoming
   Parks the issue too, by the same four steps — with the gate failure and what
-  it would take to clear it posted in place of the question.
+  it would take to clear it posted in place of the question. There was no
+  ping, so the Park writes the reason itself: overwrite the journal with
+  `step: "park"` and `openQuestion` set to `{text, askedAt}`, the failure and
+  what clears it, and the current time. Without it, a crash mid-Park leaves
+  recovery no reason to post, and the Park is reversed instead of finished.
 
 ## Pause note
 

@@ -150,6 +150,26 @@ test("a journal at the park step, corroborated by tracker and git, resumes the r
   ]);
 });
 
+// The other trigger (PROTOCOL.md "Ping and Park"): a Park with no ping writes
+// its gate-failure reason into openQuestion itself, so a crash mid-Park is
+// finished, not reversed.
+test("a gate-failure Park journals its reason, so a crash mid-Park resumes the Park", () => {
+  const gateParkJournal = journal({
+    step: "park",
+    openQuestion: { text: "Landing gate failed: tests. To clear: fix the flaky parser test.", askedAt: "2026-11-16T12:00:00Z" },
+  });
+  const decisions = reconcileClaims(input({ journal: gateParkJournal }));
+
+  expect(decisions).toEqual([
+    {
+      k: "resume-park",
+      ticket: "43",
+      branch: BRANCH,
+      remaining: ["post-comment", "release-claim", "swap-label", "set-unstarted"],
+    },
+  ]);
+});
+
 // S19 permits completing OR reversing an interrupted Park. Completing it means
 // re-posting the durable comment, which needs the original reason — and the
 // only reason that survives a crash is the journaled question. With none, the

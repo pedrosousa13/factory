@@ -2,6 +2,8 @@
 
 Date: 2026-08-01. Source: [#50](https://github.com/pedrosousa13/factory/issues/50), all four workstreams, plus the real migration of this repo ([#52](https://github.com/pedrosousa13/factory/issues/52)). Approved by the maintainer in session.
 
+> **Superseded in part.** Workstream C's notifier (`notifierCommand`, `runtime/src/ping.ts`, the `Notification` hook) was removed in #62; Pings now use Claude Code's built-in `PushNotification` tool. See `PROTOCOL.md`, "Ping and Park".
+
 ## The stance that governs everything
 
 The run loop is PROTOCOL prose, executed by the skill with the agent's own tools. The runtime's pure modules are the executable spec. The conformance hosts prove that a live agent follows the spec on each harness.
