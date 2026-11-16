@@ -190,8 +190,10 @@ The loop triages when it needs to. It does not triage on a schedule.
    stay at `needs-triage`. The next run-out pass asks about them.
 
 Nothing else starts a pass. A pass with nothing to do costs one listing:
-when no open issue carries `needs-triage`, and no open issue outside the
-reserved planning namespace lacks a state label, skip it and say nothing.
+when no open issue carries `needs-triage`, no open issue outside the
+reserved planning namespace lacks a state label, and no `needs-info` issue
+has a maintainer comment newer than its Parked question, skip it and say
+nothing.
 
 **How.** The `/triage` skill (`~/.claude/skills/triage`) is
 human-invoke-only. The session reads its SKILL.md and applies the
@@ -204,9 +206,13 @@ context.
 
 **What it applies without asking.** These are the calls the evidence
 settles: the category label, a milestone that the issue's own scope
-places, a duplicate closed with a link to its original, and a move to
+places, a duplicate closed with a link to its original, a move to
 `needs-info` with the question posted (with the AI disclaimer, see Ping
-and Park).
+and Park), and a **move back to `ready-for-agent`** for a `needs-info`
+issue the maintainer has answered since its Parked question. That issue
+already carries its agent brief, and the answer is the maintainer's
+decision, so there is nothing left to ask. Post a one-line comment (with
+the AI disclaimer) naming the answer the loop will act on.
 
 **What it asks.** These are the calls that decide what gets built:
 promotion to `ready-for-agent` (with the agent brief written into the
@@ -253,7 +259,14 @@ ordered cannot run the loop.
 
 ## Session start
 
-1. **Check the working tree, and for a Pause note.** Clean tree, no Pause
+1. **Check the journal, the working tree, and for a Pause note.** First,
+   if `.factory/journal.json` carries `step: "park"` and a non-null
+   `openQuestion`, a Park crashed halfway: finish it before anything else.
+   Run the Park steps (Ping and Park) that have not landed, checking the
+   tracker for each, since the comment may already be posted, and use the
+   journaled question as the comment's text. The journal is a hint, not
+   truth, so check the issue's tracker state against it. A finished Park
+   leaves no Pause note behind. Then: clean tree, no Pause
    note (`.scratch/pause-note.md`) → proceed to step 2 normally. Otherwise
    the previous session was interrupted mid-issue:
    - **Pause note present** → read it, verify it, and resume the issue it
@@ -423,12 +436,32 @@ nothing decided yet.
 Overwrite the journal: `step: "implementation"`.
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
-  the tracker's per-issue branch name (`docs/agents/issue-tracker.md`).
+  the tracker's per-issue branch name (`docs/agents/issue-tracker.md`). If
+  that branch already exists on origin (a Parked issue re-entering), check
+  it out and merge the freshly pulled default branch into it instead.
 - The issue brief is the spec. Read the issue and its comments in full before
   writing anything.
-- **The Loop Session orchestrates; subagents implement.** Dispatch code work to
-  subagents that follow `/tdd`; the session reviews their output and keeps its
-  own context lean.
+- **The Loop Session orchestrates; subagents implement.** The session keeps
+  its own context lean by dispatching the code work:
+  - **One implementer per issue**, on the issue branch, in the session's
+    working tree. Never two at once on one branch.
+  - **The prompt carries pointers, not copies**: the issue reference, the
+    branch, the seams to test, and the Project's check commands.
+  - **The session pre-agrees the seams.** `/tdd` writes no test at a seam
+    the user has not confirmed, and a subagent has no user to ask. The
+    session confirms them instead: it derives the seams from the brief (its
+    key interfaces and acceptance criteria) and states them in the prompt
+    as agreed. A seam the brief cannot settle is a Ping, not a guess.
+  - **The implementer** calls the Skill tool with `tdd`, runs the checks,
+    commits to the branch, and returns a short report: what changed, and
+    the test and typecheck output. It never pushes, merges, or touches the
+    tracker, and it asks the maintainer nothing. A question goes back to
+    the session in its report.
+  - **The session reviews the report and the diff stat**, not the whole
+    diff; the Landing gate's `/code-review` reads the code. A report with
+    failing checks or a missed acceptance criterion gets one re-dispatch,
+    with the failure named. A second failure Parks the issue, by the
+    Landing gate trigger (Ping and Park).
 - **Trivial-issue escape hatch** (a rule, not a judgment call): inline
   implementation without subagents is allowed only for a genuine one-liner —
   a single hunk in a single file whose whole behavior one line expresses
@@ -445,8 +478,13 @@ An issue lands only when all of these pass:
 
 1. **Tests** green, if the Project has a test command.
 2. **Typecheck** green, if the Project has one.
-3. **`/code-review`** (Standards + Spec) against the issue brief, with no unresolved
-   findings.
+3. **`/code-review`** (Standards + Spec), given both inputs so it asks
+   nothing: the fixed point is the merge-base with the default branch, and
+   the spec is the issue. Every Spec finding and every hard Standards
+   violation is fixed. A baseline smell is a judgement call and may be
+   declined, with the reason in the PR body. After any fix, re-run 1 and
+   2. At most two review rounds: a finding still open after the second
+   Parks the issue.
 
 The merge method follows `.factory/config.json`'s `merge` setting
 (`config.ts`'s `effective()`, `agentwork.ts`'s `mergeDecision`, pinned by
@@ -482,13 +520,15 @@ After each issue lands or is Parked:
 1. **Quiet triage, if this issue filed reports.** If the issue that just
    landed filed new `needs-triage` issues, run a quiet Triage pass (see
    "Triage pass"). It asks nothing.
-2. **Context Budget check**: above ~40% of the context window → write a
-   Handoff and stop (mechanics in the Handoff section below).
-3. **If this issue was resumed from a Pause note at Session start**, and
+2. **If this issue was resumed from a Pause note at Session start**, and
    Session start step 2 has not run yet this session, run it now: consume
    the newest Handoff, if any (mechanics in the Handoff section below).
-   This is the one place that deferred step is picked back up — skipping it
-   here would strand a Handoff unread for the rest of the session.
+   This is the one place that deferred step is picked back up. It runs
+   before the Context Budget check: a session that stopped first would
+   write a newer Handoff, and the next session reads only the newest, so
+   this one's state would be lost.
+3. **Context Budget check**: above ~40% of the context window → write a
+   Handoff and stop (mechanics in the Handoff section below).
 4. Return to Queue selection.
 
 ## Ping and Park
@@ -544,11 +584,12 @@ How a Loop Session handles a mid-issue question it must not answer itself:
      with `ready-for-agent` still on it cannot re-enter the Queue on its
      own.
   4. **Continue**: a Park is an issue boundary like a landing, so return to it
-     — Context Budget check first, then the next Queue issue.
-- **Re-entry**: the maintainer answers the tracker comment; normal triage moves
-  the issue `needs-info` → `needs-triage` → `ready-for-agent`, and it re-enters
-  the Queue like any other issue. A later Loop Session picks it up and finds
-  its work waiting on the branch.
+     — run the Issue boundary steps, then the next Queue issue.
+- **Re-entry**: the maintainer answers the tracker comment; the next Triage
+  pass moves the issue from `needs-info` back to `ready-for-agent` (see
+  "Triage pass"), and it re-enters the Queue like any other issue. The
+  session that picks it up finds its work waiting on the branch
+  (Implementation).
 - **The other trigger**: a Landing gate that fails with no fix forthcoming
   Parks the issue too, by the same four steps — with the gate failure and what
   it would take to clear it posted in place of the question.
