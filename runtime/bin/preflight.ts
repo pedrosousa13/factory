@@ -83,7 +83,7 @@ function requireHome(): string {
   report([
     {
       what: "HOME is not set, so preflight cannot look for the planning-role implementations",
-      why: "roles resolve against $HOME/.claude/skills and $HOME/.claude/plugins/cache; with HOME empty every lookup would read the current directory instead and report all seven roles absent",
+      why: "roles resolve against $HOME/.claude/skills; with HOME empty every lookup would read the current directory instead and report all seven roles absent",
       fix: "run preflight with HOME set to the maintainer's home directory",
     },
   ]);

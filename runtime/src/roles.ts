@@ -17,21 +17,11 @@ export type RoleName =
   | "triage"
   | "implement";
 
-// One role's two implementations can live in two different places, so an
-// implementation names its kind as well as itself:
-//
-//   "skill"  — installed at `<home>/.claude/skills/<name>`, the dependent-skills
-//              check in PROTOCOL.md "## Preflight: prerequisites, not the
-//              stamp". This is how the Matt Pocock skills install, as symlinks.
-//   "plugin" — a plugin skill, addressed by its `<plugin>:<skill>` id, the
-//              superpowers check in the same Preflight section. Superpowers
-//              ships this way and is never
-//              installed at `~/.claude/skills/<name>`, so looking for it there
-//              can only ever report it absent.
-//
-// Detecting either one is the caller's job — see edges.ts. This module only
-// says which kind each implementation is.
-export type RoleImpl = { k: "skill" | "plugin"; name: string };
+// Every implementation is a skill installed at `<home>/.claude/skills/<name>`,
+// the dependent-skills check in PROTOCOL.md "## Preflight: prerequisites, not
+// the stamp". This is how the Matt Pocock skills install, as symlinks.
+// Detecting one is the caller's job — see edges.ts.
+export type RoleImpl = { name: string };
 
 export type RoleSpec = {
   role: RoleName;
@@ -47,8 +37,7 @@ export type RoleSpec = {
   blocksExecutionOnly?: true;
 };
 
-const skill = (name: string): RoleImpl => ({ k: "skill", name });
-const plugin = (name: string): RoleImpl => ({ k: "plugin", name });
+const skill = (name: string): RoleImpl => ({ name });
 
 export const ROLE_TABLE: RoleSpec[] = [
   { role: "interrogate", label: "Interrogate", preferred: skill("grilling"), fallback: null },
@@ -60,8 +49,8 @@ export const ROLE_TABLE: RoleSpec[] = [
   {
     role: "implement",
     label: "Implement",
-    preferred: plugin("superpowers:test-driven-development"),
-    fallback: skill("tdd"),
+    preferred: skill("tdd"),
+    fallback: null,
     blocksExecutionOnly: true,
   },
 ];
@@ -76,14 +65,8 @@ export type RoleResolution = { resolved: RoleSelection[]; failures: Failure[] };
 // reported — a maintainer who installs one skill only to meet the next missing
 // one on the following run is the failure Preflight exists to prevent
 // (PROTOCOL.md "## Preflight: prerequisites, not the stamp").
-// How the maintainer installs each kind. A plugin skill has no
-// ~/.claude/skills/ path at all, so pointing there would send them looking in
-// a directory the check never reads (same section, the superpowers check).
 function installFix(impl: RoleImpl): string {
-  const [pluginName] = impl.name.split(":");
-  return impl.k === "plugin"
-    ? `Install the "${pluginName}" plugin, from any marketplace.`
-    : `Install "${impl.name}" into ~/.claude/skills/ and check the symlink resolves.`;
+  return `Install "${impl.name}" into ~/.claude/skills/ and check the symlink resolves.`;
 }
 
 export function resolveRoles(available: string[]): RoleResolution {

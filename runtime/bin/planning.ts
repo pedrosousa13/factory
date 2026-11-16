@@ -70,9 +70,7 @@ function printSteps(steps: Step[]): void {
 // ───────────────────────────────────────────────── fixture skills tree (roles)
 
 // Builds a scratch "home" holding every role implementation in its real
-// on-disk shape — `.claude/skills/<name>` for a skill-kind one,
-// `.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>` for a
-// plugin-kind one — then reads it back through edges.ts's real
+// on-disk shape, `.claude/skills/<name>`, then reads it back through edges.ts's real
 // gatherAvailableRoles rather than listing what it just wrote. `omit` is the
 // one preferred implementation this run deliberately leaves out, so
 // resolveRoles has to fall back for it.
@@ -81,14 +79,7 @@ function mkSkillsHome(omit: string): { home: string; available: string[] } {
   for (const spec of ROLE_TABLE) {
     for (const impl of [spec.preferred, spec.fallback]) {
       if (impl === null || impl.name === omit) continue;
-      if (impl.k === "plugin") {
-        const [pluginName, skillName] = impl.name.split(":");
-        mkdirSync(join(home, ".claude", "plugins", "cache", "test-marketplace", pluginName, "0.0.0", "skills", skillName), {
-          recursive: true,
-        });
-      } else {
-        mkdirSync(join(home, ".claude", "skills", impl.name), { recursive: true });
-      }
+      mkdirSync(join(home, ".claude", "skills", impl.name), { recursive: true });
     }
   }
   return { home, available: gatherAvailableRoles(home) };
