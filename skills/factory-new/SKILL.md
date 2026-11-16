@@ -22,7 +22,8 @@ moving the maintainer into a Planning Session — grilling → spec → tickets
 (`to-spec`, `to-tickets`) — because that is the only place new work gets created (see
 `${CLAUDE_PLUGIN_ROOT}/GLOSSARY.md`).
 
-**Every question in this skill** follows `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+**Every question in this skill** goes through `factory:ask-structured`, per
+`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
 "## Asking the maintainer": a structured question, with the researched
 recommendation first.
 

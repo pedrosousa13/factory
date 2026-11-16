@@ -15,7 +15,7 @@ The maintainer plans interactively; an AI Loop Session consumes the queue and on
    - questions: push notification + block ~15 min; unanswered → question posted to the issue, `needs-info`, work stays on its branch, loop continues
    - at each issue boundary: context above ~40% → `/handoff` to `.scratch/handoffs/` and stop
    - queue runs out → triages any `needs-triage` reports, notifies you, runs `/retro` on the session, and opens a Planning Session with you. The loop never invents work.
-   - every question comes as a structured prompt, with a researched recommendation first
+   - every question comes as a structured prompt, with a researched recommendation first: the plugin's SessionStart hook routes each one through `/ask-structured`, even when another skill would ask in plain text
 3. **Steer** (you, from anywhere): set priorities and answer `needs-info` questions in the tracker.
 
 Resuming after a handoff, a reboot, or a week away is always the same command: `/factory`. With no argument, it works out the next step itself: it adopts an unstamped repo, migrates an old stamp, or works the whole Queue. `/factory <milestone>` scopes the Queue to one milestone.

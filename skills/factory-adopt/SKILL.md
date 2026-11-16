@@ -19,7 +19,8 @@ content here too — you fill in its placeholders and write the result, you
 never hand-write `AGENTS.md`, `docs/agents/`, or `.gitignore` content
 yourself.
 
-**Every question in this skill** follows `${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
+**Every question in this skill** goes through `factory:ask-structured`, per
+`${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md`'s
 "## Asking the maintainer": a structured question, with the researched
 recommendation first.
 

@@ -55,9 +55,11 @@ It is the source of truth; this file only bootstraps it.
   milestone that exists. Draining a scoped Queue reports the milestone's
   progress and remaining-work breakdown, not "milestone complete" — see
   ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md.
-- Every question to the maintainer is structured (`AskUserQuestion`), with
-  the researched recommendation first — see "## Asking the maintainer". The
-  one exception is a mid-loop Ping, which stays push + timer + Park.
+- Every question to the maintainer goes through `factory:ask-structured`
+  (`AskUserQuestion`, researched recommendation first), including questions
+  a dependent skill would ask in plain text — see "## Asking the
+  maintainer". The one exception is a mid-loop Ping, which stays push +
+  timer + Park.
 - Triage when you need to. When the Queue runs out: one full pass that
   applies what the evidence settles and asks, in batches, about anything
   that would promote work into the Queue or drop it. After an issue that
