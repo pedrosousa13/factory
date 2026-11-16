@@ -144,8 +144,9 @@ in every skill: the loop, `/factory-new`, `/factory-adopt`,
 `/factory-migrate`, and a Planning Session.
 
 - **Through `ask-structured`.** In Claude Code, call the Skill tool with
-  `factory:ask-structured` before asking; it carries this shape, and the
-  plugin's SessionStart hook says so in every session. It also wins over a
+  `factory:ask-structured` before asking (except a mid-loop Ping, below);
+  it carries this shape, and the plugin's SessionStart hook says so in
+  every session. It also wins over a
   dependent skill's own question format (`grilling`, `triage`, `to-spec`,
   `tdd`, …): that skill decides what to ask, this section decides how.
 - **Structured.** Ask through the harness's structured-question tool. In
