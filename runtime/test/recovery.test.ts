@@ -152,8 +152,9 @@ test("a journal at the park step, corroborated by tracker and git, resumes the r
 
 // S19 permits completing OR reversing an interrupted Park. Completing it means
 // re-posting the durable comment, which needs the original reason — and the
-// only reason that survives a crash is the journaled question. With none, the
-// Park is reversed: the run just resumes the work rather than inventing a
+// only reason that survives a crash is the journaled openQuestion (a ping's
+// question, or a question-less Park's own reason). With none, the Park is
+// reversed: the run just resumes the work rather than inventing a
 // reason to post.
 test("a park-step journal with no recoverable reason reverses to a plain resume", () => {
   const decisions = reconcileClaims(input({ journal: journal({ step: "park", openQuestion: null }) }));
