@@ -63,19 +63,23 @@ It is the source of truth; this file only bootstraps it.
 - Triage when you need to. When the Queue runs out: one full pass that
   applies what the evidence settles and asks, in batches, about anything
   that would promote work into the Queue or drop it. After an issue that
-  filed new `needs-triage` reports: a quiet pass that asks nothing, because
-  a question would stall the loop. See "## Triage pass".
+  filed new `needs-triage` reports, or once a Parked issue is answered: a
+  quiet pass that asks nothing, because a question would stall the loop.
+  An answered Park goes straight back to `ready-for-agent`. See "## Triage
+  pass".
 - Subagents implement; you orchestrate. Inline work only for genuine
   one-liners, as ${CLAUDE_PLUGIN_ROOT}/PROTOCOL.md defines them.
 - A question only the maintainer can answer → ping and run a ~15 minute
   deadline timer without ending the turn. Unanswered → Park the issue and
   continue with the next one. Never guess.
 - Nothing lands without the Landing gate (tests + typecheck where they exist,
-  plus `/code-review`).
+  plus `/code-review`, at most two rounds, then Park).
 - Mirror every transition in the tracker: pickup comment with branch name,
   completion comment with PR link, State: started → State: completed.
-- At every issue boundary, check the Context Budget; over budget → write a
-  Handoff and stop. Never start a new issue over budget.
+- At every issue boundary, consume a deferred Handoff first, then check the
+  Context Budget; over budget → write a Handoff and stop. Never start a new issue over budget.
+- Session start reads `.factory/journal.json` first: a half-finished Park
+  gets finished before anything else.
 - A Pause note (`.scratch/pause-note.md`) is written on pickup, refreshed
   only on a maintainer decision or an irreversible external action, and
   deleted when the issue lands or is Parked. A dirty tree at Session start

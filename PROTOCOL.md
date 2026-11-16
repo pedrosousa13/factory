@@ -175,7 +175,7 @@ text format above.
 
 The loop triages when it needs to. It does not triage on a schedule.
 
-**When.** At exactly two points:
+**When.** At exactly three points:
 
 1. **The Queue runs out.** Queue selection finds no issue. Before it
    reports an empty Queue, run a full Triage pass, then run Queue selection
@@ -188,12 +188,18 @@ The loop triages when it needs to. It does not triage on a schedule.
    question blocks the turn with no timeout, and mid-loop that would stall
    the loop (see "Asking the maintainer"). The items that need an answer
    stay at `needs-triage`. The next run-out pass asks about them.
+3. **A Parked issue was answered.** At every Issue boundary, check each
+   open `needs-info` issue for a maintainer comment newer than its Parked
+   question. A maintainer comment is one that does not open with the AI
+   disclaimer, which every agent-written comment carries (see Ping and
+   Park). If one has, run a quiet pass, so the answered issue re-enters the
+   Queue in the same session rather than at run-out.
 
 Nothing else starts a pass. A pass with nothing to do costs one listing:
 when no open issue carries `needs-triage`, no open issue outside the
 reserved planning namespace lacks a state label, and no `needs-info` issue
-has a maintainer comment newer than its Parked question, skip it and say
-nothing.
+has a maintainer comment newer than its Parked question (point 3), skip it
+and say nothing.
 
 **How.** The `/triage` skill (`~/.claude/skills/triage`) is
 human-invoke-only. The session reads its SKILL.md and applies the
@@ -216,7 +222,8 @@ the AI disclaimer) naming the answer the loop will act on.
 
 **What it asks.** These are the calls that decide what gets built:
 promotion to `ready-for-agent` (with the agent brief written into the
-issue) or to `ready-for-human`, `wontfix`, and any milestone the evidence
+issue; an answered Park, above, is not a promotion: its brief already
+exists and the maintainer just answered) or to `ready-for-human`, `wontfix`, and any milestone the evidence
 does not settle. A full pass puts them to the maintainer in batches, in the
 shape of "Asking the maintainer". Each issue gets its own question with a
 recommended answer. A quiet pass, or a headless run, applies only what it
@@ -259,16 +266,21 @@ ordered cannot run the loop.
 
 ## Session start
 
-1. **Check the journal, the working tree, and for a Pause note.** First,
-   if `.factory/journal.json` carries `step: "park"` and a non-null
-   `openQuestion`, a Park crashed halfway: finish it before anything else.
-   Run the Park steps (Ping and Park) that have not landed, checking the
-   tracker for each, since the comment may already be posted, and use the
-   journaled question as the comment's text. The journal is a hint, not
-   truth, so check the issue's tracker state against it. A finished Park
-   leaves no Pause note behind. Then: clean tree, no Pause
-   note (`.scratch/pause-note.md`) → proceed to step 2 normally. Otherwise
-   the previous session was interrupted mid-issue:
+1. **Check the journal, the working tree, and for a Pause note.**
+
+   **Journal first.** If `.factory/journal.json` carries `step: "park"` and
+   a non-null `openQuestion`, a Park crashed halfway: finish it before
+   anything else. Go through the Park steps (Ping and Park) in order. For
+   each, check origin and the tracker for whether it already landed (the
+   comment may already be posted), and run the ones that did not, using
+   the journaled question as the comment's text. The journal is a hint,
+   not truth: what origin and the tracker show wins. The Park's re-label
+   step deletes its Pause note, so the check below finds none for that
+   issue. Any other journal content needs nothing here.
+
+   **Then the tree.** Clean tree, no Pause note (`.scratch/pause-note.md`)
+   → proceed to step 2 normally. Otherwise the previous session was
+   interrupted mid-issue:
    - **Pause note present** → read it, verify it, and resume the issue it
      names directly — mechanics in the Pause note section below. Do this
      before step 2: the Pause note decides what to resume right now; the
@@ -453,7 +465,8 @@ Overwrite the journal: `step: "implementation"`.
     key interfaces and acceptance criteria) and states them in the prompt
     as agreed. A seam the brief cannot settle is a Ping, not a guess.
   - **The implementer** calls the Skill tool with `tdd`, runs the checks,
-    commits to the branch, and returns a short report: what changed, and
+    commits to the branch with each message referencing the issue (so
+    `/code-review` finds its spec), and returns a short report: what changed, and
     the test and typecheck output. It never pushes, merges, or touches the
     tracker, and it asks the maintainer nothing. A question goes back to
     the session in its report.
@@ -461,7 +474,7 @@ Overwrite the journal: `step: "implementation"`.
     diff; the Landing gate's `/code-review` reads the code. A report with
     failing checks or a missed acceptance criterion gets one re-dispatch,
     with the failure named. A second failure Parks the issue, by the
-    Landing gate trigger (Ping and Park).
+    other trigger (Ping and Park).
 - **Trivial-issue escape hatch** (a rule, not a judgment call): inline
   implementation without subagents is allowed only for a genuine one-liner —
   a single hunk in a single file whose whole behavior one line expresses
@@ -480,7 +493,8 @@ An issue lands only when all of these pass:
 2. **Typecheck** green, if the Project has one.
 3. **`/code-review`** (Standards + Spec), given both inputs so it asks
    nothing: the fixed point is the merge-base with the default branch, and
-   the spec is the issue. Every Spec finding and every hard Standards
+   the spec is the issue, named in the skill's arguments and referenced by
+   the branch's commits. Every Spec finding and every hard Standards
    violation is fixed. A baseline smell is a judgement call and may be
    declined, with the reason in the PR body. After any fix, re-run 1 and
    2. At most two review rounds: a finding still open after the second
@@ -517,9 +531,11 @@ Overwrite the journal: `step: "issue-boundary"`.
 
 After each issue lands or is Parked:
 
-1. **Quiet triage, if this issue filed reports.** If the issue that just
-   landed filed new `needs-triage` issues, run a quiet Triage pass (see
-   "Triage pass"). It asks nothing.
+1. **Quiet triage, if this issue filed reports or a Park was answered.** If
+   the issue that just landed filed new `needs-triage` issues, or an open
+   `needs-info` issue has a maintainer comment newer than its Parked
+   question, run a quiet Triage pass (see "Triage pass", points 2 and 3).
+   It asks nothing.
 2. **If this issue was resumed from a Pause note at Session start**, and
    Session start step 2 has not run yet this session, run it now: consume
    the newest Handoff, if any (mechanics in the Handoff section below).
