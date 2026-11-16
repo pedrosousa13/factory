@@ -18,8 +18,9 @@ it. `${CLAUDE_PLUGIN_ROOT}/runtime/src/stamp.ts`, `sections.ts`, and
 runtime), but they're the precise reference if a step below reads
 ambiguous.
 
-**Every question in this skill** follows `PROTOCOL.md`'s "## Asking the
-maintainer": a structured question, with the researched recommendation first.
+**Every question in this skill** goes through `factory:ask-structured`, per
+`PROTOCOL.md`'s "## Asking the maintainer": a structured question, with the
+researched recommendation first.
 
 **When to use this skill.** Follow the routing rule in `PROTOCOL.md`'s
 "## Invocation: what `/factory` does next".
