@@ -76,7 +76,8 @@ It is the source of truth; this file only bootstraps it.
 - Nothing lands without the Landing gate (tests + typecheck from
   `AGENTS.md`'s `## Checks`, created lazily, plus `/code-review`, at most
   two rounds, then Park). Under merge policy `human`, open the PR and move
-  on; Session start completes the issue once its PR merges.
+  on; Queue selection merges it once you approve it, and sends it back to
+  the Queue if you request changes.
 - Mirror every transition in the tracker: pickup comment with branch name,
   completion comment with PR link, State: started → State: completed.
 - At every issue boundary, consume a deferred Handoff first, then check the

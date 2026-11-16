@@ -99,7 +99,7 @@ that is the Invocation section's business, below.
 `/factory` takes one optional argument, a Queue scope: a milestone name,
 `everything`, or `no-milestone`. A bare `/factory` means **Everything**. A
 name that matches no milestone is a question, not an error: ask with the
-Session start menu (step 4). In a Project with no milestones, say that the
+Session start menu (step 3). In a Project with no milestones, say that the
 argument was ignored, and run the whole Queue. The argument only sets the scope. It never
 decides what the session does.
 
@@ -297,17 +297,7 @@ ordered cannot run the loop.
    artifacts). After absorbing it, move it to `.scratch/handoffs/archive/`
    (consume-once: the next session must not act on stale state). Writing
    Handoffs is specified in the Handoff section below.
-3. **Close out PRs that waited on the maintainer** (merge policy `human`).
-   For each open issue in a started state whose branch has a Factory PR:
-   - **PR merged** → mirror completion (comment with the PR link, move the
-     issue to a completed state) and delete the branch.
-   - **PR closed without merging** → the maintainer declined it. Return the
-     issue to an unstarted state, swap `ready-for-agent` for
-     `needs-triage`, and comment with the PR link (with the AI disclaimer).
-     The next full Triage pass asks what to do with it.
-   - **PR still open** → leave it. It is not in the Queue, because the
-     issue is started.
-4. **Settle the Queue scope.** The invocation usually settles it already:
+3. **Settle the Queue scope.** The invocation usually settles it already:
    a bare `/factory` means **Everything**, and an argument names the scope
    (see "Invocation"). Ask only when an argument named no milestone that
    exists. List the Project's milestones.
@@ -329,7 +319,7 @@ ordered cannot run the loop.
      be picked and the loop stops immediately.
    - Record the answer as this session's **Queue scope** (used by Queue
      selection below).
-5. Enter the loop below.
+4. Enter the loop below.
 
 ## The loop
 
@@ -356,6 +346,29 @@ claim. The ping is the one write that sets it (see "Ping and Park").
 ### 1. Queue selection
 
 Overwrite the journal: `step: "queue-selection"`.
+
+**First, close out PRs waiting on the maintainer** (merge policy `human`;
+see Landing gate). For each open issue in a started state whose branch has
+an open or closed PR from the loop:
+
+- **Approved, with green required checks** → merge it with the resolved
+  method, delete the branch, and mirror completion in the tracker.
+- **Merged by the maintainer** → mirror completion in the tracker.
+- **Changes requested, or a red required check** → the issue goes back to
+  the Queue: move it to an unstarted state with `ready-for-agent` kept, and
+  comment the review or failure (with the AI disclaimer). Whoever picks it
+  up reuses its branch and PR (Implementation), and the review comments
+  are part of its brief.
+- **Closed without merging** → the maintainer declined it: move it to an
+  unstarted state, swap `ready-for-agent` for `needs-triage`, and comment
+  the PR link (with the AI disclaimer). The next full Triage pass asks
+  what to do with it.
+- **Still open, no review** → leave it. It stays out of the Queue, because
+  the issue is started.
+
+The tracker calls are the adapter's: State: completed for completion, and
+Park's state move back to unstarted, with the state label set as above
+instead of `needs-info`.
 
 The Queue is the set of this Project's issues that are:
 
@@ -388,6 +401,8 @@ Queue selection again. If the pass moved an issue into the Queue, carry on
 with that issue. If the Queue is still empty, the session has run out. Stop
 the loop cleanly. What to report depends on scope:
 
+- **Waiting PRs.** Whatever the scope, the report also lists the PRs still
+  waiting on the maintainer's review (merge policy `human`).
 - **Unscoped** (Everything, or no milestones in the Project) → notify the
   maintainer with a push notification (one-line status; in Claude Code, the
   `PushNotification` tool), as before.
@@ -461,8 +476,9 @@ Overwrite the journal: `step: "implementation"`.
 
 - **Branch per issue**, created from the freshly pulled default branch. Use
   the tracker's per-issue branch name (`docs/agents/issue-tracker.md`). If
-  that branch already exists on origin (a Parked issue re-entering), check
-  it out and merge the freshly pulled default branch into it instead.
+  that branch already exists on origin (a Parked issue re-entering, or a PR
+  sent back for changes), check it out and merge the freshly pulled default
+  branch into it instead. A PR already open for it stays the PR.
 - The issue brief is the spec. Read the issue and its comments in full before
   writing anything.
 - **The Loop Session orchestrates; subagents implement.** The session keeps
@@ -471,7 +487,7 @@ Overwrite the journal: `step: "implementation"`.
     working tree. Never two at once on one branch.
   - **The prompt carries pointers, not copies**: the issue reference, the
     branch, the seams to test, and the Project's check commands (`AGENTS.md`
-    `## Checks`, see Landing gate).
+    `## Checks`, established first if missing; see Landing gate).
   - **The session pre-agrees the seams.** `/tdd` writes no test at a seam
     the user has not confirmed, and a subagent has no user to ask. The
     session confirms them instead: it derives the seams from the brief (its
@@ -517,7 +533,11 @@ An issue lands only when all of these pass:
 commands, one line each, or `none` for either. The section is created
 lazily, like `GLOSSARY.md`. When it is missing, find the commands (the CI
 workflow, the package manifest, a Makefile, the README), run them once to
-confirm they work, and add the section in this issue's PR. Found nothing →
+confirm they work, and add the section in this issue's PR. Do this at
+Implementation, before dispatching, so the implementer gets the commands.
+Run them on the freshly pulled default branch: a command that fails there
+is broken before this issue touched anything, so Park the issue with its
+output as the reason rather than record or land over it. Found nothing →
 write `none`, so the next session does not search again. A Project with
 `none` for both lands on `/code-review` alone, and says so in the PR body.
 
@@ -526,7 +546,9 @@ The merge method follows `.factory/config.json`'s `merge` setting
 `runtime/test/config.test.ts:623-701`). An explicit `merge.method` wins. An
 absent method under an auto policy — `squash`, `merge`, or `rebase` — takes
 the policy itself as the method. An absent method under the `human` policy
-defaults to `squash`. Under `human`, approval also gates the merge.
+defaults to `squash`. Under `human`, approval also gates the merge: the
+maintainer approves the PR, and the loop merges it at its next Queue
+selection.
 
 Then land it:
 
@@ -538,16 +560,16 @@ Then land it:
 - **Under an auto policy**: if the repo has required checks, enable
   auto-merge and wait for green. If it has none, the Landing gate above
   *is* the green signal — merge immediately using the resolved method,
-  delete the branch. A required check that goes red gets one fix attempt
-  on the branch; still red → Park the issue, by the other trigger (Ping and
-  Park).
+  delete the branch. Once merged, mirror completion in the tracker: comment
+  with the PR link, move the issue to a **completed** state. A required
+  check that goes red gets one fix attempt on the branch; still red → the
+  Landing gate has failed, so Park the issue by the other trigger (Ping and
+  Park). Its branch is already pushed.
 - **Under `human`**: do not wait for approval, which would stall the loop.
   Comment the PR link on the issue, leave the issue in its started state,
-  delete the Pause note, and go to the Issue boundary. For the loop, the
-  open PR is this issue's landing; the tracker completes it later, when
-  Session start finds the PR merged (step 3).
-- Mirror completion in the tracker: comment with the PR link, move the issue
-  to a **completed** state. Under `human`, this waits for the merge.
+  and go to the Issue boundary. For the loop, the open PR is this issue's
+  landing. Queue selection merges it once it is approved, and completes
+  the issue then.
 - Delete the Pause note (`.scratch/pause-note.md`) — this is the issue
   boundary that closes it.
 
