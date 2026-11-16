@@ -48,6 +48,8 @@ test("the implement role's failure blocks execution only — a missing TDD skill
   expect(got.failures.length).toBe(1);
   expect(got.failures[0].what).toContain("Implement");
   expect(got.failures[0].blocksExecutionOnly).toBe(true);
+  expect(got.failures[0].why).toContain("has no fallback");
+  expect(got.failures[0].fix).toContain("~/.claude/skills/");
 });
 
 test("every other role's failure blocks the whole run, not execution alone", () => {

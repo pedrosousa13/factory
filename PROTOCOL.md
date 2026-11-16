@@ -41,23 +41,21 @@ fix — never a bare "preflight failed." Shape:
   the file in the first place, so its absence going in is expected.
 - **`gh` authenticated.** Run `gh auth status`. Failure: `gh auth login`.
 - **Dependent skills present**: `/code-review`, `/handoff`, `/triage`,
-  `/domain-modeling`, each of which must exist at `~/.claude/skills/<name>/`
+  `/domain-modeling`, `/tdd`, each of which must exist at `~/.claude/skills/<name>/`
   — that path, not the skill's source location, is what makes a skill
   invocable in a session. `npx skills@latest add mattpocock/skills -g`
-  installs the four as symlinks there, pointing at
+  installs all five as symlinks there, pointing at
   `~/.agents/skills/<name>/`; check the
   `~/.claude/skills/` path itself; a missing or broken symlink there leaves
   the skill unavailable even if the `~/.agents/skills/` source exists.
   Failure, per missing skill: name it, name what it's for (`/code-review`
   gates Landing, `/handoff` bridges a Context Budget stop, `/triage` runs
   Adoption's re-triage sweep and the loop's Triage pass, `/domain-modeling`
-  maintains `GLOSSARY.md`), fix with `npx skills@latest add
+  maintains `GLOSSARY.md`, `/tdd` drives Implementation — a missing `/tdd`
+  stops autonomous execution but not planning), fix with `npx skills@latest add
   mattpocock/skills -g` (update an old install with `npx skills@latest
   update -g`). `/setup-matt-pocock-skills` is per-repo configuration, not
   this install.
-- **`/tdd` present** at `~/.claude/skills/tdd/`, required by
-  Implementation (below). It installs with the dependent skills above.
-  A missing `/tdd` stops autonomous execution but not planning.
 - **No stale `factory*` symlinks**: `~/.claude/skills/factory`,
   `factory-new`, `factory-adopt` must not exist. The Factory ships as a
   plugin now; a leftover symlink from before that change means two things
