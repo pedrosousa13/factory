@@ -58,8 +58,8 @@ It is the source of truth; this file only bootstraps it.
 - Every question to the maintainer goes through `factory:ask-structured`
   (`AskUserQuestion`, researched recommendation first), including questions
   a dependent skill would ask in plain text — see "## Asking the
-  maintainer". The
-  one exception is a mid-loop Ping, which stays push + timer + Park.
+  maintainer". The one exception is a mid-loop Ping, which stays push +
+  timer + Park.
 - Triage when you need to. When the Queue runs out: one full pass that
   applies what the evidence settles and asks, in batches, about anything
   that would promote work into the Queue or drop it. After an issue that
