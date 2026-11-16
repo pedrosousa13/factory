@@ -60,7 +60,6 @@ function printTable(settings: EffectiveSettings): void {
     row("maxWorkers", settings.maxWorkers),
     row("answerWindowMinutes", settings.answerWindowMinutes),
     row("contextBudget", settings.contextBudget),
-    row("notifierCommand", settings.notifierCommand),
     row("trackerTokenVar", settings.trackerTokenVar),
     row("defaultBranch", settings.defaultBranch),
     { setting: "lockPath", value: settings.lockPath, source: "fixed" },

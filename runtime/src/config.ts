@@ -20,7 +20,6 @@ export interface FactoryConfig {
   maxWorkers?: number;
   answerWindowMinutes?: number;
   contextBudget?: number;
-  notifierCommand?: string;
   trackerTokenVar?: string;
 }
 
@@ -54,7 +53,6 @@ export interface EffectiveSettings {
   maxWorkers: Effective<number>;
   answerWindowMinutes: Effective<number>;
   contextBudget?: Effective<number>;
-  notifierCommand?: Effective<string>;
   trackerTokenVar?: Effective<string>;
   defaultBranch: Effective<string>;
   // notificationChannel: returns here once it derives from a real detection
@@ -116,7 +114,6 @@ const TOP_LEVEL_KEYS = [
   "maxWorkers",
   "answerWindowMinutes",
   "contextBudget",
-  "notifierCommand",
   "trackerTokenVar",
 ] as const;
 
@@ -258,16 +255,6 @@ export function parseConfig(raw: string): ParseResult {
     }
   }
 
-  // notifierCommand (optional)
-  let notifierCommand: string | undefined;
-  if ("notifierCommand" in data) {
-    if (typeof data.notifierCommand !== "string") {
-      errors.push(typeError("notifierCommand", data.notifierCommand, "string"));
-    } else {
-      notifierCommand = data.notifierCommand;
-    }
-  }
-
   // trackerTokenVar (optional)
   let trackerTokenVar: string | undefined;
   if ("trackerTokenVar" in data) {
@@ -290,7 +277,6 @@ export function parseConfig(raw: string): ParseResult {
     ...(maxWorkers !== undefined ? { maxWorkers } : {}),
     ...(answerWindowMinutes !== undefined ? { answerWindowMinutes } : {}),
     ...(contextBudget !== undefined ? { contextBudget } : {}),
-    ...(notifierCommand !== undefined ? { notifierCommand } : {}),
     ...(trackerTokenVar !== undefined ? { trackerTokenVar } : {}),
   };
 
@@ -336,9 +322,6 @@ export function effective(config: FactoryConfig, detected: Detected): EffectiveS
   // Parse support stays; no enforcement lives here.
   if (config.contextBudget !== undefined) {
     settings.contextBudget = { value: config.contextBudget, source: "config" };
-  }
-  if (config.notifierCommand !== undefined) {
-    settings.notifierCommand = { value: config.notifierCommand, source: "config" };
   }
   if (config.trackerTokenVar !== undefined) {
     settings.trackerTokenVar = { value: config.trackerTokenVar, source: "config" };

@@ -417,18 +417,16 @@ test("renderStampBump bumps stampVersion to STAMP_VERSION and preserves every ot
   expect(parsed.attackSurface).toBe(true);
 });
 
-test("renderStampBump preserves notifierCommand and keys it doesn't itself know about", () => {
+test("renderStampBump preserves keys it doesn't itself know about", () => {
   const existing = JSON.stringify({
     stampVersion: "2.0.0",
     tracker: { kind: "linear" },
     merge: { policy: "squash" },
     attackSurface: false,
-    notifierCommand: "notify-send",
     somethingFutureFactoryAddedLater: 42,
   });
   const parsed = JSON.parse(renderStampBump(existing));
   expect(parsed.stampVersion).toBe(STAMP_VERSION);
-  expect(parsed.notifierCommand).toBe("notify-send");
   expect(parsed.somethingFutureFactoryAddedLater).toBe(42);
 });
 

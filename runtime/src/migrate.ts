@@ -389,7 +389,7 @@ export function renderV1ToV2Config(answers: V1ToV2Answers): string {
 /**
  * The v2-to-v3 step's config.json content (PROTOCOL.md "## Migration"): bumps
  * `stampVersion` to `STAMP_VERSION` and preserves every other field
- * verbatim — including `notifierCommand` and any key this module doesn't
+ * verbatim — including any key this module doesn't
  * know about. Unlike `renderV1ToV2Config`, which synthesizes a config.json
  * from four freshly-answered fields because a v1 repo has none yet, a v2
  * repo already has a config; the only field v2-to-v3 touches is the version

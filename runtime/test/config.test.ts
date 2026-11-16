@@ -41,7 +41,6 @@ test("absent optional keys are fine — no defaults are required in the file", (
     expect(result.config.maxWorkers).toBeUndefined();
     expect(result.config.answerWindowMinutes).toBeUndefined();
     expect(result.config.contextBudget).toBeUndefined();
-    expect(result.config.notifierCommand).toBeUndefined();
     expect(result.config.trackerTokenVar).toBeUndefined();
     expect(result.config.merge.method).toBeUndefined();
     expect(result.config.tracker.repo).toBeUndefined();
@@ -57,7 +56,6 @@ test("parses optional keys when present", () => {
     maxWorkers: 4,
     answerWindowMinutes: 30,
     contextBudget: 100000,
-    notifierCommand: "notify-send",
     trackerTokenVar: "LINEAR_TOKEN",
   });
 
@@ -68,7 +66,6 @@ test("parses optional keys when present", () => {
     expect(result.config.maxWorkers).toBe(4);
     expect(result.config.answerWindowMinutes).toBe(30);
     expect(result.config.contextBudget).toBe(100000);
-    expect(result.config.notifierCommand).toBe("notify-send");
     expect(result.config.trackerTokenVar).toBe("LINEAR_TOKEN");
     expect(result.config.merge.method).toBe("rebase");
   }
@@ -342,15 +339,6 @@ test("non-string tracker.repo is rejected", () => {
   }
 });
 
-test("non-string notifierCommand is rejected", () => {
-  const result = parseConfig(JSON.stringify({ ...baseValid(), notifierCommand: 42 }));
-
-  expect(result.ok).toBe(false);
-  if (!result.ok) {
-    expect(result.errors).toContain("notifierCommand: 42 is not a string");
-  }
-});
-
 test("non-string trackerTokenVar is rejected", () => {
   const result = parseConfig(JSON.stringify({ ...baseValid(), trackerTokenVar: false }));
 
@@ -464,7 +452,6 @@ test("effective() tags config-provided values as config", () => {
       maxWorkers: 3,
       answerWindowMinutes: 20,
       contextBudget: 50000,
-      notifierCommand: "notify-send",
       trackerTokenVar: "GH_TOKEN",
     }),
   );
@@ -484,7 +471,6 @@ test("effective() tags config-provided values as config", () => {
   expect(settings.maxWorkers).toEqual({ value: 3, source: "config" });
   expect(settings.answerWindowMinutes).toEqual({ value: 20, source: "config" });
   expect(settings.contextBudget).toEqual({ value: 50000, source: "config" });
-  expect(settings.notifierCommand).toEqual({ value: "notify-send", source: "config" });
   expect(settings.trackerTokenVar).toEqual({ value: "GH_TOKEN", source: "config" });
 });
 
@@ -509,7 +495,6 @@ test("effective() tags absent optional values as default or omits them", () => {
   // omitted rather than invented.
   expect(settings.mergeMethod).toEqual({ value: "squash", source: "default" });
   expect(settings.contextBudget).toBeUndefined();
-  expect(settings.notifierCommand).toBeUndefined();
   expect(settings.trackerTokenVar).toBeUndefined();
 });
 

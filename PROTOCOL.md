@@ -379,7 +379,8 @@ with that issue. If the Queue is still empty, the session has run out. Stop
 the loop cleanly. What to report depends on scope:
 
 - **Unscoped** (Everything, or no milestones in the Project) → notify the
-  maintainer with a push notification (one-line status), as before.
+  maintainer with a push notification (one-line status; in Claude Code, the
+  `PushNotification` tool), as before.
 - **Scoped to a milestone** → an empty scoped Queue means agent-ready work is
   exhausted, not that the milestone is complete — those are different
   claims, and conflating them is exactly the failure scoping guards against.
@@ -396,8 +397,9 @@ the loop cleanly. What to report depends on scope:
   The blocked count is a fresh count at report time, not a tally accumulated
   as the loop skipped issues — a session-long tally counts the same issue
   once per iteration, so two runs over identical state would disagree.
-  Deliver this the same way as the unscoped case: a push notification with a
-  one-line status, the detail in the session.
+  Deliver this the same way as the unscoped case: a push notification (in
+  Claude Code, the `PushNotification` tool) with a one-line status, the
+  detail in the session.
 - **Scoped to (No milestone)** → the same breakdown (`ready-for-human`,
   `needs-info`, blocked counts) among no-milestone issues, delivered the same
   way, with no progress figure — there is no milestone entity to report it
@@ -555,19 +557,16 @@ How a Loop Session handles a mid-issue question it must not answer itself:
   in the brief, not something resolvable by reading the code, the issue, or the
   docs. Guessing is the failure this prevents; so is pinging for what you could
   have looked up.
-- **Ping**: send a push notification with the question in one line, then start
-  a ~15 minute deadline timer — a backgrounded `sleep`, whose completion
-  notification is the signal to Park. Keep working the turn while it runs; the
-  maintainer's answer, if it comes, arrives mid-turn alongside a tool result.
-  Do not end the turn to ask: that stalls the loop indefinitely, the exact cost
-  Park exists to remove (ADR-0001). The native channel for the current harness
-  carries this push where one exists — Claude Code's Notification hook, or
-  Codex's `notify` — and Pi carries none. Beneath all three sits one fallback,
-  the `notifierCommand` subprocess (`runtime/src/ping.ts`): PRD §5 item 4,
-  "Factory does not rely on `notify` … to reach the maintainer." That
-  subprocess gets the question in the `FACTORY_NOTIFY_MESSAGE` environment
-  variable and nothing else — no arguments, no stdin. The Notification hook
-  sets the same variable, so one notifier command serves both.
+- **Ping**: send the question in one line as a push notification — in Claude
+  Code, with the built-in `PushNotification` tool (load it via ToolSearch if it
+  is deferred) — then start a ~15 minute deadline timer: a backgrounded
+  `sleep`, whose completion notification is the signal to Park. Keep working
+  the turn while it runs; the maintainer's answer, if it comes, arrives
+  mid-turn alongside a tool result. Do not end the turn to ask: that stalls
+  the loop indefinitely, the exact cost Park exists to remove (ADR-0001). On
+  other harnesses the push is weaker: Codex's `notify` fires only at turn end
+  and Pi has no channel. Either way the timer and Park still apply, and the
+  tracker comment remains the durable record.
 - **Journal the ask** as the ping goes out: overwrite `.factory/journal.json`
   with `step: "ask"` and `openQuestion` set to `{text, askedAt}` — the
   question, and the ISO 8601 time it was posted. This is the only write that
@@ -691,10 +690,11 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
   written at run-out also says so, whether a retrospective is pending, and
   which sessions it should cover (see Queue selection, "Empty Queue"). Reference,
   don't duplicate, what the artifacts already hold — the skill's own rule.
-- **Then stop.** Send the maintainer a push notification (one line: Handoff
-  written, fresh session needed) and stop cleanly. Resuming is just running
-  `/factory` in a fresh session — its Session start consumes the Handoff and
-  archives it to `.scratch/handoffs/archive/` (consume-once).
+- **Then stop.** Send the maintainer a push notification (in Claude Code, the
+  `PushNotification` tool; one line: Handoff written, fresh session needed)
+  and stop cleanly. Resuming is just running `/factory` in a fresh session —
+  its Session start consumes the Handoff and archives it to
+  `.scratch/handoffs/archive/` (consume-once).
 
 ## Milestones
 
