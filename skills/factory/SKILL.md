@@ -45,8 +45,8 @@ It is the source of truth; this file only bootstraps it.
 ## Hard rules (from the protocol — details there)
 
 - The Queue is the only source of work. Never invent work. Run out (empty
-  after a Triage pass) → push notification (Claude Code: the `PushNotification` tool) and report. An interactive
-  session then runs `/retro` if one is due, opens a Planning Session, and
+  after a Triage pass) → push notification (Claude Code: the
+  `PushNotification` tool) and report. An interactive session then runs `/retro` if one is due, opens a Planning Session, and
   returns to Queue selection after it — budget permitting, see "Empty
   Queue". A headless run stops.
 - A bare `/factory` never asks what to do: it routes itself, and its Queue

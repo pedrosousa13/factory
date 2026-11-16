@@ -397,9 +397,9 @@ the loop cleanly. What to report depends on scope:
   The blocked count is a fresh count at report time, not a tally accumulated
   as the loop skipped issues — a session-long tally counts the same issue
   once per iteration, so two runs over identical state would disagree.
-  Deliver this the same way as the unscoped case: a push notification (in Claude Code, the
-  `PushNotification` tool) with a
-  one-line status, the detail in the session.
+  Deliver this the same way as the unscoped case: a push notification (in
+  Claude Code, the `PushNotification` tool) with a one-line status, the
+  detail in the session.
 - **Scoped to (No milestone)** → the same breakdown (`ready-for-human`,
   `needs-info`, blocked counts) among no-milestone issues, delivered the same
   way, with no progress figure — there is no milestone entity to report it
@@ -691,8 +691,8 @@ How a Loop Session bridges to the next one when its Context Budget is spent:
   which sessions it should cover (see Queue selection, "Empty Queue"). Reference,
   don't duplicate, what the artifacts already hold — the skill's own rule.
 - **Then stop.** Send the maintainer a push notification (in Claude Code, the
-  `PushNotification` tool; one line: Handoff
-  written, fresh session needed) and stop cleanly. Resuming is just running
+  `PushNotification` tool; one line: Handoff written, fresh session needed)
+  and stop cleanly. Resuming is just running
   `/factory` in a fresh session — its Session start consumes the Handoff and
   archives it to `.scratch/handoffs/archive/` (consume-once).
 
