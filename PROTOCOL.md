@@ -41,29 +41,21 @@ fix — never a bare "preflight failed." Shape:
   the file in the first place, so its absence going in is expected.
 - **`gh` authenticated.** Run `gh auth status`. Failure: `gh auth login`.
 - **Dependent skills present**: `/code-review`, `/handoff`, `/triage`,
-  `/domain-modeling`, each of which must exist at `~/.claude/skills/<name>/`
+  `/domain-modeling`, `/tdd`, each of which must exist at `~/.claude/skills/<name>/`
   — that path, not the skill's source location, is what makes a skill
   invocable in a session. `npx skills@latest add mattpocock/skills -g`
-  installs the four as symlinks there, pointing at
+  installs all five as symlinks there, pointing at
   `~/.agents/skills/<name>/`; check the
   `~/.claude/skills/` path itself; a missing or broken symlink there leaves
   the skill unavailable even if the `~/.agents/skills/` source exists.
   Failure, per missing skill: name it, name what it's for (`/code-review`
   gates Landing, `/handoff` bridges a Context Budget stop, `/triage` runs
   Adoption's re-triage sweep and the loop's Triage pass, `/domain-modeling`
-  maintains `GLOSSARY.md`), fix with `npx skills@latest add
+  maintains `GLOSSARY.md`, `/tdd` drives Implementation — a missing `/tdd`
+  stops autonomous execution but not planning), fix with `npx skills@latest add
   mattpocock/skills -g` (update an old install with `npx skills@latest
   update -g`). `/setup-matt-pocock-skills` is per-repo configuration, not
   this install.
-- **superpowers available**: `superpowers:subagent-driven-development` and
-  `superpowers:test-driven-development`, both required by Implementation
-  (below). This Preflight check is the *only* thing that guarantees them —
-  the plugin manifest deliberately declares no dependency on superpowers.
-  A manifest dependency has to name a marketplace as well as a plugin, so
-  it fails on a machine that installed superpowers from a different one
-  even though the skills are right there; checking for the skills
-  themselves is what actually matters, and it doesn't care where they came
-  from. Failure: install the `superpowers` plugin, from any marketplace.
 - **No stale `factory*` symlinks**: `~/.claude/skills/factory`,
   `factory-new`, `factory-adopt` must not exist. The Factory ships as a
   plugin now; a leftover symlink from before that change means two things
@@ -429,9 +421,8 @@ Overwrite the journal: `step: "implementation"`.
 - The issue brief is the spec. Read the issue and its comments in full before
   writing anything.
 - **The Loop Session orchestrates; subagents implement.** Dispatch code work to
-  superpowers TDD subagents (`superpowers:subagent-driven-development`,
-  `superpowers:test-driven-development`); the session reviews their output and
-  keeps its own context lean.
+  subagents that follow `/tdd`; the session reviews their output and keeps its
+  own context lean.
 - **Trivial-issue escape hatch** (a rule, not a judgment call): inline
   implementation without subagents is allowed only for a genuine one-liner —
   a single hunk in a single file whose whole behavior one line expresses

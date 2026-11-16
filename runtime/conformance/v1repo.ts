@@ -40,7 +40,7 @@ const REPO_ROOT = join(import.meta.dir, "../..");
 
 // The files that make a repo a v1 stamp (docs/agents/issue-tracker.md's
 // legacy heading) and the ones the v1-to-v2 step's docs/agents rules touch —
-// not the whole repo, and never .git, node_modules, .superpowers, or runtime/
+// not the whole repo, and never .git, node_modules, or runtime/
 // (the fixture needs the stamp, not this repo's own history or tooling).
 // Each entry is [source in this repo, destination in the fixture]. The
 // glossary is the one pair that differs: this repo now carries GLOSSARY.md
@@ -172,7 +172,7 @@ export const CHOSEN_ATTACK_SURFACE = false;
 export const TRACKER_REACHABLE_QUESTION = "Can this project's tracker be reached right now?";
 export const REACHABLE_SHAPE = `type ReachableAnswer = { result: "ok" } | { result: "unreachable"; why: string };`;
 
-// ───── a fully populated skills/plugin home
+// ───── a fully populated skills home
 //
 // Every planning role's preferred AND fallback implementation installed, so
 // resolveRoles (src/roles.ts) returns zero failures. Unlike planning.ts's own
@@ -181,14 +181,7 @@ export const REACHABLE_SHAPE = `type ReachableAnswer = { result: "ok" } | { resu
 // stamp itself, not planning-role resolution.
 
 function installRoleImpl(home: string, impl: RoleImpl): void {
-  if (impl.k === "plugin") {
-    const [pluginName, skillName] = impl.name.split(":");
-    mkdirSync(join(home, ".claude", "plugins", "cache", "test-marketplace", pluginName, "0.0.0", "skills", skillName), {
-      recursive: true,
-    });
-  } else {
-    mkdirSync(join(home, ".claude", "skills", impl.name), { recursive: true });
-  }
+  mkdirSync(join(home, ".claude", "skills", impl.name), { recursive: true });
 }
 
 export function mkFullSkillsHome(): { home: string } {

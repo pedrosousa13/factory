@@ -181,10 +181,7 @@ describe("gatherPreflightFacts", () => {
 
 // ───── gatherAvailableRoles
 //
-// A fixture home built in the two real shapes: `.claude/skills/<name>` for a
-// skill-kind implementation, and
-// `.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>` for
-// a plugin-kind one.
+// A fixture home built in the real shape: `.claude/skills/<name>`.
 
 function scratchHome(): string {
   return mkdtempSync(join(tmpdir(), "edges-home-"));
@@ -192,12 +189,6 @@ function scratchHome(): string {
 
 function mkSkill(home: string, name: string): void {
   mkdirSync(join(home, ".claude", "skills", name), { recursive: true });
-}
-
-function mkPluginSkill(home: string, marketplace: string, plugin: string, version: string, skill: string): void {
-  mkdirSync(join(home, ".claude", "plugins", "cache", marketplace, plugin, version, "skills", skill), {
-    recursive: true,
-  });
 }
 
 describe("gatherAvailableRoles", () => {
@@ -210,7 +201,7 @@ describe("gatherAvailableRoles", () => {
     }
   });
 
-  test("reports the skill-kind implementations present, and only those", () => {
+  test("reports the implementations present, and only those", () => {
     const home = scratchHome();
     try {
       mkSkill(home, "grilling");
@@ -236,27 +227,7 @@ describe("gatherAvailableRoles", () => {
     }
   });
 
-  test("finds a plugin-kind implementation under any marketplace and any version", () => {
-    const home = scratchHome();
-    try {
-      mkPluginSkill(home, "some-other-marketplace", "superpowers", "9.9.9", "test-driven-development");
-      expect(gatherAvailableRoles(home)).toContain("superpowers:test-driven-development");
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  test("a plugin skill of the same name under a different plugin does not count", () => {
-    const home = scratchHome();
-    try {
-      mkPluginSkill(home, "some-marketplace", "not-superpowers", "1.0.0", "test-driven-development");
-      expect(gatherAvailableRoles(home)).not.toContain("superpowers:test-driven-development");
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  test("the implement role's fallback is a plain skill, found at ~/.claude/skills/tdd", () => {
+  test("the implement role is a plain skill, found at ~/.claude/skills/tdd", () => {
     const home = scratchHome();
     try {
       mkSkill(home, "tdd");

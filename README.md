@@ -10,7 +10,7 @@ The maintainer plans interactively; an AI Loop Session consumes the queue and on
 2. **Run** (AI, autonomous): `/factory` in the project repo starts a Loop Session:
    - reads the newest handoff in `.scratch/handoffs/`, if any
    - picks the next unblocked `ready-for-agent` issue — priority first, then oldest — and moves it to a started state
-   - implements subagent-driven (superpowers TDD subagents; the session only orchestrates), gated by `/code-review`
+   - implements subagent-driven (TDD subagents following `/tdd`; the session only orchestrates), gated by `/code-review`
    - lands it: branch per issue → PR (body by `/pr`) → auto-merge when tests, typecheck, and review are green → issue completed
    - questions: push notification + block ~15 min; unanswered → question posted to the issue, `needs-info`, work stays on its branch, loop continues
    - at each issue boundary: context above ~40% → `/handoff` to `.scratch/handoffs/` and stop
@@ -50,7 +50,7 @@ Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — t
 - **Domain docs**: single-context `GLOSSARY.md` + `docs/adr/` per repo, created lazily. See `docs/agents/domain.md`.
 - **Security sweeps**: a Project with an attack surface carries an OWASP Top 10 sweep issue in every milestone that touches it; declines are recorded in its `GLOSSARY.md`. See `PROTOCOL.md`, "Security sweeps".
 - **Git**: branch per issue, PR, auto-merge on green. No half-done work on main — parked issues live on their branch.
-- **Context discipline**: Loop Sessions stay under ~40% context; superpowers subagents do the implementation; `/handoff` bridges sessions.
+- **Context discipline**: Loop Sessions stay under ~40% context; subagents do the implementation; `/handoff` bridges sessions.
 - **Notifications**: an optional `notifierCommand` in `.factory/config.json` is the push channel — the plugin's Claude Code `Notification` hook and the runtime's own ping both run it with the message in `FACTORY_NOTIFY_MESSAGE`. Offered during adopt/migrate, declinable. See `PROTOCOL.md`, "Ping and Park".
 
 ## Install
@@ -59,13 +59,7 @@ What the Factory assumes on the machine:
 
 1. **Claude Code**, plus the **Linear MCP server** connected to the Side projects workspace for any Linear-backed Project.
 2. **`gh`** authenticated, git over SSH.
-3. **Skills**: [superpowers](https://github.com/obra/superpowers) and the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, …) installed under `~/.claude/skills` (`/pr` and `/retro` too, used at landing and at run-out when present), as editable copies via `npx skills@latest add mattpocock/skills -g` (update with `npx skills@latest update -g`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
-
-   Install superpowers yourself — the Factory's manifest declares no
-   dependency on it, on purpose. A manifest dependency names a marketplace
-   as well as a plugin, so it breaks on a machine that installed
-   superpowers from a different one. Any marketplace will do; Preflight
-   checks for the skills, not their provenance.
+3. **Skills**: the engineering skills (`/code-review`, `/handoff`, `/triage`, `/grilling`, `/tdd`, …) installed under `~/.claude/skills` (`/pr` and `/retro` too, used at landing and at run-out when present), as editable copies via `npx skills@latest add mattpocock/skills -g` (update with `npx skills@latest update -g`). Preflight checks that path, so Matt Pocock's self-updating plugin install does not satisfy it. New repos get their per-repo config (`AGENTS.md`, `docs/agents/`) via `/setup-matt-pocock-skills`, or via `/factory-new` for new projects and `/factory-adopt` for existing ones.
 4. **The Factory plugin**, installed from its marketplace:
 
    ```sh

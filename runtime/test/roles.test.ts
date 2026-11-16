@@ -44,13 +44,12 @@ test("a role whose preferred and fallback are both absent fails preflight", () =
 });
 
 test("the implement role's failure blocks execution only — a missing TDD skill must not stop planning", () => {
-  const got = resolveRoles(ALL_PREFERRED.filter((p) => p !== "superpowers:test-driven-development"));
+  const got = resolveRoles(ALL_PREFERRED.filter((p) => p !== "tdd"));
   expect(got.failures.length).toBe(1);
   expect(got.failures[0].what).toContain("Implement");
   expect(got.failures[0].blocksExecutionOnly).toBe(true);
-  // A plugin skill has no ~/.claude/skills/ path, so the fix must not name one.
-  expect(got.failures[0].fix).toContain("superpowers");
-  expect(got.failures[0].fix).not.toContain("~/.claude/skills/");
+  expect(got.failures[0].why).toContain("has no fallback");
+  expect(got.failures[0].fix).toContain("~/.claude/skills/");
 });
 
 test("every other role's failure blocks the whole run, not execution alone", () => {

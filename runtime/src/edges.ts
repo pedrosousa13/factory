@@ -3,7 +3,7 @@
 // to the pure modules (config.ts, marker.ts, preflight.ts) that decide what
 // they mean.
 
-import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { parseConfig, type ParseResult } from "./config";
@@ -152,7 +152,6 @@ export function gatherStampFacts(repoRoot: string): StampFacts {
 // ───── planning-role implementations
 
 const SKILLS_DIR = ".claude/skills";
-const PLUGIN_CACHE_DIR = ".claude/plugins/cache";
 
 // PROTOCOL.md "## Preflight: prerequisites, not the stamp", the dependent-skills
 // check: read the `~/.claude/skills/` path itself — a missing or broken
@@ -163,49 +162,12 @@ function skillInstalled(home: string, name: string): boolean {
   return existsSync(join(home, SKILLS_DIR, name));
 }
 
-// A directory listing where "nothing here" and "can't tell" both mean the
-// same thing to a caller walking the plugin cache: no entries. existsSync
-// alone isn't enough to guard readdirSync — it passes for a path that exists
-// as a file, not a directory, and readdirSync then throws. Preflight's
-// contract is to collect every failure and report them together, so a walk
-// that can throw would crash preflight instead of just finding nothing.
-function safeReaddir(path: string): string[] {
-  try {
-    return readdirSync(path);
-  } catch {
-    return [];
-  }
-}
-
-// PROTOCOL.md "## Preflight: prerequisites, not the stamp", the superpowers
-// check: a plugin skill has no `~/.claude/skills/` path. It
-// unpacks to
-// `<home>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`,
-// and both the marketplace and the version differ per machine — the protocol
-// says the check must not care which marketplace it came from — so walk those
-// two levels instead of naming them.
-function pluginInstalled(home: string, id: string): boolean {
-  const [pluginName, skillName] = id.split(":");
-  if (pluginName === undefined || skillName === undefined) return false;
-
-  const cache = join(home, PLUGIN_CACHE_DIR);
-
-  for (const marketplace of safeReaddir(cache)) {
-    const versions = join(cache, marketplace, pluginName);
-    for (const version of safeReaddir(versions)) {
-      if (existsSync(join(versions, version, "skills", skillName))) return true;
-    }
-  }
-  return false;
-}
-
 export function gatherAvailableRoles(home: string): string[] {
   const names = new Set<string>();
   for (const spec of ROLE_TABLE) {
     for (const impl of [spec.preferred, spec.fallback]) {
       if (impl === null) continue;
-      const found = impl.k === "plugin" ? pluginInstalled(home, impl.name) : skillInstalled(home, impl.name);
-      if (found) names.add(impl.name);
+      if (skillInstalled(home, impl.name)) names.add(impl.name);
     }
   }
   return [...names];
