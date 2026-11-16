@@ -49,7 +49,6 @@ import { reconcileClaims, type RecoveryInput } from "../src/recovery";
 import type { JournalRecord } from "../src/journal";
 import { readJournal, startClaim, writeJournal } from "../src/journalfile";
 import { interactiveAnswer, waitDecision } from "../src/answerwait";
-import { ping } from "../src/ping";
 
 const DIR = import.meta.dir;
 const PHRASEBOOK_PATH = join(DIR, "../conformance/phrasebook.md");
@@ -130,14 +129,13 @@ function appendAnswerComment(id: string, text: string): void {
 // ────────────────────────────────────────────────────── headless ask cycle
 //
 // Item 1 and item 2 of the ask/park proof (issue #43) share this exact
-// sequence — post the question as a durable ticket comment, journal it, ping
-// — up to whether an answer ever lands, which is where the two paths differ.
+// sequence — post the question as a durable ticket comment, journal it —
+// up to whether an answer ever lands, which is where the two paths differ.
 
 function askAndJournal(
   runner: Runner,
   phrasebook: string,
   repoRoot: string,
-  harness: HarnessName,
   ticketId: string,
   branch: string,
   question: string,
@@ -168,12 +166,6 @@ function askAndJournal(
     workers: [],
   });
 
-  // No notifierCommand is configured for this host, so no-notifier-configured
-  // (or pi-no-ping for pi) is the honest outcome, not a failure — ping.ts's
-  // own contract.
-  const pingOutcome = ping(harness, undefined, repoRoot, question);
-  const pingOk = pingOutcome.k !== "notifier-failed";
-  steps.push(step(`ping ${ticketId}`, pingOutcome.k, pingOk));
 }
 
 // ───────────────────────────────────────────────────────────────── scoreboard
@@ -502,12 +494,12 @@ function main(): void {
         }
 
         // ── headless ask cycle: answered path (T-2). Proves answerwait.ts,
-        // journalfile.ts, and ping.ts live — before this slice all three had
+        // journalfile.ts live — before this slice both had
         // no caller but their own unit test (issue #43).
         const askTicketBefore = readFixtureTicket("T-2");
         const askBranch = branchName(askTicketBefore.id, askTicketBefore.title);
         const question = "Should T-2 pull in the shared parsing library or vendor its own copy?";
-        askAndJournal(runner, phrasebook, repo.root, harness, "T-2", askBranch, question, steps);
+        askAndJournal(runner, phrasebook, repo.root, "T-2", askBranch, question, steps);
 
         const answerText = "Use the shared library.";
         appendAnswerComment("T-2", `MAINTAINER ANSWER: ${answerText}`);
@@ -561,7 +553,7 @@ function main(): void {
         const parkTicketBefore = readFixtureTicket("T-3");
         const parkBranch = branchName(parkTicketBefore.id, parkTicketBefore.title);
         const parkQuestion = "Should T-3 stay blocked on the pending audit, or proceed without it?";
-        askAndJournal(runner, phrasebook, repo.root, harness, "T-3", parkBranch, parkQuestion, steps);
+        askAndJournal(runner, phrasebook, repo.root, "T-3", parkBranch, parkQuestion, steps);
 
         const journalAfterAsk2 = readJournal(repo.root);
         const askedAtFromJournal2 =

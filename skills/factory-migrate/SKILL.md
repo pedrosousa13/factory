@@ -84,8 +84,7 @@ below.
 (`PROTOCOL.md`'s "## Migration"). It runs only on a legacy v1 repo, which
 has no `config.json` at all. It asks all three answers fresh. If a stray
 `config.json` exists anyway, the step never reads it for answers, and
-writes its own config over it. `notifierCommand` is the single field
-carried over, and the paragraph after the bullets says why:
+writes its own config over it:
 
 - **Tracker.** Read `docs/agents/issue-tracker.md`'s first line only. If
   it matches `# Issue tracker: Linear` or `# Issue tracker: GitHub`,
@@ -106,15 +105,6 @@ carried over, and the paragraph after the bullets says why:
 
 Ask merge policy and attack surface fresh every run, whether or not the
 tracker was detected.
-
-**One field survives the rewrite: `notifierCommand`.** If a stray
-`config.json` carries it, read it and write it back into the new one
-unchanged. This is not a breach of the fresh-answers rule above. That rule
-exists so a stale answer cannot stand in for a decision this step must put
-to the maintainer, and `notifierCommand` is not one of those decisions — it
-is a machine-local address the maintainer already gave `/factory-adopt`, and
-this step never asks for it. Dropping it would silently unwire the ping
-channel and leave the verify step below rejecting a config that was correct.
 
 Once the tracker is settled, render that tracker's v2 adapter-doc
 template — `${CLAUDE_PLUGIN_ROOT}/templates/stamp/docs/agents/issue-tracker-<tracker>.md`,
@@ -160,7 +150,7 @@ Otherwise the step plans three things:
   template's.
 - On a 2.0.0 repo, `config.json` is the existing one with `stampVersion`
   bumped to the current version. Every other field stays as it is,
-  `merge.method` and `notifierCommand` included. When v1-to-v2 runs in the
+  `merge.method` included. When v1-to-v2 runs in the
   same plan, its freshly written config simply carries the current version.
 
 **The adapter document is not the only stamp file** — for the v1-to-v2
@@ -202,8 +192,7 @@ never one approval per step:
   must be one of these four. On GitHub, `tracker` also carries `repo`, the
   `owner/name` slug from the git remote — the same value `{{REPO}}` takes
   above, derived the same way and never asked for. It sits inside
-  `tracker`, so it is not a fifth top-level field. Show `notifierCommand`
-  as a fifth field whenever the old config carried one.
+  `tracker`, so it is not a fifth top-level field.
 
 If the classification found the document already matches its template,
 the diff still shows `config.json` — a pending step writes `config.json`
@@ -270,8 +259,7 @@ A reply of done is not evidence — the files are. After writing:
    contract.
    Otherwise, re-read `.factory/config.json` from disk. Confirm it parses, and that
    it carries the four top-level fields — `stampVersion`, `tracker`,
-   `merge`, `attackSurface` — and at most one more, `notifierCommand`,
-   present only if the old config carried it. Any other fifth field, or a
+   `merge`, `attackSurface`. Any other top-level field, or a
    missing one of the four, is a failure. Confirm the shape, not
    just the names: `tracker` and `merge` are each objects
    (`tracker.kind`, `merge.policy`), not flat strings, per

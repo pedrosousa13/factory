@@ -443,7 +443,6 @@ function writeV2Config(repoRoot: string, stampVersion: string): void {
         tracker: { kind: "github", repo: "owner/name" },
         merge: { policy: "human", method: "rebase" },
         attackSurface: true,
-        notifierCommand: "notify-send",
       },
       null,
       2,
@@ -452,7 +451,7 @@ function writeV2Config(repoRoot: string, stampVersion: string): void {
 }
 
 describe("v2-to-v3 end to end", () => {
-  test("a real 2.0.0 repo: GLOSSARY.md lands as a staged git rename, CONTEXT.md is gone, the stamp bumps, merge.method and notifierCommand survive", () => {
+  test("a real 2.0.0 repo: GLOSSARY.md lands as a staged git rename, CONTEXT.md is gone, the stamp bumps, merge.method survives", () => {
     const dir = scratchRepo();
     try {
       writeV2Config(dir, "2.0.0");
@@ -486,7 +485,6 @@ describe("v2-to-v3 end to end", () => {
       const configOnDisk = JSON.parse(readFileSync(configPath, "utf8"));
       expect(configOnDisk.stampVersion).toBe(STAMP_VERSION);
       expect(configOnDisk.merge).toEqual({ policy: "human", method: "rebase" });
-      expect(configOnDisk.notifierCommand).toBe("notify-send");
     } finally {
       rmSync(dir, { recursive: true });
     }

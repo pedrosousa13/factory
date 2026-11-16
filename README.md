@@ -12,7 +12,7 @@ The maintainer plans interactively; an AI Loop Session consumes the queue and on
    - picks the next unblocked `ready-for-agent` issue — priority first, then oldest — and moves it to a started state
    - implements subagent-driven (TDD subagents following `/tdd`; the session only orchestrates), gated by `/code-review`
    - lands it: branch per issue → PR (body by `/pr`) → auto-merge when tests, typecheck, and review are green → issue completed
-   - questions: push notification + block ~15 min; unanswered → question posted to the issue, `needs-info`, work stays on its branch, loop continues
+   - questions: push notification, then a ~15 min timer while the session keeps working; unanswered → question posted to the issue, `needs-info`, work stays on its branch, loop continues
    - at each issue boundary: context above ~40% → `/handoff` to `.scratch/handoffs/` and stop
    - queue runs out → triages any `needs-triage` reports, notifies you, runs `/retro` on the session, and opens a Planning Session with you. The loop never invents work.
    - every question comes as a structured prompt, with a researched recommendation first: the plugin's SessionStart hook routes each one through `/ask-structured`, even when another skill would ask in plain text
@@ -28,7 +28,7 @@ Run `/factory-new <name>`. It will:
 
 1. Create the repo under `~/apps/<name>` with git + a private GitHub remote
 2. Pick the issue tracker — GitHub Issues by default (the repo itself is the tracker), or Linear (a project on the Side projects team)
-3. Stamp Factory conventions: `.factory/config.json` (the stamp — tracker, merge policy, attack surface, optional notifier), `AGENTS.md`, `docs/agents/` (issue tracker, triage labels, domain docs), triage labels on the tracker, `.scratch/` in `.gitignore`
+3. Stamp Factory conventions: `.factory/config.json` (the stamp — tracker, merge policy, attack surface), `AGENTS.md`, `docs/agents/` (issue tracker, triage labels, domain docs), triage labels on the tracker, `.scratch/` in `.gitignore`
 4. Drop you into a Planning Session to produce the first issues
 
 ## Existing project
@@ -51,7 +51,7 @@ Run `/factory-migrate` inside the repo. A repo stamped by an older Factory — t
 - **Security sweeps**: a Project with an attack surface carries an OWASP Top 10 sweep issue in every milestone that touches it; declines are recorded in its `GLOSSARY.md`. See `PROTOCOL.md`, "Security sweeps".
 - **Git**: branch per issue, PR, auto-merge on green. No half-done work on main — parked issues live on their branch.
 - **Context discipline**: Loop Sessions stay under ~40% context; subagents do the implementation; `/handoff` bridges sessions.
-- **Notifications**: an optional `notifierCommand` in `.factory/config.json` is the push channel — the plugin's Claude Code `Notification` hook and the runtime's own ping both run it with the message in `FACTORY_NOTIFY_MESSAGE`. Offered during adopt/migrate, declinable. See `PROTOCOL.md`, "Ping and Park".
+- **Notifications**: Pings use Claude Code's built-in push notifications. See `PROTOCOL.md`, "Ping and Park".
 
 ## Install
 
